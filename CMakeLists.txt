@@ -105,6 +105,7 @@ target_compile_definitions(sioxx
 
 if(WIN32)
     target_link_libraries(sioxx PUBLIC ws2_32 mswsock)
+    target_compile_options(sioxx PRIVATE /bigobj)
 endif()
 
 target_compile_features(sioxx PUBLIC cxx_std_17)
