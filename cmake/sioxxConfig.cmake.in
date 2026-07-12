@@ -1,0 +1,14 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(Boost 1.90 COMPONENTS asio beast)
+find_dependency(OpenSSL)
+find_dependency(Threads)
+
+include("${CMAKE_CURRENT_LIST_DIR}/sioxxTargets.cmake")
+
+if(NOT TARGET sioxx::nlohmann_json AND NOT TARGET nlohmann_json::nlohmann_json)
+    find_dependency(nlohmann_json 3.12)
+endif()
+
+check_required_components(sioxx)

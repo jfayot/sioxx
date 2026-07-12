@@ -1,0 +1,17 @@
+BasedOnStyle: Google
+Language: Cpp
+# Force int* foo spacing style:
+DerivePointerAlignment: false
+PointerAlignment: Left
+IndentPPDirectives: AfterHash
+IndentCaseLabels: false
+BreakBeforeBraces: Allman
+ContinuationIndentWidth: 2
+BreakStringLiterals: false
+AlwaysBreakTemplateDeclarations: false
+AllowShortCaseLabelsOnASingleLine: true
+AlignConsecutiveShortCaseStatements:
+  Enabled: true
+  AcrossEmptyLines: true
+  AcrossComments: true
+  AlignCaseColons: false

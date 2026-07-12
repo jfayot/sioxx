@@ -1,0 +1,100 @@
+#include <gtest/gtest.h>
+
+#include <sioxx/msgpack_parser.hpp>
+
+using namespace sioxx;
+
+TEST(MsgpackParser, EncodeProducesBinaryFrame)
+{
+  msgpack_parser parser;
+  socketio_packet pkt;
+  pkt.type = socketio_packet_type::event;
+  pkt.nsp = "/";
+  pkt.data = json::array({"hello", "world"});
+
+  bool saw_binary = false;
+  std::string payload;
+  parser.encode(pkt,
+                [&](const std::string& p, bool is_binary)
+                {
+                  saw_binary = is_binary;
+                  payload = p;
+                });
+
+  EXPECT_TRUE(saw_binary);
+  EXPECT_FALSE(payload.empty());
+}
+
+TEST(MsgpackParser, RoundTripsEvent)
+{
+  msgpack_parser parser;
+  socketio_packet pkt;
+  pkt.type = socketio_packet_type::event;
+  pkt.nsp = "/mission_events";
+  pkt.id = 5;
+  pkt.data = json::array(
+    {"mission_update", json::object({{"lat", 48.85}, {"lon", 2.35}})});
+
+  std::string payload;
+  parser.encode(pkt, [&](const std::string& p, bool) { payload = p; });
+
+  socketio_packet decoded;
+  ASSERT_TRUE(parser.decode(payload, true, decoded));
+  EXPECT_EQ(decoded.type, socketio_packet_type::event);
+  EXPECT_EQ(decoded.nsp, "/mission_events");
+  EXPECT_EQ(decoded.id, 5);
+  ASSERT_TRUE(decoded.data.is_array());
+  EXPECT_EQ(decoded.data[0].get<std::string>(), "mission_update");
+  EXPECT_DOUBLE_EQ(decoded.data[1]["lat"].get<double>(), 48.85);
+}
+
+TEST(MsgpackParser, RoundTripsWithoutAckId)
+{
+  msgpack_parser parser;
+  socketio_packet pkt;
+  pkt.type = socketio_packet_type::connect;
+  pkt.nsp = "/";
+
+  std::string payload;
+  parser.encode(pkt, [&](const std::string& p, bool) { payload = p; });
+
+  socketio_packet decoded;
+  ASSERT_TRUE(parser.decode(payload, true, decoded));
+  EXPECT_EQ(decoded.type, socketio_packet_type::connect);
+  EXPECT_EQ(decoded.id, -1);
+}
+
+TEST(MsgpackParser, CarriesBinaryPayloadNatively)
+{
+  msgpack_parser parser;
+  std::vector<uint8_t> raw{0xDE, 0xAD, 0xBE, 0xEF};
+
+  socketio_packet pkt;
+  pkt.type = socketio_packet_type::event;
+  pkt.nsp = "/";
+  pkt.data = json::array({"blob", json::binary(raw)});
+
+  std::string payload;
+  parser.encode(pkt, [&](const std::string& p, bool) { payload = p; });
+
+  socketio_packet decoded;
+  ASSERT_TRUE(parser.decode(payload, true, decoded));
+  ASSERT_TRUE(decoded.data[1].is_binary());
+  EXPECT_EQ(static_cast<std::vector<uint8_t>>(decoded.data[1].get_binary()),
+            raw);
+}
+
+TEST(MsgpackParser, RejectsTextFrames)
+{
+  msgpack_parser parser;
+  socketio_packet decoded;
+  EXPECT_FALSE(parser.decode("not msgpack", false, decoded));
+}
+
+TEST(MsgpackParser, RejectsMalformedBytes)
+{
+  msgpack_parser parser;
+  socketio_packet decoded;
+  std::string garbage = "\xff\xff\xff\xff";
+  EXPECT_FALSE(parser.decode(garbage, true, decoded));
+}

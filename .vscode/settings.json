@@ -1,0 +1,26 @@
+{
+  "cmake.configureSettings": {
+    "CMAKE_BUILD_TYPE": "Release",
+    "SIOXX_BUILD_EXAMPLES": "ON",
+    "SIOXX_BUILD_TESTS": "ON"
+  },
+  "cmake.buildBeforeRun": true,
+  "cmake.saveBeforeBuild": true,
+  "cSpell.words": [
+    "Asio",
+    "BINDIR",
+    "ctest",
+    "DBUILD",
+    "DCMAKE",
+    "DCPM",
+    "DSIOXX",
+    "engineio",
+    "INCLUDEDIR",
+    "libsioxx",
+    "mswsock",
+    "nlohmann",
+    "sioxx",
+    "socketio",
+    "SOVERSION"
+  ]
+}
