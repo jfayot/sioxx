@@ -29,6 +29,18 @@ void socketio_socket::off_all()
   listeners_.clear();
 }
 
+void socketio_socket::on_connect(connect_listener listener)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  on_connect_ = std::move(listener);
+}
+
+void socketio_socket::on_disconnect(disconnect_listener listener)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  on_disconnect_ = std::move(listener);
+}
+
 void socketio_socket::connect()
 {
   socketio_packet packet;
@@ -119,6 +131,30 @@ void socketio_socket::dispatch_ack(int id, message data)
   if (cb) cb(std::move(data));
 }
 
-void socketio_socket::mark_connected(bool connected) { connected_ = connected; }
+void socketio_socket::mark_connected(bool connected,
+                                     const std::string& disconnect_reason)
+{
+  bool was_connected = connected_;
+  connected_ = connected;
+
+  if (connected && !was_connected)
+  {
+    connect_listener listener;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      listener = on_connect_;
+    }
+    if (listener) listener();
+  }
+  else if (!connected && was_connected)
+  {
+    disconnect_listener listener;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      listener = on_disconnect_;
+    }
+    if (listener) listener(disconnect_reason);
+  }
+}
 
 }  // namespace sioxx

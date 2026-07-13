@@ -74,10 +74,7 @@ void socketio_client_impl::ensure_engineio()
   engineio_->on_error(
     [self = shared_from_this()](const std::string& msg)
     {
-      if (self->on_close_)
-      { /* surfaced via close handler on hard failure */
-      }
-      (void)msg;
+      if (self->on_error_) self->on_error_(msg);
     });
 }
 
@@ -147,7 +144,7 @@ void socketio_client_impl::on_engineio_frame(const std::string& payload,
     {
       sock->mark_connected(true);
     }
-    if (packet.nsp == "/" && on_open_) on_open_(sock);
+    if (packet.nsp == "/" && on_open_) on_open_();
     break;
 
   case socketio_packet_type::disconnect:

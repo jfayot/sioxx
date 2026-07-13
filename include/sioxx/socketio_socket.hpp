@@ -23,6 +23,8 @@ class socketio_socket : public std::enable_shared_from_this<socketio_socket>
   using event_listener =
     std::function<void(const std::string& event, message data)>;
   using ack_callback = std::function<void(message data)>;
+  using connect_listener = std::function<void()>;
+  using disconnect_listener = std::function<void(const std::string& reason)>;
 
   socketio_socket(std::weak_ptr<socketio_client_impl> client, std::string nsp);
 
@@ -34,6 +36,14 @@ class socketio_socket : public std::enable_shared_from_this<socketio_socket>
   void on(const std::string& event, event_listener listener);
   void off(const std::string& event);
   void off_all();
+
+  // Fired when *this* namespace's CONNECT is acknowledged by the server --
+  // i.e. the earliest safe point to start emitting on this socket. Since
+  // connect()/emit() are asynchronous, emitting right after
+  // client.connect() (before this fires) will silently drop the packet
+  // because the underlying engine.io connection isn't open yet.
+  void on_connect(connect_listener listener);
+  void on_disconnect(disconnect_listener listener);
 
   // emit without expecting an ack.
   void emit(const std::string& event, message data = json::array());
@@ -47,7 +57,8 @@ class socketio_socket : public std::enable_shared_from_this<socketio_socket>
   // --- internal, called by socketio_client_impl ---
   void dispatch_event(const std::string& event, message data);
   void dispatch_ack(int id, message data);
-  void mark_connected(bool connected);
+  void mark_connected(bool connected,
+                      const std::string& disconnect_reason = "");
 
  private:
   std::weak_ptr<socketio_client_impl> client_;
@@ -58,6 +69,8 @@ class socketio_socket : public std::enable_shared_from_this<socketio_socket>
   std::map<std::string, event_listener> listeners_;
   std::map<int, ack_callback> pending_acks_;
   int next_ack_id_{0};
+  connect_listener on_connect_;
+  disconnect_listener on_disconnect_;
 };
 
 }  // namespace sioxx

@@ -40,7 +40,7 @@ class socketio_client_impl
     : public std::enable_shared_from_this<socketio_client_impl>
 {
  public:
-  using connect_handler = std::function<void(std::shared_ptr<socketio_socket>)>;
+  using connect_handler = std::function<void()>;
   using close_handler = std::function<void(const std::string& reason)>;
   using error_handler = std::function<void(const std::string& message)>;
   using fail_handler = std::function<void()>;
@@ -55,6 +55,7 @@ class socketio_client_impl
   void set_open_handler(connect_handler h) { on_open_ = std::move(h); }
   void set_close_handler(close_handler h) { on_close_ = std::move(h); }
   void set_fail_handler(fail_handler h) { on_fail_ = std::move(h); }
+  void set_error_handler(error_handler h) { on_error_ = std::move(h); }
 
   // --- internal, used by socketio_socket ---
   void send_packet(const socketio_packet& packet);
@@ -78,6 +79,7 @@ class socketio_client_impl
   connect_handler on_open_;
   close_handler on_close_;
   fail_handler on_fail_;
+  error_handler on_error_;
 
   int reconnect_attempts_used_{0};
   bool intentional_close_{false};
@@ -97,7 +99,7 @@ class client
     return impl_->socket(nsp);
   }
 
-  void set_open_listener(std::function<void(std::shared_ptr<socketio_socket>)> h)
+  void set_open_listener(std::function<void()> h)
   {
     impl_->set_open_handler(std::move(h));
   }
@@ -108,6 +110,10 @@ class client
   void set_fail_listener(std::function<void()> h)
   {
     impl_->set_fail_handler(std::move(h));
+  }
+  void set_error_listener(std::function<void(const std::string&)> h)
+  {
+    impl_->set_error_handler(std::move(h));
   }
 
  private:

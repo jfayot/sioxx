@@ -24,23 +24,14 @@ int main(int argc, char** argv)
 
   sioxx::client client(opts);
 
-  client.set_open_listener(
-    [&](auto sock)
-    {
-      std::cout << "[sioxx] connected\n";
-
-      // now it is safe to emit
-      sock->emit("hello", sioxx::json{"world"});
-      sock->emit("ping_ack", sioxx::json::array({1, 2, 3}),
-                 [](sioxx::message reply)
-                 { std::cout << "[ack] " << reply.dump() << "\n"; });
-    });
-
+  client.set_open_listener([] { std::cout << "[sioxx] engine.io open\n"; });
   client.set_close_listener(
     [](const std::string& reason)
     { std::cout << "[sioxx] closed: " << reason << "\n"; });
   client.set_fail_listener(
     [] { std::cout << "[sioxx] reconnect attempts exhausted\n"; });
+  client.set_error_listener([](const std::string& msg)
+                            { std::cout << "[sioxx] error: " << msg << "\n"; });
 
   auto sock = client.socket("/your_namespace");
 
@@ -48,9 +39,24 @@ int main(int argc, char** argv)
     "your_message", [](const std::string& event, sioxx::message data)
     { std::cout << "[event] " << event << " -> " << data.dump() << "\n"; });
 
+  // connect()/emit() are asynchronous: the earliest safe point to start
+  // emitting on this socket is once its own CONNECT has been acknowledged
+  // by the server, not just after client.connect() returns.
+  sock->on_connect(
+    [sock]
+    {
+      std::cout << "[sioxx] /your_namespace connected\n";
+
+      sock->emit("hello", sioxx::json{"world"});
+
+      sock->emit("ping_ack", sioxx::json::array({1, 2, 3}),
+                 [](sioxx::message reply)
+                 { std::cout << "[ack] " << reply.dump() << "\n"; });
+    });
+
   client.connect(uri);
 
-  std::this_thread::sleep_for(std::chrono::minutes(10));
+  std::this_thread::sleep_for(std::chrono::seconds(30));
   client.close();
   return 0;
 }

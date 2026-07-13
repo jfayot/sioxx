@@ -1,0 +1,66 @@
+'use strict';
+// Minimal socket.io server for exercising sioxx's example client
+// (examples/basic_client.cpp). Matches its namespace and events:
+//
+//   sock->on("mission_update", ...)
+//   sock->emit("hello", sioxx::json{"world"})
+//   sock->emit("ping_ack", sioxx::json::array({1,2,3}), ackCallback)
+//
+// Usage:
+//   npm install
+//   node server.js              # default JSON parser
+//   node server.js --msgpack    # socket.io-msgpack-parser, to match
+//                                # sioxx::parser_kind::msgpack on the client
+
+const http = require('http');
+const { Server } = require('socket.io');
+
+const useMsgpack = process.argv.includes('--msgpack');
+const port = process.env.PORT || 3000;
+const namespacePath = '/your_namespace';
+
+let ioOptions = {} ;
+if (useMsgpack) {
+  ioOptions.parser = require('socket.io-msgpack-parser');
+}
+
+const httpServer = http.createServer();
+// const io = new Server(httpServer, ioOptions);
+const io = new Server(httpServer);
+const missionEvents = io.of(namespacePath);
+
+missionEvents.on('connection', (socket) => {
+  console.log(`[${namespacePath}] connected: ${socket.id}`);
+
+  socket.on('hello', (arg) => {
+    console.log(`[${namespacePath}] hello from ${socket.id} ->`, arg);
+  });
+
+  socket.on('ping_ack', (...args) => {
+    // socket.io appends the ack callback as the last argument when the
+    // client emitted with one.
+    const ack = typeof args[args.length - 1] === 'function' ? args.pop() : null;
+    console.log(`[${namespacePath}] ping_ack from ${socket.id} ->`, args);
+    if (ack) ack({ reply: 'pong', received: args });
+  });
+
+  socket.on('disconnect', (reason) => {
+    console.log(`[${namespacePath}] disconnected: ${socket.id} (${reason})`);
+  });
+
+  // Give the client something to receive shortly after it connects.
+  setTimeout(() => {
+    socket.emit('your_message', { id: 1, status: 'active', note: 'hello from server' });
+  }, 1000);
+});
+
+// Periodic broadcast so mission_update keeps flowing even with an idle client.
+setInterval(() => {
+  missionEvents.emit('your_message', { id: 0, status: 'heartbeat', ts: Date.now() });
+}, 10000);
+
+httpServer.listen(port, () => {
+  console.log(`[sioxx-test-server] listening on ws://localhost:${port}`);
+  console.log(`[sioxx-test-server] namespace: ${namespacePath}`);
+  console.log(`[sioxx-test-server] parser: ${useMsgpack ? 'msgpack' : 'json (default)'}`);
+});

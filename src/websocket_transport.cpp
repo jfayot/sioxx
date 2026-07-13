@@ -20,11 +20,7 @@ websocket_transport::~websocket_transport()
 {
   close();
   work_guard_.reset();
-  if (io_thread_.joinable() &&
-      std::this_thread::get_id() != io_thread_.get_id())
-  {
-    io_thread_.join();
-  }
+  if (io_thread_.joinable()) io_thread_.join();
 }
 
 void websocket_transport::set_extra_headers(
@@ -176,8 +172,10 @@ void websocket_transport::do_read_plain()
                           if (ec)
                           {
                             state_ = transport_state::closed;
-                            if (!closing_.load() && on_close_)
-                              on_close_(ec.message());
+                            if (!closing_.load())
+                            {
+                              if (on_close_) on_close_(ec.message());
+                            }
                             return;
                           }
                           bool is_binary = ws_plain_->got_binary();
@@ -198,8 +196,10 @@ void websocket_transport::do_read_tls()
                         if (ec)
                         {
                           state_ = transport_state::closed;
-                          if (!closing_.load() && on_close_)
-                            on_close_(ec.message());
+                          if (!closing_.load())
+                          {
+                            if (on_close_) on_close_(ec.message());
+                          }
                           return;
                         }
                         bool is_binary = ws_tls_->got_binary();
@@ -222,11 +222,23 @@ void websocket_transport::queue_write(std::string payload, bool is_binary)
   net::post(ioc_,
             [this, self, payload = std::move(payload), is_binary]() mutable
             {
-              std::lock_guard<std::recursive_mutex> lock(write_mutex_);
-              write_queue_.emplace_back(std::move(payload), is_binary);
-              if (!write_in_progress_)
+              bool should_start = false;
               {
-                write_in_progress_ = true;
+                std::lock_guard<std::recursive_mutex> lock(write_mutex_);
+                write_queue_.emplace_back(std::move(payload), is_binary);
+                if (!write_in_progress_)
+                {
+                  write_in_progress_ = true;
+                  should_start = true;
+                }
+              }
+              // pump_write_queue_* takes write_mutex_ itself, so it must be
+              // called only after the lock above has gone out of scope --
+              // calling it while still holding the lock (as before)
+              // self-deadlocks the single io_context thread on the very first
+              // queued write.
+              if (should_start)
+              {
                 if (url_.tls)
                   pump_write_queue_tls();
                 else
