@@ -40,7 +40,7 @@ class socketio_client_impl
     : public std::enable_shared_from_this<socketio_client_impl>
 {
  public:
-  using connect_handler = std::function<void()>;
+  using connect_handler = std::function<void(std::shared_ptr<socketio_socket>)>;
   using close_handler = std::function<void(const std::string& reason)>;
   using error_handler = std::function<void(const std::string& message)>;
   using fail_handler = std::function<void()>;
@@ -97,7 +97,7 @@ class client
     return impl_->socket(nsp);
   }
 
-  void set_open_listener(std::function<void()> h)
+  void set_open_listener(std::function<void(std::shared_ptr<socketio_socket>)> h)
   {
     impl_->set_open_handler(std::move(h));
   }

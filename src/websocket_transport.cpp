@@ -20,7 +20,11 @@ websocket_transport::~websocket_transport()
 {
   close();
   work_guard_.reset();
-  if (io_thread_.joinable()) io_thread_.join();
+  if (io_thread_.joinable() &&
+      std::this_thread::get_id() != io_thread_.get_id())
+  {
+    io_thread_.join();
+  }
 }
 
 void websocket_transport::set_extra_headers(
@@ -172,10 +176,8 @@ void websocket_transport::do_read_plain()
                           if (ec)
                           {
                             state_ = transport_state::closed;
-                            if (!closing_.load())
-                            {
-                              if (on_close_) on_close_(ec.message());
-                            }
+                            if (!closing_.load() && on_close_)
+                              on_close_(ec.message());
                             return;
                           }
                           bool is_binary = ws_plain_->got_binary();
@@ -196,10 +198,8 @@ void websocket_transport::do_read_tls()
                         if (ec)
                         {
                           state_ = transport_state::closed;
-                          if (!closing_.load())
-                          {
-                            if (on_close_) on_close_(ec.message());
-                          }
+                          if (!closing_.load() && on_close_)
+                            on_close_(ec.message());
                           return;
                         }
                         bool is_binary = ws_tls_->got_binary();
@@ -222,7 +222,7 @@ void websocket_transport::queue_write(std::string payload, bool is_binary)
   net::post(ioc_,
             [this, self, payload = std::move(payload), is_binary]() mutable
             {
-              std::lock_guard<std::mutex> lock(write_mutex_);
+              std::lock_guard<std::recursive_mutex> lock(write_mutex_);
               write_queue_.emplace_back(std::move(payload), is_binary);
               if (!write_in_progress_)
               {
@@ -245,7 +245,7 @@ void websocket_transport::pump_write_queue_plain()
   std::string payload;
   bool is_binary;
   {
-    std::lock_guard<std::mutex> lock(write_mutex_);
+    std::lock_guard<std::recursive_mutex> lock(write_mutex_);
     if (write_queue_.empty())
     {
       write_in_progress_ = false;
@@ -260,7 +260,7 @@ void websocket_transport::pump_write_queue_plain()
                          [this, self](beast::error_code ec, std::size_t)
                          {
                            {
-                             std::lock_guard<std::mutex> lock(write_mutex_);
+                             std::lock_guard<std::recursive_mutex> lock(write_mutex_);
                              if (!write_queue_.empty())
                                write_queue_.pop_front();
                            }
@@ -284,7 +284,7 @@ void websocket_transport::pump_write_queue_tls()
   std::string payload;
   bool is_binary;
   {
-    std::lock_guard<std::mutex> lock(write_mutex_);
+    std::lock_guard<std::recursive_mutex> lock(write_mutex_);
     if (write_queue_.empty())
     {
       write_in_progress_ = false;
@@ -299,7 +299,7 @@ void websocket_transport::pump_write_queue_tls()
                        [this, self](beast::error_code ec, std::size_t)
                        {
                          {
-                           std::lock_guard<std::mutex> lock(write_mutex_);
+                           std::lock_guard<std::recursive_mutex> lock(write_mutex_);
                            if (!write_queue_.empty()) write_queue_.pop_front();
                          }
                          if (ec)

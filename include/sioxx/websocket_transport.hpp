@@ -74,7 +74,7 @@ class websocket_transport final
   std::vector<std::pair<std::string, std::string>> extra_headers_;
   bool verify_tls_{true};
 
-  std::mutex write_mutex_;
+  std::recursive_mutex write_mutex_;
   std::deque<std::pair<std::string, bool>> write_queue_;
   bool write_in_progress_{false};
   std::atomic<bool> closing_{false};

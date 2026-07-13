@@ -24,7 +24,18 @@ int main(int argc, char** argv)
 
   sioxx::client client(opts);
 
-  client.set_open_listener([] { std::cout << "[sioxx] connected\n"; });
+  client.set_open_listener(
+    [&](auto sock)
+    {
+      std::cout << "[sioxx] connected\n";
+
+      // now it is safe to emit
+      sock->emit("hello", sioxx::json{"world"});
+      sock->emit("ping_ack", sioxx::json::array({1, 2, 3}),
+                 [](sioxx::message reply)
+                 { std::cout << "[ack] " << reply.dump() << "\n"; });
+    });
+
   client.set_close_listener(
     [](const std::string& reason)
     { std::cout << "[sioxx] closed: " << reason << "\n"; });
@@ -38,13 +49,6 @@ int main(int argc, char** argv)
     { std::cout << "[event] " << event << " -> " << data.dump() << "\n"; });
 
   client.connect(uri);
-
-  // Example emit without ack.
-  sock->emit("hello", sioxx::json{"world"});
-
-  // Example emit with ack callback.
-  sock->emit("ping_ack", sioxx::json::array({1, 2, 3}), [](sioxx::message reply)
-             { std::cout << "[ack] " << reply.dump() << "\n"; });
 
   std::this_thread::sleep_for(std::chrono::minutes(10));
   client.close();

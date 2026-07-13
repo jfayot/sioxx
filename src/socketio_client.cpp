@@ -147,7 +147,7 @@ void socketio_client_impl::on_engineio_frame(const std::string& payload,
     {
       sock->mark_connected(true);
     }
-    if (packet.nsp == "/" && on_open_) on_open_();
+    if (packet.nsp == "/" && on_open_) on_open_(sock);
     break;
 
   case socketio_packet_type::disconnect:
