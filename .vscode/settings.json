@@ -1,6 +1,6 @@
 {
   "cmake.configureSettings": {
-    "CMAKE_BUILD_TYPE": "Debug",
+    "CMAKE_BUILD_TYPE": "Release",
     "SIOXX_BUILD_EXAMPLES": "ON",
     "SIOXX_BUILD_TESTS": "ON"
   },
