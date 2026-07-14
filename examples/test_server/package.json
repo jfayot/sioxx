@@ -7,7 +7,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "start:msgpack": "node server.js --msgpack"
+    "start:msgpack": "node server.js --msgpack",
+    "start:polling": "node server.js --polling",
+    "start:msgpack-polling": "node server.js --msgpack --polling"
   },
   "dependencies": {
     "socket.io": "^4.8.1",

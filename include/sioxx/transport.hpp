@@ -14,9 +14,8 @@ enum class transport_state
 };
 
 // Abstract transport so engineio_client isn't tied to any specific socket
-// implementation. websocket_transport (boost::beast) is the only concrete
-// implementation shipped, but this keeps the door open for e.g. HTTP
-// long-polling later.
+// implementation. websocket_transport and http_polling_transport are the
+// concrete implementations shipped by sioxx.
 class transport_base
 {
  public:

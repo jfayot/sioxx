@@ -27,6 +27,9 @@ struct client_options
 {
   parser_kind parser{parser_kind::json};
   bool verify_tls{true};
+  // Start with Engine.IO HTTP long-polling instead of WebSocket. Intended for
+  // environments where WebSocket is unavailable and for transport testing.
+  bool force_http_polling{false};
   std::vector<std::pair<std::string, std::string>> extra_headers;
   // Reconnection (simple fixed-delay retry; set attempts=0 to disable).
   int reconnect_attempts{0};
@@ -66,7 +69,9 @@ class socketio_client_impl
   void on_engineio_close(const std::string& reason);
   void on_engineio_frame(const std::string& payload, bool is_binary);
   void schedule_reconnect();
-  std::string build_engineio_url(const std::string& uri) const;
+  std::string build_engineio_url(const std::string& uri,
+                                 const std::string& transport) const;
+  void activate_polling_fallback();
 
   client_options options_;
   std::unique_ptr<parser_base> parser_;
@@ -83,6 +88,7 @@ class socketio_client_impl
 
   int reconnect_attempts_used_{0};
   bool intentional_close_{false};
+  bool using_polling_{false};
 };
 
 // Thin RAII-friendly facade, mirroring the ergonomics of sio::client.

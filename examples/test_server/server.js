@@ -11,11 +11,13 @@
 //   node server.js              # default JSON parser
 //   node server.js --msgpack    # socket.io-msgpack-parser, to match
 //                                # sioxx::parser_kind::msgpack on the client
+//   node server.js --polling    # disable WebSocket; exercise HTTP polling
 
 const http = require('http');
 const { Server } = require('socket.io');
 
 const useMsgpack = process.argv.includes('--msgpack');
+const usePollingOnly = process.argv.includes('--polling');
 const port = process.env.PORT || 3000;
 const namespacePath = '/your_namespace';
 
@@ -23,13 +25,16 @@ let ioOptions = {} ;
 if (useMsgpack) {
   ioOptions.parser = require('socket.io-msgpack-parser');
 }
+if (usePollingOnly) {
+  ioOptions.transports = ['polling'];
+}
 
 const httpServer = http.createServer();
 const io = new Server(httpServer, ioOptions);
 const missionEvents = io.of(namespacePath);
 
 missionEvents.on('connection', (socket) => {
-  console.log(`[${namespacePath}] connected: ${socket.id}`);
+  console.log(`[${namespacePath}] connected: ${socket.id} (${socket.conn.transport.name})`);
 
   socket.on('hello', (arg) => {
     console.log(`[${namespacePath}] hello from ${socket.id} ->`, arg);
@@ -62,4 +67,5 @@ httpServer.listen(port, () => {
   console.log(`[sioxx-test-server] listening on ws://localhost:${port}`);
   console.log(`[sioxx-test-server] namespace: ${namespacePath}`);
   console.log(`[sioxx-test-server] parser: ${useMsgpack ? 'msgpack' : 'json (default)'}`);
+  console.log(`[sioxx-test-server] transport: ${usePollingOnly ? 'polling only' : 'websocket + polling'}`);
 });

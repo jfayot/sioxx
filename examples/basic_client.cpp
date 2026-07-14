@@ -1,7 +1,9 @@
 // Minimal example: connect, join a namespace, emit with/without ack, listen.
 //
-//   ./sioxx_basic_client ws://localhost:3000          (JSON parser, default)
-//   ./sioxx_basic_client ws://localhost:3000 msgpack   (MessagePack parser)
+//   ./sioxx_basic_client                              (JSON parser, default)
+//   ./sioxx_basic_client msgpack                      (MessagePack parser)
+//   ./sioxx_basic_client polling                      (HTTP long-polling)
+//   ./sioxx_basic_client ws://localhost:3001 polling (custom server URL)
 
 #include <chrono>
 #include <iostream>
@@ -10,15 +12,20 @@
 
 int main(int argc, char** argv)
 {
-  std::string uri = argc > 1 ? argv[1] : "ws://localhost:3000";
+  std::string uri = "ws://localhost:3000";
   sioxx::parser_kind parser = sioxx::parser_kind::json;
-  if (argc > 2 && std::string(argv[2]) == "msgpack")
+  bool force_polling = false;
+  for (int i = 1; i < argc; ++i)
   {
-    parser = sioxx::parser_kind::msgpack;
+    const std::string option = argv[i];
+    if (option == "msgpack") parser = sioxx::parser_kind::msgpack;
+    else if (option == "polling") force_polling = true;
+    else uri = option;
   }
 
   sioxx::client_options opts;
   opts.parser = parser;
+  opts.force_http_polling = force_polling;
   opts.reconnect_attempts = 5;
   opts.reconnect_delay = std::chrono::milliseconds(2000);
 

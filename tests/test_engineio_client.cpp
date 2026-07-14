@@ -2,6 +2,7 @@
 
 #include <sioxx/engineio_client.hpp>
 #include <sioxx/message.hpp>
+#include <sioxx/polling_protocol.hpp>
 
 using namespace sioxx;
 
@@ -65,6 +66,24 @@ struct EngineioClientFixture : ::testing::Test
 };
 
 }  // namespace
+
+TEST(HttpPollingProtocol, BinaryPayloadRoundTripsThroughBase64Packet)
+{
+  const std::string binary{"\x00\xff\x01\x02", 4};
+  std::string decoded;
+  const auto packet = detail::polling_encode_binary(binary);
+
+  EXPECT_EQ(packet.substr(0, 1), "b");
+  ASSERT_TRUE(detail::polling_decode_binary(packet, decoded));
+  EXPECT_EQ(decoded, binary);
+}
+
+TEST(HttpPollingProtocol, RejectsNonBinaryAndMalformedPackets)
+{
+  std::string decoded;
+  EXPECT_FALSE(detail::polling_decode_binary("4hello", decoded));
+  EXPECT_FALSE(detail::polling_decode_binary("b???", decoded));
+}
 
 TEST_F(EngineioClientFixture, NotOpenBeforeHandshake)
 {

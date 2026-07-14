@@ -2,6 +2,7 @@
 
 #include <thread>
 
+#include "sioxx/http_polling_transport.hpp"
 #include "sioxx/json_parser.hpp"
 #include "sioxx/msgpack_parser.hpp"
 #include "sioxx/websocket_transport.hpp"
@@ -23,7 +24,7 @@ socketio_client_impl::socketio_client_impl(client_options options)
 }
 
 std::string socketio_client_impl::build_engineio_url(
-  const std::string& uri) const
+  const std::string& uri, const std::string& transport) const
 {
   std::string url = uri;
   size_t scheme_end = url.find("://");
@@ -43,7 +44,7 @@ std::string socketio_client_impl::build_engineio_url(
     (query_pos == std::string::npos) ? url : url.substr(0, query_pos);
   if (!base.empty() && base.back() == '/') base.pop_back();
 
-  base += "/socket.io/?EIO=4&transport=websocket";
+  base += "/socket.io/?EIO=4&transport=" + transport;
   return base;
 }
 
@@ -51,18 +52,33 @@ void socketio_client_impl::connect(const std::string& uri)
 {
   base_uri_ = uri;
   intentional_close_ = false;
+  using_polling_ = options_.force_http_polling;
   reconnect_attempts_used_ = 0;
   ensure_engineio();
-  engineio_->open(build_engineio_url(uri));
+  engineio_->open(
+    build_engineio_url(uri, using_polling_ ? "polling" : "websocket"));
 }
 
 void socketio_client_impl::ensure_engineio()
 {
   engineio_ = std::make_shared<engineio_client>();
-  auto transport = std::make_shared<websocket_transport>();
-  transport->set_verify_tls(options_.verify_tls);
-  if (!options_.extra_headers.empty())
-    transport->set_extra_headers(options_.extra_headers);
+  std::shared_ptr<transport_base> transport;
+  if (using_polling_)
+  {
+    auto polling = std::make_shared<http_polling_transport>();
+    polling->set_verify_tls(options_.verify_tls);
+    if (!options_.extra_headers.empty())
+      polling->set_extra_headers(options_.extra_headers);
+    transport = std::move(polling);
+  }
+  else
+  {
+    auto websocket = std::make_shared<websocket_transport>();
+    websocket->set_verify_tls(options_.verify_tls);
+    if (!options_.extra_headers.empty())
+      websocket->set_extra_headers(options_.extra_headers);
+    transport = std::move(websocket);
+  }
   engineio_->set_transport(transport);
 
   engineio_->on_open([self = shared_from_this()] { self->on_engineio_open(); });
@@ -74,8 +90,22 @@ void socketio_client_impl::ensure_engineio()
   engineio_->on_error(
     [self = shared_from_this()](const std::string& msg)
     {
+      if (!self->using_polling_ && !self->engineio_->is_open())
+      {
+        self->activate_polling_fallback();
+      }
       if (self->on_error_) self->on_error_(msg);
     });
+}
+
+void socketio_client_impl::activate_polling_fallback()
+{
+  if (intentional_close_ || using_polling_) return;
+  using_polling_ = true;
+  if (on_error_)
+    on_error_("WebSocket connection failed; switching to HTTP long-polling");
+  ensure_engineio();
+  engineio_->open(build_engineio_url(base_uri_, "polling"));
 }
 
 void socketio_client_impl::on_engineio_open()
@@ -119,7 +149,8 @@ void socketio_client_impl::schedule_reconnect()
       std::this_thread::sleep_for(delay);
       if (self->intentional_close_) return;
       self->ensure_engineio();
-      self->engineio_->open(self->build_engineio_url(uri));
+      self->engineio_->open(self->build_engineio_url(
+        uri, self->using_polling_ ? "polling" : "websocket"));
     })
     .detach();
 }

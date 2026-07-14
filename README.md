@@ -93,6 +93,7 @@ cd examples/test_server
 pnpm install
 pnpm start              # JSON parser (default)
 # or: pnpm start:msgpack
+# or: pnpm start:polling  # JSON over HTTP long-polling only
 ```
 
 Then, from the repository root, run the matching client mode:
@@ -100,6 +101,7 @@ Then, from the repository root, run the matching client mode:
 ```bash
 ./build/sioxx_basic_client ws://localhost:3000
 ./build/sioxx_basic_client ws://localhost:3000 msgpack
+./build/sioxx_basic_client polling  # default ws://localhost:3000
 ```
 
 The server and client parser modes must match. The test server defaults to
@@ -166,7 +168,9 @@ the callback.
 - Reconnection is a simple fixed-delay retry loop (`reconnect_attempts` /
   `reconnect_delay`), not the exponential-backoff + jitter policy engine.io
   client normally uses.
-- No HTTP long-polling fallback transport — WebSocket only.
+- HTTP long-polling is used automatically only when the initial WebSocket
+  connection fails. It is intentionally not upgraded back to WebSocket, and
+  it opens a fresh HTTP connection for each poll/write.
 
 ## License
 
