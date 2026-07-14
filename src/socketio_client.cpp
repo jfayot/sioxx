@@ -1,5 +1,6 @@
 #include "sioxx/socketio_client.hpp"
 
+#include <random>
 #include <thread>
 
 #include "sioxx/http_polling_transport.hpp"
@@ -141,7 +142,12 @@ void socketio_client_impl::schedule_reconnect()
   }
   ++reconnect_attempts_used_;
   auto self = shared_from_this();
-  auto delay = options_.reconnect_delay;
+  thread_local std::mt19937 jitter_engine{std::random_device{}()};
+  std::uniform_real_distribution<double> jitter_distribution(0.0, 1.0);
+  auto delay = reconnect_delay_for_attempt(
+    options_.reconnect_delay, options_.reconnect_delay_max,
+    options_.reconnect_randomization_factor, reconnect_attempts_used_,
+    jitter_distribution(jitter_engine));
   auto uri = base_uri_;
   std::thread(
     [self, delay, uri]

@@ -18,9 +18,12 @@ int main(int argc, char** argv)
   for (int i = 1; i < argc; ++i)
   {
     const std::string option = argv[i];
-    if (option == "msgpack") parser = sioxx::parser_kind::msgpack;
-    else if (option == "polling") force_polling = true;
-    else uri = option;
+    if (option == "msgpack")
+      parser = sioxx::parser_kind::msgpack;
+    else if (option == "polling")
+      force_polling = true;
+    else
+      uri = option;
   }
 
   sioxx::client_options opts;
@@ -46,9 +49,6 @@ int main(int argc, char** argv)
     "your_message", [](const std::string& event, sioxx::message data)
     { std::cout << "[event] " << event << " -> " << data.dump() << "\n"; });
 
-  // connect()/emit() are asynchronous: the earliest safe point to start
-  // emitting on this socket is once its own CONNECT has been acknowledged
-  // by the server, not just after client.connect() returns.
   sock->on_connect(
     [sock]
     {

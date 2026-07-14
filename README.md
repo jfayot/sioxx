@@ -116,6 +116,9 @@ port `3000`; override it with `PORT=3001 pnpm start` if needed. See the
 sioxx::client_options opts;
 opts.parser = sioxx::parser_kind::msgpack;   // or parser_kind::json (default)
 opts.reconnect_attempts = 5;
+opts.reconnect_delay = std::chrono::milliseconds(1000);
+opts.reconnect_delay_max = std::chrono::milliseconds(30000);
+opts.reconnect_randomization_factor = 0.5;
 
 sioxx::client client(opts);
 client.set_open_listener([] { /* engine.io + "/" namespace connected */ });
@@ -165,9 +168,9 @@ the callback.
   headers but does not implement the placeholder deconstruction/
   reconstruction scheme for multi-attachment binary payloads. Use the
   MessagePack parser if you need binary data — it carries it natively.
-- Reconnection is a simple fixed-delay retry loop (`reconnect_attempts` /
-  `reconnect_delay`), not the exponential-backoff + jitter policy engine.io
-  client normally uses.
+- Reconnection uses capped exponential backoff with symmetric jitter. Configure
+  it with `reconnect_attempts`, `reconnect_delay`, `reconnect_delay_max`, and
+  `reconnect_randomization_factor`.
 - HTTP long-polling is used automatically only when the initial WebSocket
   connection fails. It is intentionally not upgraded back to WebSocket, and
   it opens a fresh HTTP connection for each poll/write.

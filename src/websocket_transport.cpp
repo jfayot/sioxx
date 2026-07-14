@@ -277,22 +277,22 @@ void websocket_transport::pump_write_queue_plain()
   ws_plain_->binary(is_binary);
   auto self = shared_from_this();
   auto buf = std::make_shared<std::string>(std::move(payload));
-  ws_plain_->async_write(net::buffer(*buf),
-                         [this, self, buf](beast::error_code ec, std::size_t)
-                         {
-                           {
-                             std::lock_guard<std::recursive_mutex> lock(write_mutex_);
-                             if (!write_queue_.empty())
-                               write_queue_.pop_front();
-                           }
-                           if (ec)
-                           {
-                             fail("write", ec);
-                             write_in_progress_ = false;
-                             return;
-                           }
-                           pump_write_queue_plain();
-                         });
+  ws_plain_->async_write(
+    net::buffer(*buf),
+    [this, self, buf](beast::error_code ec, std::size_t)
+    {
+      {
+        std::lock_guard<std::recursive_mutex> lock(write_mutex_);
+        if (!write_queue_.empty()) write_queue_.pop_front();
+      }
+      if (ec)
+      {
+        fail("write", ec);
+        write_in_progress_ = false;
+        return;
+      }
+      pump_write_queue_plain();
+    });
 }
 
 void websocket_transport::pump_write_queue_tls()
@@ -317,21 +317,22 @@ void websocket_transport::pump_write_queue_tls()
   ws_tls_->binary(is_binary);
   auto self = shared_from_this();
   auto buf = std::make_shared<std::string>(std::move(payload));
-  ws_tls_->async_write(net::buffer(*buf),
-                       [this, self, buf](beast::error_code ec, std::size_t)
-                       {
-                         {
-                           std::lock_guard<std::recursive_mutex> lock(write_mutex_);
-                           if (!write_queue_.empty()) write_queue_.pop_front();
-                         }
-                         if (ec)
-                         {
-                           fail("write", ec);
-                           write_in_progress_ = false;
-                           return;
-                         }
-                         pump_write_queue_tls();
-                       });
+  ws_tls_->async_write(
+    net::buffer(*buf),
+    [this, self, buf](beast::error_code ec, std::size_t)
+    {
+      {
+        std::lock_guard<std::recursive_mutex> lock(write_mutex_);
+        if (!write_queue_.empty()) write_queue_.pop_front();
+      }
+      if (ec)
+      {
+        fail("write", ec);
+        write_in_progress_ = false;
+        return;
+      }
+      pump_write_queue_tls();
+    });
 }
 
 void websocket_transport::close()

@@ -12,6 +12,7 @@
 
 #include "engineio_client.hpp"
 #include "parser.hpp"
+#include "reconnection.hpp"
 #include "socketio_socket.hpp"
 
 namespace sioxx
@@ -31,9 +32,12 @@ struct client_options
   // environments where WebSocket is unavailable and for transport testing.
   bool force_http_polling{false};
   std::vector<std::pair<std::string, std::string>> extra_headers;
-  // Reconnection (simple fixed-delay retry; set attempts=0 to disable).
+  // Reconnection (set attempts=0 to disable). The delay doubles on each
+  // attempt, is capped, and then receives symmetric jitter.
   int reconnect_attempts{0};
   std::chrono::milliseconds reconnect_delay{2000};
+  std::chrono::milliseconds reconnect_delay_max{30000};
+  double reconnect_randomization_factor{0.5};
 };
 
 // socketio_client_impl holds the shared engine.io connection and dispatches

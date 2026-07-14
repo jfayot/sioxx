@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(sioxx
-  VERSION 0.0.3
+  VERSION 0.0.4
   DESCRIPTION "Modern C++ socket.io client (nlohmann/json + Boost.Beast, JSON/MessagePack parsers)"
   LANGUAGES CXX
 )
@@ -78,6 +78,7 @@ add_library(sioxx
   src/websocket_transport.cpp
   src/http_polling_transport.cpp
   src/engineio_client.cpp
+  src/reconnection.cpp
   src/socketio_socket.cpp
   src/socketio_client.cpp
 )
