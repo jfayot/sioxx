@@ -78,6 +78,34 @@ There's deliberately no test that opens a real socket: `websocket_transport`
 itself (the Boost.Beast plumbing) is exercised end-to-end by the
 `sioxx_basic_client` example against a real server instead.
 
+## Example test server
+
+The repository includes a small Socket.IO server in
+[`examples/test_server`](examples/test_server) for exercising
+`sioxx_basic_client` against a live server. It uses the `/your_namespace`
+namespace, logs the example's `hello` and `ping_ack` events, replies to the
+acknowledgement, and periodically emits `your_message`.
+
+Start it in a separate terminal:
+
+```bash
+cd examples/test_server
+pnpm install
+pnpm start              # JSON parser (default)
+# or: pnpm start:msgpack
+```
+
+Then, from the repository root, run the matching client mode:
+
+```bash
+./build/sioxx_basic_client ws://localhost:3000
+./build/sioxx_basic_client ws://localhost:3000 msgpack
+```
+
+The server and client parser modes must match. The test server defaults to
+port `3000`; override it with `PORT=3001 pnpm start` if needed. See the
+[test-server README](examples/test_server/README.md) for details.
+
 ## API sketch
 
 ```cpp

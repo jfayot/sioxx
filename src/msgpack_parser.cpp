@@ -10,7 +10,7 @@ void msgpack_parser::encode(const socketio_packet& packet,
   obj["type"] = static_cast<int>(packet.type);
   obj["nsp"] = packet.nsp;
   if (packet.id >= 0) obj["id"] = packet.id;
-  obj["data"] = packet.data.is_null() ? json::array() : packet.data;
+  if (!packet.data.is_null()) obj["data"] = packet.data;
 
   std::vector<uint8_t> bytes = json::to_msgpack(obj);
   write(std::string(reinterpret_cast<const char*>(bytes.data()), bytes.size()),

@@ -37,11 +37,11 @@ TEST(JsonParser, EncodesEventOnCustomNamespace)
   json_parser parser;
   socketio_packet pkt;
   pkt.type = socketio_packet_type::event;
-  pkt.nsp = "/mission_events";
-  pkt.data = json::array({"mission_update", 1});
+  pkt.nsp = "/your_namespace";
+  pkt.data = json::array({"your_message", 1});
 
   EXPECT_EQ(encode_to_string(parser, pkt),
-            R"(2/mission_events,["mission_update",1])");
+            R"(2/your_namespace,["your_message",1])");
 }
 
 TEST(JsonParser, EncodesEventWithAckId)
@@ -86,14 +86,14 @@ TEST(JsonParser, DecodesEventRoundTrip)
 {
   json_parser parser;
   socketio_packet decoded;
-  ASSERT_TRUE(parser.decode(R"(2/mission_events,3["mission_update",{"id":7}])",
+  ASSERT_TRUE(parser.decode(R"(2/your_namespace,3["your_message",{"id":7}])",
                             false, decoded));
 
   EXPECT_EQ(decoded.type, socketio_packet_type::event);
-  EXPECT_EQ(decoded.nsp, "/mission_events");
+  EXPECT_EQ(decoded.nsp, "/your_namespace");
   EXPECT_EQ(decoded.id, 3);
   ASSERT_TRUE(decoded.data.is_array());
-  EXPECT_EQ(decoded.data[0].get<std::string>(), "mission_update");
+  EXPECT_EQ(decoded.data[0].get<std::string>(), "your_message");
   EXPECT_EQ(decoded.data[1]["id"].get<int>(), 7);
 }
 

@@ -21,6 +21,7 @@
     "nlohmann",
     "sioxx",
     "socketio",
-    "SOVERSION"
+    "SOVERSION",
+    "tlsext"
   ]
 }

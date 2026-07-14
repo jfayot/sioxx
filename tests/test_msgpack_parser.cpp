@@ -30,10 +30,10 @@ TEST(MsgpackParser, RoundTripsEvent)
   msgpack_parser parser;
   socketio_packet pkt;
   pkt.type = socketio_packet_type::event;
-  pkt.nsp = "/mission_events";
+  pkt.nsp = "/your_namespace";
   pkt.id = 5;
   pkt.data = json::array(
-    {"mission_update", json::object({{"lat", 48.85}, {"lon", 2.35}})});
+    {"your_message", json::object({{"lat", 48.85}, {"lon", 2.35}})});
 
   std::string payload;
   parser.encode(pkt, [&](const std::string& p, bool) { payload = p; });
@@ -41,10 +41,10 @@ TEST(MsgpackParser, RoundTripsEvent)
   socketio_packet decoded;
   ASSERT_TRUE(parser.decode(payload, true, decoded));
   EXPECT_EQ(decoded.type, socketio_packet_type::event);
-  EXPECT_EQ(decoded.nsp, "/mission_events");
+  EXPECT_EQ(decoded.nsp, "/your_namespace");
   EXPECT_EQ(decoded.id, 5);
   ASSERT_TRUE(decoded.data.is_array());
-  EXPECT_EQ(decoded.data[0].get<std::string>(), "mission_update");
+  EXPECT_EQ(decoded.data[0].get<std::string>(), "your_message");
   EXPECT_DOUBLE_EQ(decoded.data[1]["lat"].get<double>(), 48.85);
 }
 
@@ -62,6 +62,7 @@ TEST(MsgpackParser, RoundTripsWithoutAckId)
   ASSERT_TRUE(parser.decode(payload, true, decoded));
   EXPECT_EQ(decoded.type, socketio_packet_type::connect);
   EXPECT_EQ(decoded.id, -1);
+  EXPECT_TRUE(decoded.data.is_null());
 }
 
 TEST(MsgpackParser, CarriesBinaryPayloadNatively)

@@ -70,6 +70,7 @@ class engineio_client : public std::enable_shared_from_this<engineio_client>
   std::string sid_;
 
   std::thread heartbeat_thread_;
+  std::mutex heartbeat_thread_mutex_;
   std::mutex heartbeat_mutex_;
   std::condition_variable heartbeat_cv_;
   std::chrono::steady_clock::time_point last_pong_;

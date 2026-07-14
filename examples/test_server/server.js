@@ -2,7 +2,7 @@
 // Minimal socket.io server for exercising sioxx's example client
 // (examples/basic_client.cpp). Matches its namespace and events:
 //
-//   sock->on("mission_update", ...)
+//   sock->on("your_message", ...)
 //   sock->emit("hello", sioxx::json{"world"})
 //   sock->emit("ping_ack", sioxx::json::array({1,2,3}), ackCallback)
 //
@@ -25,8 +25,7 @@ if (useMsgpack) {
 }
 
 const httpServer = http.createServer();
-// const io = new Server(httpServer, ioOptions);
-const io = new Server(httpServer);
+const io = new Server(httpServer, ioOptions);
 const missionEvents = io.of(namespacePath);
 
 missionEvents.on('connection', (socket) => {
@@ -54,7 +53,7 @@ missionEvents.on('connection', (socket) => {
   }, 1000);
 });
 
-// Periodic broadcast so mission_update keeps flowing even with an idle client.
+// Periodic broadcast so your_message keeps flowing even with an idle client.
 setInterval(() => {
   missionEvents.emit('your_message', { id: 0, status: 'heartbeat', ts: Date.now() });
 }, 10000);

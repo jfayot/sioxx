@@ -167,6 +167,8 @@ void engineio_client::stop_heartbeat_timer()
     std::lock_guard<std::mutex> lock(heartbeat_mutex_);
     heartbeat_cv_.notify_all();
   }
+
+  std::lock_guard<std::mutex> thread_lock(heartbeat_thread_mutex_);
   if (heartbeat_thread_.joinable() &&
       heartbeat_thread_.get_id() != std::this_thread::get_id())
   {

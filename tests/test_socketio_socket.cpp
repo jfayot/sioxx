@@ -21,8 +21,8 @@ std::shared_ptr<socketio_socket> make_socket(std::string nsp = "/")
 
 TEST(SocketioSocket, NspAccessorReturnsConstructedNamespace)
 {
-  auto sock = make_socket("/mission_events");
-  EXPECT_EQ(sock->nsp(), "/mission_events");
+  auto sock = make_socket("/your_namespace");
+  EXPECT_EQ(sock->nsp(), "/your_namespace");
 }
 
 TEST(SocketioSocket, StartsDisconnected)

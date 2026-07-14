@@ -4,6 +4,8 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl/error.hpp>
 #include <boost/beast/version.hpp>
+#include <memory>
+#include <string>
 
 namespace sioxx
 {
@@ -20,7 +22,13 @@ websocket_transport::~websocket_transport()
 {
   close();
   work_guard_.reset();
-  if (io_thread_.joinable()) io_thread_.join();
+  if (io_thread_.joinable())
+  {
+    if (io_thread_.get_id() == std::this_thread::get_id())
+      io_thread_.detach();
+    else
+      io_thread_.join();
+  }
 }
 
 void websocket_transport::set_extra_headers(
@@ -268,8 +276,9 @@ void websocket_transport::pump_write_queue_plain()
   }
   ws_plain_->binary(is_binary);
   auto self = shared_from_this();
-  ws_plain_->async_write(net::buffer(payload),
-                         [this, self](beast::error_code ec, std::size_t)
+  auto buf = std::make_shared<std::string>(std::move(payload));
+  ws_plain_->async_write(net::buffer(*buf),
+                         [this, self, buf](beast::error_code ec, std::size_t)
                          {
                            {
                              std::lock_guard<std::recursive_mutex> lock(write_mutex_);
@@ -307,8 +316,9 @@ void websocket_transport::pump_write_queue_tls()
   }
   ws_tls_->binary(is_binary);
   auto self = shared_from_this();
-  ws_tls_->async_write(net::buffer(payload),
-                       [this, self](beast::error_code ec, std::size_t)
+  auto buf = std::make_shared<std::string>(std::move(payload));
+  ws_tls_->async_write(net::buffer(*buf),
+                       [this, self, buf](beast::error_code ec, std::size_t)
                        {
                          {
                            std::lock_guard<std::recursive_mutex> lock(write_mutex_);
