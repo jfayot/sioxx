@@ -19,7 +19,7 @@ class json_parser final : public parser_base
   void encode(const socketio_packet& packet,
               const frame_writer& write) const override;
   bool decode(const std::string& payload, bool is_binary,
-              socketio_packet& out) const override;
+              socketio_packet& out) override;
   std::string name() const override { return "json"; }
 };
 

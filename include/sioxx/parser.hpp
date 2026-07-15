@@ -65,7 +65,7 @@ class parser_base
   // fully populated (json_parser is single-frame per packet as long as
   // there are no binary attachments; msgpack_parser is always single-frame).
   virtual bool decode(const std::string& payload, bool is_binary,
-                      socketio_packet& out) const = 0;
+                      socketio_packet& out) = 0;
 
   virtual std::string name() const = 0;
 };

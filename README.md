@@ -78,6 +78,35 @@ There's deliberately no test that opens a real socket: `websocket_transport`
 itself (the Boost.Beast plumbing) is exercised end-to-end by the
 `sioxx_basic_client` example against a real server instead.
 
+## Preparing a release
+
+Keep the pending user-visible changes under `[Unreleased]` in
+[`CHANGELOG.md`](CHANGELOG.md). When they are ready to publish, run the
+release-preparation helper with the new version (with or without a leading
+`v`):
+
+```bash
+./scripts/prepare-release.sh 0.0.5
+```
+
+The script updates the CMake project version, turns the current
+`[Unreleased]` entries into a dated `0.0.5` section, creates a fresh
+`[Unreleased]` section, and updates the changelog comparison links. Review
+the result before committing it:
+
+```bash
+git diff -- CMakeLists.txt CHANGELOG.md
+git add CMakeLists.txt CHANGELOG.md
+git commit -m "chore: prepare release v0.0.5"
+git tag v0.0.5
+git push origin main v0.0.5
+```
+
+The tag-triggered GitHub Actions job verifies that the tag matches the CMake
+version and that `CHANGELOG.md` contains non-empty notes for it. After the
+multi-platform build and tests pass, those notes become the GitHub Release
+description.
+
 ## Example test server
 
 The repository includes a small Socket.IO server in
@@ -93,6 +122,7 @@ cd examples/test_server
 pnpm install
 pnpm start              # JSON parser (default)
 # or: pnpm start:msgpack
+# or: pnpm start:cbor
 # or: pnpm start:polling  # JSON over HTTP long-polling only
 ```
 
@@ -101,8 +131,14 @@ Then, from the repository root, run the matching client mode:
 ```bash
 ./build/sioxx_basic_client ws://localhost:3000
 ./build/sioxx_basic_client ws://localhost:3000 msgpack
+./build/sioxx_basic_client ws://localhost:3000 cbor
 ./build/sioxx_basic_client polling  # default ws://localhost:3000
 ```
+
+The `cbor` mode demonstrates a user-provided strategy in
+[`examples/cbor_parser.hpp`](examples/cbor_parser.hpp). It uses
+`nlohmann::json`'s built-in CBOR support. Run the matching bundled Node server
+with `pnpm start:cbor`.
 
 The server and client parser modes must match. The test server defaults to
 port `3000`; override it with `PORT=3001 pnpm start` if needed. See the
@@ -147,6 +183,28 @@ Both parsers implement the same `sioxx::parser_base` interface
 configured with (e.g. Node's `socket.io` default vs.
 `socket.io-msgpack-parser`) — sioxx does not negotiate it automatically,
 exactly like the JS clients don't either.
+
+Applications can supply their own strategy with `parser_factory`. It takes
+precedence over `parser`, and is called once for each client so the returned
+parser may keep per-connection state:
+
+```cpp
+class my_parser : public sioxx::parser_base {
+public:
+    void encode(const sioxx::socketio_packet& packet,
+                const sioxx::frame_writer& write) const override;
+    bool decode(const std::string& payload, bool is_binary,
+                sioxx::socketio_packet& out) override;
+    std::string name() const override { return "my-parser"; }
+};
+
+sioxx::client_options opts;
+opts.parser_factory = [] { return std::make_unique<my_parser>(); };
+sioxx::client client(opts);
+```
+
+The factory must return a non-null `std::unique_ptr<parser_base>`; otherwise
+client construction throws `std::invalid_argument`.
 
 `msgpack_parser` is implemented on top of `nlohmann::json::to_msgpack` /
 `from_msgpack`, so it needs no extra MessagePack library and — unlike the

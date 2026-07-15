@@ -8,10 +8,13 @@
   "scripts": {
     "start": "node server.js",
     "start:msgpack": "node server.js --msgpack",
+    "start:cbor": "node server.js --cbor",
     "start:polling": "node server.js --polling",
-    "start:msgpack-polling": "node server.js --msgpack --polling"
+    "start:msgpack-polling": "node server.js --msgpack --polling",
+    "start:cbor-polling": "node server.js --cbor --polling"
   },
   "dependencies": {
+    "cbor-x": "^1.6.4",
     "socket.io": "^4.8.1",
     "socket.io-msgpack-parser": "^3.0.2"
   }

@@ -27,6 +27,9 @@ enum class parser_kind
 struct client_options
 {
   parser_kind parser{parser_kind::json};
+  // When set, creates the parser strategy owned by this client and takes
+  // precedence over `parser`. The factory must return a non-null parser.
+  std::function<std::unique_ptr<parser_base>()> parser_factory;
   bool verify_tls{true};
   // Start with Engine.IO HTTP long-polling instead of WebSocket. Intended for
   // environments where WebSocket is unavailable and for transport testing.

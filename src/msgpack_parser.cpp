@@ -18,7 +18,7 @@ void msgpack_parser::encode(const socketio_packet& packet,
 }
 
 bool msgpack_parser::decode(const std::string& payload, bool is_binary,
-                            socketio_packet& out) const
+                            socketio_packet& out)
 {
   if (!is_binary) return false;
   try

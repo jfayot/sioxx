@@ -38,7 +38,7 @@ void json_parser::encode(const socketio_packet& packet,
 }
 
 bool json_parser::decode(const std::string& payload, bool is_binary,
-                         socketio_packet& out) const
+                         socketio_packet& out)
 {
   if (is_binary || payload.empty()) return false;
 

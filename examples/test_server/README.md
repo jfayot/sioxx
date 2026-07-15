@@ -24,8 +24,10 @@ pnpm install
 ```bash
 pnpm start              # default JSON parser (matches sioxx::parser_kind::json)
 pnpm start:msgpack      # socket.io-msgpack-parser (matches sioxx::parser_kind::msgpack)
+pnpm start:cbor         # custom CBOR parser (matches examples/cbor_parser.hpp)
 pnpm start:polling      # JSON parser, HTTP long-polling only
 pnpm start:msgpack-polling  # MessagePack parser, HTTP long-polling only
+pnpm start:cbor-polling     # CBOR parser, HTTP long-polling only
 ```
 
 By default it listens on port `3000` (override with `PORT=xxxx pnpm start`).
@@ -36,12 +38,13 @@ By default it listens on port `3000` (override with `PORT=xxxx pnpm start`).
 # from the sioxx build directory
 ./sioxx_basic_client ws://localhost:3000          # JSON parser
 ./sioxx_basic_client ws://localhost:3000 msgpack   # MessagePack parser
+./sioxx_basic_client ws://localhost:3000 cbor      # custom CBOR parser
 ./sioxx_basic_client polling                        # force HTTP polling
 ./sioxx_basic_client ws://localhost:3000 msgpack polling
 ```
 
 **Important:** the client and server parsers must match — connecting a
-`parser_kind::json` client to `pnpm start:msgpack` (or vice versa)
+one parser mode to a server running another parser mode
 will fail the handshake, exactly like the JS clients.
 
 You should see connect/disconnect, `hello`, and `ping_ack` logged
