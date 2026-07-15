@@ -11,19 +11,27 @@
 //   node server.js              # default JSON parser
 //   node server.js --msgpack    # socket.io-msgpack-parser, to match
 //                                # sioxx::parser_kind::msgpack on the client
+//   node server.js --cbor       # custom CBOR parser example
 //   node server.js --polling    # disable WebSocket; exercise HTTP polling
 
 const http = require('http');
 const { Server } = require('socket.io');
 
 const useMsgpack = process.argv.includes('--msgpack');
+const useCbor = process.argv.includes('--cbor');
 const usePollingOnly = process.argv.includes('--polling');
 const port = process.env.PORT || 3000;
 const namespacePath = '/your_namespace';
 
-let ioOptions = {} ;
+if (useMsgpack && useCbor) {
+  throw new Error('--msgpack and --cbor are mutually exclusive');
+}
+
+let ioOptions = {};
 if (useMsgpack) {
   ioOptions.parser = require('socket.io-msgpack-parser');
+} else if (useCbor) {
+  ioOptions.parser = require('./cbor-parser');
 }
 if (usePollingOnly) {
   ioOptions.transports = ['polling'];
@@ -66,6 +74,7 @@ setInterval(() => {
 httpServer.listen(port, () => {
   console.log(`[sioxx-test-server] listening on ws://localhost:${port}`);
   console.log(`[sioxx-test-server] namespace: ${namespacePath}`);
-  console.log(`[sioxx-test-server] parser: ${useMsgpack ? 'msgpack' : 'json (default)'}`);
+  const parserName = useMsgpack ? 'msgpack' : useCbor ? 'cbor' : 'json (default)';
+  console.log(`[sioxx-test-server] parser: ${parserName}`);
   console.log(`[sioxx-test-server] transport: ${usePollingOnly ? 'polling only' : 'websocket + polling'}`);
 });

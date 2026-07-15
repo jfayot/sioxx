@@ -13,6 +13,7 @@ add_executable(sioxx_tests
   test_url_parse.cpp
   test_json_parser.cpp
   test_msgpack_parser.cpp
+  test_custom_parser.cpp
   test_socketio_socket.cpp
   test_engineio_client.cpp
   test_reconnection.cpp

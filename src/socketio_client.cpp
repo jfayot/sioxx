@@ -1,6 +1,7 @@
 #include "sioxx/socketio_client.hpp"
 
 #include <random>
+#include <stdexcept>
 #include <thread>
 
 #include "sioxx/http_polling_transport.hpp"
@@ -14,7 +15,14 @@ namespace sioxx
 socketio_client_impl::socketio_client_impl(client_options options)
     : options_(std::move(options))
 {
-  if (options_.parser == parser_kind::msgpack)
+  if (options_.parser_factory)
+  {
+    parser_ = options_.parser_factory();
+    if (!parser_)
+      throw std::invalid_argument(
+        "client_options::parser_factory returned null");
+  }
+  else if (options_.parser == parser_kind::msgpack)
   {
     parser_ = std::make_unique<msgpack_parser>();
   }
