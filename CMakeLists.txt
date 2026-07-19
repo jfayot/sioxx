@@ -13,6 +13,7 @@ include(CTest)
 # ---------------------------------------------------------------------------
 option(SIOXX_BUILD_EXAMPLES "Build example programs" ON)
 option(SIOXX_BUILD_TESTS "Build unit tests" ON)
+option(SIOXX_USE_SYSTEM_BOOST "Use system-installed boost instead of fetching it" OFF)
 option(SIOXX_USE_SYSTEM_JSON "Use system-installed nlohmann_json instead of fetching it" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -39,17 +40,21 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 # Dependencies
 # ---------------------------------------------------------------------------
 
-CPMAddPackage(
-  NAME Boost
-  VERSION 1.90.0
-  URL https://github.com/boostorg/boost/releases/download/boost-1.90.0/boost-1.90.0-cmake.tar.xz
-  URL_HASH SHA256=aca59f889f0f32028ad88ba6764582b63c916ce5f77b31289ad19421a96c555f
-  OPTIONS
-  "BOOST_ENABLE_CMAKE ON"
-  "BUILD_SHARED_LIBS OFF"
-  "BOOST_SKIP_INSTALL_RULES OFF"
-  "BOOST_INCLUDE_LIBRARIES asio\\\;beast"
-)
+if(SIOXX_USE_SYSTEM_BOOST)
+  find_package(Boost 1.90.0 REQUIRED COMPONENTS asio beast)
+else()
+  CPMAddPackage(
+    NAME Boost
+    VERSION 1.90.0
+    URL https://github.com/boostorg/boost/releases/download/boost-1.90.0/boost-1.90.0-cmake.tar.xz
+    URL_HASH SHA256=aca59f889f0f32028ad88ba6764582b63c916ce5f77b31289ad19421a96c555f
+    OPTIONS
+    "BOOST_ENABLE_CMAKE ON"
+    "BUILD_SHARED_LIBS OFF"
+    "BOOST_SKIP_INSTALL_RULES OFF"
+    "BOOST_INCLUDE_LIBRARIES asio\\\;beast"
+  )
+endif()
 
 # TLS support for wss://
 find_package(OpenSSL REQUIRED)
