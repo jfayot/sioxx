@@ -1,0 +1,37 @@
+name: Build Linux
+
+on:
+  workflow_call:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler:
+          - cc: gcc
+            cxx: g++
+          - cc: clang
+            cxx: clang++
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure CMake
+      run: >
+        cmake -B build
+        -DCMAKE_CXX_COMPILER=${{ matrix.compiler.cxx }}
+        -DCMAKE_C_COMPILER=${{ matrix.compiler.cc }}
+        -DCMAKE_BUILD_TYPE=Release
+        -S .
+
+    - name: Build
+      run: cmake --build build --config Release
+
+    - name: Test
+      run: ctest --test-dir build --build-config Release --output-on-failure
