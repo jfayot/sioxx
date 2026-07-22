@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(sioxx
-  VERSION 0.0.6
+  VERSION 0.1.0
   DESCRIPTION "A modern C++17 Socket.IO client built on Boost.Beast and nlohmann-json"
   LANGUAGES CXX
 )
