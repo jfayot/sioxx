@@ -2,7 +2,9 @@
 
 ![GitHub Release](https://img.shields.io/github/v/release/jfayot/sioxx)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/jfayot/sioxx/blob/main/LICENSE)
-![build](https://github.com/jfayot/sioxx/actions/workflows/cmake-multi-platform.yml/badge.svg)
+![Linux](https://github.com/jfayot/sioxx/actions/workflows/build-linux.yml/badge.svg)
+![macOS](https://github.com/jfayot/sioxx/actions/workflows/build-macos.yml/badge.svg)
+![Windows](https://github.com/jfayot/sioxx/actions/workflows/build-windows.yml/badge.svg)
 
 A C++ implementation of `socket.io`'s client functionality with the following stack:
 

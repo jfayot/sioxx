@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags: [ "v*" ]
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux:
+    uses: ./.github/workflows/build-linux.yml
+
+  build-macos:
+    uses: ./.github/workflows/build-macos.yml
+
+  build-windows:
+    uses: ./.github/workflows/build-windows.yml
+
+  release:
+    name: Create GitHub release
+    needs: [build-linux, build-macos, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Verify tag matches CMake project version
+      shell: bash
+      run: |
+        tag_version="${GITHUB_REF_NAME#v}"
+        cmake_version="$(awk '/^[[:space:]]*VERSION[[:space:]]+[0-9]/ { print $2; exit }' CMakeLists.txt)"
+        if [ "$tag_version" != "$cmake_version" ]; then
+          echo "Tag version $tag_version does not match CMake version $cmake_version" >&2
+          exit 1
+        fi
+
+    - name: Extract release notes from changelog
+      shell: bash
+      run: |
+        version="${GITHUB_REF_NAME#v}"
+        awk -v version="$version" '
+          $0 ~ "^## \\[" version "\\]( |$)" { found = 1; next }
+          found && /^## \[/ { exit }
+          found { print }
+          END { if (!found) exit 1 }
+        ' CHANGELOG.md > release-notes.md
+
+        if [ ! -s release-notes.md ]; then
+          echo "No release notes found for version $version in CHANGELOG.md" >&2
+          exit 1
+        fi
+
+    - name: Create release from changelog
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: >
+        gh release create "$GITHUB_REF_NAME"
+        --verify-tag
+        --title "$GITHUB_REF_NAME"
+        --notes-file release-notes.md
