@@ -12,7 +12,7 @@
 class cbor_parser final : public sioxx::parser_base
 {
  public:
-  void encode(const sioxx::socketio_packet& packet,
+  void encode(const sioxx::packet& packet,
               const sioxx::frame_writer& write) const override
   {
     sioxx::json object = sioxx::json::object();
@@ -28,7 +28,7 @@ class cbor_parser final : public sioxx::parser_base
   }
 
   bool decode(const std::string& payload, bool is_binary,
-              sioxx::socketio_packet& out) override
+              sioxx::packet& out) override
   {
     if (!is_binary) return false;
 
@@ -39,7 +39,7 @@ class cbor_parser final : public sioxx::parser_base
       if (!object.is_object()) return false;
 
       out.type =
-        static_cast<sioxx::socketio_packet_type>(object.value("type", 0));
+        static_cast<sioxx::packet_type>(object.value("type", 0));
       out.nsp = object.value("nsp", std::string("/"));
       out.id = object.contains("id") && !object["id"].is_null()
                  ? object["id"].get<int>()

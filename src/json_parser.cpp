@@ -1,18 +1,18 @@
-#include "sioxx/json_parser.hpp"
+#include "json_parser.hpp"
 
 #include <cctype>
 
 namespace sioxx
 {
 
-void json_parser::encode(const socketio_packet& packet,
+void json_parser::encode(const packet& packet,
                          const frame_writer& write) const
 {
   std::string out;
   out += std::to_string(static_cast<int>(packet.type));
 
-  if (packet.type == socketio_packet_type::binary_event ||
-      packet.type == socketio_packet_type::binary_ack)
+  if (packet.type == packet_type::binary_event ||
+      packet.type == packet_type::binary_ack)
   {
     out += std::to_string(packet.attachments);
     out += '-';
@@ -38,7 +38,7 @@ void json_parser::encode(const socketio_packet& packet,
 }
 
 bool json_parser::decode(const std::string& payload, bool is_binary,
-                         socketio_packet& out)
+                         packet& out)
 {
   if (is_binary || payload.empty()) return false;
 
@@ -46,12 +46,12 @@ bool json_parser::decode(const std::string& payload, bool is_binary,
   if (!std::isdigit(static_cast<unsigned char>(payload[i]))) return false;
   int type = payload[i] - '0';
   if (type < 0 || type > 6) return false;
-  out.type = static_cast<socketio_packet_type>(type);
+  out.type = static_cast<packet_type>(type);
   ++i;
 
   out.attachments = 0;
-  if (out.type == socketio_packet_type::binary_event ||
-      out.type == socketio_packet_type::binary_ack)
+  if (out.type == packet_type::binary_event ||
+      out.type == packet_type::binary_ack)
   {
     size_t dash = payload.find('-', i);
     if (dash == std::string::npos) return false;

@@ -1,14 +1,14 @@
 #include <gtest/gtest.h>
 
-#include <sioxx/msgpack_parser.hpp>
+#include "msgpack_parser.hpp"
 
 using namespace sioxx;
 
 TEST(MsgpackParser, EncodeProducesBinaryFrame)
 {
   msgpack_parser parser;
-  socketio_packet pkt;
-  pkt.type = socketio_packet_type::event;
+  packet pkt;
+  pkt.type = packet_type::event;
   pkt.nsp = "/";
   pkt.data = json::array({"hello", "world"});
 
@@ -28,8 +28,8 @@ TEST(MsgpackParser, EncodeProducesBinaryFrame)
 TEST(MsgpackParser, RoundTripsEvent)
 {
   msgpack_parser parser;
-  socketio_packet pkt;
-  pkt.type = socketio_packet_type::event;
+  packet pkt;
+  pkt.type = packet_type::event;
   pkt.nsp = "/your_namespace";
   pkt.id = 5;
   pkt.data = json::array(
@@ -38,9 +38,9 @@ TEST(MsgpackParser, RoundTripsEvent)
   std::string payload;
   parser.encode(pkt, [&](const std::string& p, bool) { payload = p; });
 
-  socketio_packet decoded;
+  packet decoded;
   ASSERT_TRUE(parser.decode(payload, true, decoded));
-  EXPECT_EQ(decoded.type, socketio_packet_type::event);
+  EXPECT_EQ(decoded.type, packet_type::event);
   EXPECT_EQ(decoded.nsp, "/your_namespace");
   EXPECT_EQ(decoded.id, 5);
   ASSERT_TRUE(decoded.data.is_array());
@@ -51,16 +51,16 @@ TEST(MsgpackParser, RoundTripsEvent)
 TEST(MsgpackParser, RoundTripsWithoutAckId)
 {
   msgpack_parser parser;
-  socketio_packet pkt;
-  pkt.type = socketio_packet_type::connect;
+  packet pkt;
+  pkt.type = packet_type::connect;
   pkt.nsp = "/";
 
   std::string payload;
   parser.encode(pkt, [&](const std::string& p, bool) { payload = p; });
 
-  socketio_packet decoded;
+  packet decoded;
   ASSERT_TRUE(parser.decode(payload, true, decoded));
-  EXPECT_EQ(decoded.type, socketio_packet_type::connect);
+  EXPECT_EQ(decoded.type, packet_type::connect);
   EXPECT_EQ(decoded.id, -1);
   EXPECT_TRUE(decoded.data.is_null());
 }
@@ -70,15 +70,15 @@ TEST(MsgpackParser, CarriesBinaryPayloadNatively)
   msgpack_parser parser;
   std::vector<uint8_t> raw{0xDE, 0xAD, 0xBE, 0xEF};
 
-  socketio_packet pkt;
-  pkt.type = socketio_packet_type::event;
+  packet pkt;
+  pkt.type = packet_type::event;
   pkt.nsp = "/";
   pkt.data = json::array({"blob", json::binary(raw)});
 
   std::string payload;
   parser.encode(pkt, [&](const std::string& p, bool) { payload = p; });
 
-  socketio_packet decoded;
+  packet decoded;
   ASSERT_TRUE(parser.decode(payload, true, decoded));
   ASSERT_TRUE(decoded.data[1].is_binary());
   EXPECT_EQ(static_cast<std::vector<uint8_t>>(decoded.data[1].get_binary()),
@@ -88,14 +88,14 @@ TEST(MsgpackParser, CarriesBinaryPayloadNatively)
 TEST(MsgpackParser, RejectsTextFrames)
 {
   msgpack_parser parser;
-  socketio_packet decoded;
+  packet decoded;
   EXPECT_FALSE(parser.decode("not msgpack", false, decoded));
 }
 
 TEST(MsgpackParser, RejectsMalformedBytes)
 {
   msgpack_parser parser;
-  socketio_packet decoded;
+  packet decoded;
   std::string garbage = "\xff\xff\xff\xff";
   EXPECT_FALSE(parser.decode(garbage, true, decoded));
 }

@@ -7,7 +7,7 @@
 #include <thread>
 #include <vector>
 
-#include "message.hpp"
+#include "sioxx/message.hpp"
 #include "transport.hpp"
 #include "url_parse.hpp"
 

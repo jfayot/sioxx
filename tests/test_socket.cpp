@@ -1,37 +1,37 @@
 #include <gtest/gtest.h>
 
-#include <sioxx/socketio_socket.hpp>
+#include <sioxx/socket.hpp>
 
 using namespace sioxx;
 
 namespace
 {
 
-// A default-constructed weak_ptr<socketio_client_impl> is enough to build a
-// socketio_socket for these tests: emit()/connect()/disconnect() will just
+// A default-constructed weak_ptr<client_impl> is enough to build a
+// socket for these tests: emit()/connect()/disconnect() will just
 // find client_.lock() == nullptr and skip the network send, while still
 // exercising the local listener/ack bookkeeping we care about here.
-std::shared_ptr<socketio_socket> make_socket(std::string nsp = "/")
+std::shared_ptr<socket> make_socket(std::string nsp = "/")
 {
-  return std::make_shared<socketio_socket>(
-    std::weak_ptr<socketio_client_impl>{}, std::move(nsp));
+  return std::make_shared<socket>(
+    std::weak_ptr<client_impl>{}, std::move(nsp));
 }
 
 }  // namespace
 
-TEST(SocketioSocket, NspAccessorReturnsConstructedNamespace)
+TEST(Socket, NspAccessorReturnsConstructedNamespace)
 {
   auto sock = make_socket("/your_namespace");
   EXPECT_EQ(sock->nsp(), "/your_namespace");
 }
 
-TEST(SocketioSocket, StartsDisconnected)
+TEST(Socket, StartsDisconnected)
 {
   auto sock = make_socket();
   EXPECT_FALSE(sock->connected());
 }
 
-TEST(SocketioSocket, MarkConnectedUpdatesState)
+TEST(Socket, MarkConnectedUpdatesState)
 {
   auto sock = make_socket();
   sock->mark_connected(true);
@@ -40,7 +40,7 @@ TEST(SocketioSocket, MarkConnectedUpdatesState)
   EXPECT_FALSE(sock->connected());
 }
 
-TEST(SocketioSocket, OnDispatchesMatchingEventWithData)
+TEST(Socket, OnDispatchesMatchingEventWithData)
 {
   auto sock = make_socket();
   bool called = false;
@@ -64,7 +64,7 @@ TEST(SocketioSocket, OnDispatchesMatchingEventWithData)
   EXPECT_EQ(seen_data[1].get<int>(), 42);
 }
 
-TEST(SocketioSocket, DispatchIgnoresUnregisteredEvent)
+TEST(Socket, DispatchIgnoresUnregisteredEvent)
 {
   auto sock = make_socket();
   int call_count = 0;
@@ -74,7 +74,7 @@ TEST(SocketioSocket, DispatchIgnoresUnregisteredEvent)
   EXPECT_EQ(call_count, 0);
 }
 
-TEST(SocketioSocket, OnOverwritesPreviousListenerForSameEvent)
+TEST(Socket, OnOverwritesPreviousListenerForSameEvent)
 {
   auto sock = make_socket();
   int first_calls = 0, second_calls = 0;
@@ -87,7 +87,7 @@ TEST(SocketioSocket, OnOverwritesPreviousListenerForSameEvent)
   EXPECT_EQ(second_calls, 1);
 }
 
-TEST(SocketioSocket, OffRemovesOnlyTheNamedListener)
+TEST(Socket, OffRemovesOnlyTheNamedListener)
 {
   auto sock = make_socket();
   int a_calls = 0, b_calls = 0;
@@ -102,7 +102,7 @@ TEST(SocketioSocket, OffRemovesOnlyTheNamedListener)
   EXPECT_EQ(b_calls, 1);
 }
 
-TEST(SocketioSocket, OffAllRemovesEveryListener)
+TEST(Socket, OffAllRemovesEveryListener)
 {
   auto sock = make_socket();
   int calls = 0;
@@ -116,7 +116,7 @@ TEST(SocketioSocket, OffAllRemovesEveryListener)
   EXPECT_EQ(calls, 0);
 }
 
-TEST(SocketioSocket, EmitWithAckRegistersCallbackInvokedByDispatchAck)
+TEST(Socket, EmitWithAckRegistersCallbackInvokedByDispatchAck)
 {
   auto sock = make_socket();
   bool called = false;
@@ -139,7 +139,7 @@ TEST(SocketioSocket, EmitWithAckRegistersCallbackInvokedByDispatchAck)
   EXPECT_EQ(reply[0].get<std::string>(), "pong");
 }
 
-TEST(SocketioSocket, AckIdsIncrementPerCall)
+TEST(Socket, AckIdsIncrementPerCall)
 {
   auto sock = make_socket();
   std::vector<int> received_ids;
@@ -155,13 +155,13 @@ TEST(SocketioSocket, AckIdsIncrementPerCall)
   EXPECT_EQ(received_ids[1], 0);
 }
 
-TEST(SocketioSocket, DispatchAckWithUnknownIdIsIgnored)
+TEST(Socket, DispatchAckWithUnknownIdIsIgnored)
 {
   auto sock = make_socket();
   EXPECT_NO_THROW(sock->dispatch_ack(999, json::array()));
 }
 
-TEST(SocketioSocket, DispatchAckIsConsumedOnce)
+TEST(Socket, DispatchAckIsConsumedOnce)
 {
   auto sock = make_socket();
   int calls = 0;
@@ -173,13 +173,13 @@ TEST(SocketioSocket, DispatchAckIsConsumedOnce)
   EXPECT_EQ(calls, 1);
 }
 
-TEST(SocketioSocket, EmitWithoutAckDoesNotThrowWithNoClientAttached)
+TEST(Socket, EmitWithoutAckDoesNotThrowWithNoClientAttached)
 {
   auto sock = make_socket();
   EXPECT_NO_THROW(sock->emit("fire_and_forget", json::array({"x"})));
 }
 
-TEST(SocketioSocket, ConnectAndDisconnectDoNotThrowWithNoClientAttached)
+TEST(Socket, ConnectAndDisconnectDoNotThrowWithNoClientAttached)
 {
   auto sock = make_socket();
   EXPECT_NO_THROW(sock->connect());

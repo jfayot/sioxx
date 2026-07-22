@@ -1,18 +1,20 @@
-#include "sioxx/socketio_client.hpp"
+#include "sioxx/client.hpp"
+
+#include "client_impl.hpp"
 
 #include <random>
 #include <stdexcept>
 #include <thread>
 
-#include "sioxx/http_polling_transport.hpp"
-#include "sioxx/json_parser.hpp"
-#include "sioxx/msgpack_parser.hpp"
-#include "sioxx/websocket_transport.hpp"
+#include "http_polling_transport.hpp"
+#include "json_parser.hpp"
+#include "msgpack_parser.hpp"
+#include "websocket_transport.hpp"
 
 namespace sioxx
 {
 
-socketio_client_impl::socketio_client_impl(client_options options)
+client_impl::client_impl(client_options options)
     : options_(std::move(options))
 {
   if (options_.parser_factory)
@@ -32,7 +34,7 @@ socketio_client_impl::socketio_client_impl(client_options options)
   }
 }
 
-std::string socketio_client_impl::build_engineio_url(
+std::string client_impl::build_engineio_url(
   const std::string& uri, const std::string& transport) const
 {
   std::string url = uri;
@@ -57,7 +59,7 @@ std::string socketio_client_impl::build_engineio_url(
   return base;
 }
 
-void socketio_client_impl::connect(const std::string& uri)
+void client_impl::connect(const std::string& uri)
 {
   base_uri_ = uri;
   intentional_close_ = false;
@@ -68,7 +70,7 @@ void socketio_client_impl::connect(const std::string& uri)
     build_engineio_url(uri, using_polling_ ? "polling" : "websocket"));
 }
 
-void socketio_client_impl::ensure_engineio()
+void client_impl::ensure_engineio()
 {
   engineio_ = std::make_shared<engineio_client>();
   std::shared_ptr<transport_base> transport;
@@ -107,7 +109,7 @@ void socketio_client_impl::ensure_engineio()
     });
 }
 
-void socketio_client_impl::activate_polling_fallback()
+void client_impl::activate_polling_fallback()
 {
   if (intentional_close_ || using_polling_) return;
   using_polling_ = true;
@@ -117,7 +119,7 @@ void socketio_client_impl::activate_polling_fallback()
   engineio_->open(build_engineio_url(base_uri_, "polling"));
 }
 
-void socketio_client_impl::on_engineio_open()
+void client_impl::on_engineio_open()
 {
   // Auto-CONNECT every namespace socket that's already been requested.
   std::lock_guard<std::mutex> lock(sockets_mutex_);
@@ -127,7 +129,7 @@ void socketio_client_impl::on_engineio_open()
   }
 }
 
-void socketio_client_impl::on_engineio_close(const std::string& reason)
+void client_impl::on_engineio_close(const std::string& reason)
 {
   {
     std::lock_guard<std::mutex> lock(sockets_mutex_);
@@ -141,7 +143,7 @@ void socketio_client_impl::on_engineio_close(const std::string& reason)
   }
 }
 
-void socketio_client_impl::schedule_reconnect()
+void client_impl::schedule_reconnect()
 {
   if (reconnect_attempts_used_ >= options_.reconnect_attempts)
   {
@@ -169,13 +171,13 @@ void socketio_client_impl::schedule_reconnect()
     .detach();
 }
 
-void socketio_client_impl::on_engineio_frame(const std::string& payload,
+void client_impl::on_engineio_frame(const std::string& payload,
                                              bool is_binary)
 {
-  socketio_packet packet;
+  packet packet;
   if (!parser_->decode(payload, is_binary, packet)) return;
 
-  std::shared_ptr<socketio_socket> sock;
+  std::shared_ptr<sioxx::socket> sock;
   {
     std::lock_guard<std::mutex> lock(sockets_mutex_);
     auto it = sockets_.find(packet.nsp);
@@ -184,7 +186,7 @@ void socketio_client_impl::on_engineio_frame(const std::string& payload,
 
   switch (packet.type)
   {
-  case socketio_packet_type::connect:
+  case packet_type::connect:
     if (sock)
     {
       sock->mark_connected(true);
@@ -192,16 +194,16 @@ void socketio_client_impl::on_engineio_frame(const std::string& payload,
     if (packet.nsp == "/" && on_open_) on_open_();
     break;
 
-  case socketio_packet_type::disconnect:
+  case packet_type::disconnect:
     if (sock) sock->mark_connected(false);
     break;
 
-  case socketio_packet_type::connect_error:
+  case packet_type::connect_error:
     if (sock) sock->dispatch_event("connect_error", packet.data);
     break;
 
-  case socketio_packet_type::event:
-  case socketio_packet_type::binary_event:
+  case packet_type::event:
+  case packet_type::binary_event:
   {
     if (!sock || !packet.data.is_array() || packet.data.empty()) break;
     std::string event_name =
@@ -213,14 +215,14 @@ void socketio_client_impl::on_engineio_frame(const std::string& payload,
     break;
   }
 
-  case socketio_packet_type::ack:
-  case socketio_packet_type::binary_ack:
+  case packet_type::ack:
+  case packet_type::binary_ack:
     if (sock && packet.id >= 0) sock->dispatch_ack(packet.id, packet.data);
     break;
   }
 }
 
-std::shared_ptr<socketio_socket> socketio_client_impl::socket(
+std::shared_ptr<sioxx::socket> client_impl::socket(
   const std::string& nsp)
 {
   std::string norm_nsp = nsp.empty() ? "/" : nsp;
@@ -228,20 +230,20 @@ std::shared_ptr<socketio_socket> socketio_client_impl::socket(
   auto it = sockets_.find(norm_nsp);
   if (it != sockets_.end()) return it->second;
 
-  auto sock = std::make_shared<socketio_socket>(weak_from_this(), norm_nsp);
+  auto sock = std::make_shared<sioxx::socket>(weak_from_this(), norm_nsp);
   sockets_[norm_nsp] = sock;
   if (engineio_ && engineio_->is_open()) sock->connect();
   return sock;
 }
 
-void socketio_client_impl::send_packet(const socketio_packet& packet)
+void client_impl::send_packet(const packet& packet)
 {
   if (!engineio_) return;
   parser_->encode(packet, [this](const std::string& payload, bool is_binary)
                   { engineio_->send(payload, is_binary); });
 }
 
-void socketio_client_impl::close()
+void client_impl::close()
 {
   intentional_close_ = true;
   {
@@ -255,8 +257,39 @@ void socketio_client_impl::close()
 }
 
 client::client(client_options options)
-    : impl_(std::make_shared<socketio_client_impl>(std::move(options)))
+    : impl_(std::make_shared<client_impl>(std::move(options)))
 {
+}
+
+client::~client() = default;
+
+void client::connect(const std::string& uri) { impl_->connect(uri); }
+
+void client::close() { impl_->close(); }
+
+std::shared_ptr<sioxx::socket> client::socket(const std::string& nsp)
+{
+  return impl_->socket(nsp);
+}
+
+void client::set_open_listener(std::function<void()> h)
+{
+  impl_->set_open_handler(std::move(h));
+}
+
+void client::set_close_listener(std::function<void(const std::string&)> h)
+{
+  impl_->set_close_handler(std::move(h));
+}
+
+void client::set_fail_listener(std::function<void()> h)
+{
+  impl_->set_fail_handler(std::move(h));
+}
+
+void client::set_error_listener(std::function<void(const std::string&)> h)
+{
+  impl_->set_error_handler(std::move(h));
 }
 
 }  // namespace sioxx

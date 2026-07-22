@@ -1,5 +1,5 @@
 #pragma once
-// sioxx/socketio_socket.hpp
+// sioxx/socket.hpp
 //
 // Represents one socket.io namespace connection ("/", "/chat", ...),
 // mirroring sio::socket from the original socket.io-client-cpp.
@@ -15,9 +15,9 @@
 namespace sioxx
 {
 
-class socketio_client_impl;  // fwd decl, defined in socketio_client.hpp/.cpp
+class client_impl;  // fwd decl, defined in client.hpp/.cpp
 
-class socketio_socket : public std::enable_shared_from_this<socketio_socket>
+class socket : public std::enable_shared_from_this<socket>
 {
  public:
   using event_listener =
@@ -26,7 +26,7 @@ class socketio_socket : public std::enable_shared_from_this<socketio_socket>
   using connect_listener = std::function<void()>;
   using disconnect_listener = std::function<void(const std::string& reason)>;
 
-  socketio_socket(std::weak_ptr<socketio_client_impl> client, std::string nsp);
+  socket(std::weak_ptr<client_impl> client, std::string nsp);
 
   const std::string& nsp() const { return nsp_; }
   bool connected() const { return connected_; }
@@ -54,14 +54,14 @@ class socketio_socket : public std::enable_shared_from_this<socketio_socket>
   void connect();     // send a CONNECT packet for this namespace
   void disconnect();  // send a DISCONNECT packet for this namespace
 
-  // --- internal, called by socketio_client_impl ---
+  // --- internal, called by client_impl ---
   void dispatch_event(const std::string& event, message data);
   void dispatch_ack(int id, message data);
   void mark_connected(bool connected,
                       const std::string& disconnect_reason = "");
 
  private:
-  std::weak_ptr<socketio_client_impl> client_;
+  std::weak_ptr<client_impl> client_;
   std::string nsp_;
   bool connected_{false};
 

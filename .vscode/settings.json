@@ -4,12 +4,14 @@
     "SIOXX_BUILD_EXAMPLES": "ON",
     "SIOXX_BUILD_TESTS": "ON"
   },
+  "editor.formatOnSave": true,
   "cmake.buildBeforeRun": true,
   "cmake.saveBeforeBuild": true,
   "cSpell.words": [
     "Asio",
     "BINDIR",
     "cbor",
+    "chrono",
     "ctest",
     "DBUILD",
     "DCMAKE",
