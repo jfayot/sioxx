@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-22
+
+### Breaking changes
+
+- Hid implementation details from the public includes
+- Renamed client and related classes for consistency
+
+### Changes
+
+- Split gh workflow into build per platform and dedicated release workflow
+- Introduced package-lock.cmake for centralized dependency management
+
 ## [0.0.6] - 2026-07-19
 
 ### Added
@@ -52,7 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - WebSocket write-queue and recursive-mutex deadlocks.
 - Windows builds and test configuration in CMake and VS Code.
 
-[Unreleased]: https://github.com/jfayot/sioxx/compare/v0.0.6...HEAD
+[Unreleased]: https://github.com/jfayot/sioxx/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/jfayot/sioxx/compare/v0.0.6...v0.1.0
 [0.0.6]: https://github.com/jfayot/sioxx/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/jfayot/sioxx/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/jfayot/sioxx/compare/v0.0.3...v0.0.4
