@@ -1,25 +1,29 @@
-# sioxx — modern socket.io-client for C++
+# sioxx — modern Socket.IO client for C++
+
+![GitHub Release](https://img.shields.io/github/v/release/jfayot/sioxx)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/jfayot/sioxx/blob/main/LICENSE)
+![build](https://github.com/jfayot/sioxx/actions/workflows/cmake-multi-platform.yml/badge.svg)
 
 A C++ implementation of `socket.io`'s client functionality with the following stack:
 
 | | |
 | --- | --- |
-| JSON | **nlohmann/json** |
-| WebSocket | **Boost.Beast** (`boost::asio` + `boost::beast::websocket`) |
+| JSON | **nlohmann-json** |
+| WebSocket | **Boost.Asio** + **Boost.Beast** |
 | Wire protocol | **JSON or MessagePack**, selectable per-client |
-| Build | **modern CMake**, [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake) for nlohmann/json and Boost/OpenSSL, full `install(EXPORT ...)` so `find_package(sioxx)` works downstream |
+| Build | **modern CMake**, [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake) for nlohmann-json and Boost, full `install(EXPORT ...)` so `find_package(sioxx)` works downstream |
 
 ## Building
 
-Requires: CMake ≥ 3.20, a C++20 compiler, Boost ≥ 1.75 (asio + beast),
-OpenSSL. nlohmann/json is fetched automatically via the vendored
-[`cmake/CPM.cmake`](cmake/CPM.cmake) (CPM.cmake v0.43.1) unless you pass
-`-DSIOXX_USE_SYSTEM_JSON=ON`. CPM caches the download under
+Requires: CMake ≥ 3.20, a C++17 compiler, Boost ≥ 1.75 (asio + beast),
+OpenSSL. Boost.asio, Boost.beast and nlohmann-json are fetched automatically via the vendored
+[`cmake/CPM.cmake`](cmake/CPM.cmake) unless you pass
+`-DSIOXX_USE_SYSTEM_BOOST=ON` and `-DSIOXX_USE_SYSTEM_JSON=ON`. CPM caches the download under
 `~/.cache/CPM` by default (override with `-DCPM_SOURCE_CACHE=<dir>` or the
 `CPM_SOURCE_CACHE` env var), so repeat configures/CI runs don't re-fetch it.
 
 ```bash
-sudo apt install cmake
+sudo apt install cmake ccache
 
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
@@ -35,18 +39,38 @@ find_package(sioxx REQUIRED)
 target_link_libraries(my_app PRIVATE sioxx::sioxx)
 ```
 
+### Building a shared library
+
+By default, sioxx is built as a static library. To build it as a shared
+library, enable CMake's standard `BUILD_SHARED_LIBS` option when configuring:
+
+```bash
+cmake -S . -B build-shared \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_SHARED_LIBS=ON
+cmake --build build-shared -j
+cmake --install build-shared --prefix /usr/local   # optional
+```
+
+This produces `libsioxx.so` on Linux or `libsioxx.dylib` on macOS. Using a
+separate build directory avoids retaining the static-library setting from an
+earlier CMake configuration. Downstream projects link to the same
+`sioxx::sioxx` target regardless of whether sioxx was built as a static or
+shared library.
+
 CMake options:
 
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `SIOXX_BUILD_EXAMPLES` | `ON` | build `examples/basic_client.cpp` |
 | `SIOXX_BUILD_TESTS` | `ON` | build and register the GoogleTest suite in `tests/` |
+| `SIOXX_USE_SYSTEM_BOOST` | `OFF` | use an already-installed `Boost` package instead of fetching one |
 | `SIOXX_USE_SYSTEM_JSON` | `OFF` | use an already-installed `nlohmann_json` package instead of fetching one |
+| `BUILD_SHARED_LIBS` | `OFF` | build sioxx as a shared library instead of a static library |
 
 ## Testing
 
-Unit tests use GoogleTest (fetched automatically via `FetchContent`, same as
-nlohmann/json). Build with `-DSIOXX_BUILD_TESTS=ON` and run via `ctest` or
+Unit tests use GoogleTest (fetched automatically via `CPM.cmake`). Build with `-DSIOXX_BUILD_TESTS=ON` and run via `ctest` or
 the test binary directly:
 
 ```bash
@@ -56,56 +80,9 @@ ctest --test-dir build --output-on-failure
 # or: ./build/tests/sioxx_tests
 ```
 
-Coverage is intentionally focused on the parts that don't require a live
-socket.io server:
-
-- `test_json_parser.cpp` / `test_msgpack_parser.cpp` — encode/decode
-  correctness for both wire protocols, including round-trips, ack ids,
-  namespaces, binary attachments (msgpack), and malformed-input rejection.
-- `test_message.cpp` — the `sioxx::message`/`make_args`/`binary_message`
-  helpers built on `nlohmann::json`.
-- `test_url_parse.cpp` — the `ws://`/`wss://` URL splitter used by
-  `websocket_transport` (scheme, host, port defaults, path, error cases).
-- `test_socketio_socket.cpp` — the `on`/`off`/`emit`/ack-callback bookkeeping
-  in `socketio_socket`, exercised with no client attached (a default
-  `std::weak_ptr<socketio_client_impl>{}`) so it needs no network at all.
-- `test_engineio_client.cpp` — the engine.io v4 handshake, ping/pong
-  heartbeat, and message framing (`4`-prefixing, binary passthrough),
-  exercised against a small in-memory fake `transport_base` implementation
-  instead of a real WebSocket.
-
 There's deliberately no test that opens a real socket: `websocket_transport`
 itself (the Boost.Beast plumbing) is exercised end-to-end by the
 `sioxx_basic_client` example against a real server instead.
-
-## Preparing a release
-
-Keep the pending user-visible changes under `[Unreleased]` in
-[`CHANGELOG.md`](CHANGELOG.md). When they are ready to publish, run the
-release-preparation helper with the new version (with or without a leading
-`v`):
-
-```bash
-./scripts/prepare-release.sh 0.0.5
-```
-
-The script updates the CMake project version, turns the current
-`[Unreleased]` entries into a dated `0.0.5` section, creates a fresh
-`[Unreleased]` section, and updates the changelog comparison links. Review
-the result before committing it:
-
-```bash
-git diff -- CMakeLists.txt CHANGELOG.md
-git add CMakeLists.txt CHANGELOG.md
-git commit -m "chore: prepare release v0.0.5"
-git tag v0.0.5
-git push origin main v0.0.5
-```
-
-The tag-triggered GitHub Actions job verifies that the tag matches the CMake
-version and that `CHANGELOG.md` contains non-empty notes for it. After the
-multi-platform build and tests pass, those notes become the GitHub Release
-description.
 
 ## Example test server
 
@@ -191,10 +168,10 @@ parser may keep per-connection state:
 ```cpp
 class my_parser : public sioxx::parser_base {
 public:
-    void encode(const sioxx::socketio_packet& packet,
+    void encode(const sioxx::packet& packet,
                 const sioxx::frame_writer& write) const override;
     bool decode(const std::string& payload, bool is_binary,
-                sioxx::socketio_packet& out) override;
+                sioxx::packet& out) override;
     std::string name() const override { return "my-parser"; }
 };
 
@@ -219,6 +196,35 @@ thread per connection. All `on_*` callbacks (`socket->on(...)`, open/close
 listeners, ack callbacks) fire on that thread — if you're updating UI state
 or anything not thread-safe, hop back to your own thread/queue from inside
 the callback.
+
+## Preparing a release
+
+Keep the pending user-visible changes under `[Unreleased]` in
+[`CHANGELOG.md`](CHANGELOG.md). When they are ready to publish, run the
+release-preparation helper with the new version (with or without a leading
+`v`):
+
+```bash
+./scripts/prepare-release.sh 0.0.5
+```
+
+The script updates the CMake project version, turns the current
+`[Unreleased]` entries into a dated `0.0.5` section, creates a fresh
+`[Unreleased]` section, and updates the changelog comparison links. Review
+the result before committing it:
+
+```bash
+git diff -- CMakeLists.txt CHANGELOG.md
+git add CMakeLists.txt CHANGELOG.md
+git commit -m "chore: prepare release v0.0.5"
+git tag v0.0.5
+git push origin main v0.0.5
+```
+
+The tag-triggered GitHub Actions job verifies that the tag matches the CMake
+version and that `CHANGELOG.md` contains non-empty notes for it. After the
+multi-platform build and tests pass, those notes become the GitHub Release
+description.
 
 ## Known limitations
 

@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <sioxx/url_parse.hpp>
+#include "url_parse.hpp"
 
 using namespace sioxx;
 

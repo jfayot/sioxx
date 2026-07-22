@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include <sioxx/engineio_client.hpp>
+#include "engineio_client.hpp"
 #include <sioxx/message.hpp>
-#include <sioxx/polling_protocol.hpp>
+#include "polling_protocol.hpp"
 
 using namespace sioxx;
 

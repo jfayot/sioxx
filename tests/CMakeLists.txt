@@ -1,12 +1,4 @@
-CPMAddPackage(
-  NAME googletest
-  GITHUB_REPOSITORY google/googletest
-  VERSION 1.15.2
-  OPTIONS
-  "INSTALL_GTEST OFF"
-  "BUILD_GMOCK OFF"
-  "gtest_force_shared_crt ON"
-)
+CPMGetPackage(googletest)
 
 add_executable(sioxx_tests
   test_message.cpp
@@ -14,7 +6,7 @@ add_executable(sioxx_tests
   test_json_parser.cpp
   test_msgpack_parser.cpp
   test_custom_parser.cpp
-  test_socketio_socket.cpp
+  test_socket.cpp
   test_engineio_client.cpp
   test_reconnection.cpp
 )
@@ -22,11 +14,14 @@ add_executable(sioxx_tests
 target_link_libraries(sioxx_tests
   PRIVATE
   sioxx::sioxx
-  # GTest::gtest
   GTest::gtest_main
 )
 
-target_include_directories(sioxx_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(sioxx_tests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${PROJECT_SOURCE_DIR}/src
+)
 
 include(GoogleTest)
+enable_testing()
 gtest_discover_tests(sioxx_tests)

@@ -1,5 +1,5 @@
 #pragma once
-#include "parser.hpp"
+#include "sioxx/parser.hpp"
 
 namespace sioxx
 {
@@ -15,10 +15,10 @@ namespace sioxx
 class msgpack_parser final : public parser_base
 {
  public:
-  void encode(const socketio_packet& packet,
+  void encode(const packet& packet,
               const frame_writer& write) const override;
   bool decode(const std::string& payload, bool is_binary,
-              socketio_packet& out) override;
+              packet& out) override;
   std::string name() const override { return "msgpack"; }
 };
 

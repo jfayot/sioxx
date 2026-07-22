@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <sioxx/reconnection.hpp>
+#include "reconnection.hpp"
 
 using namespace sioxx;
 using namespace std::chrono_literals;

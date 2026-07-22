@@ -2,17 +2,25 @@ cmake_minimum_required(VERSION 3.20)
 
 project(sioxx
   VERSION 0.0.6
-  DESCRIPTION "Modern C++ socket.io client (nlohmann/json + Boost.Beast, JSON/MessagePack parsers)"
+  DESCRIPTION "A modern C++17 Socket.IO client built on Boost.Beast and nlohmann-json"
   LANGUAGES CXX
 )
 
+include(GNUInstallDirs)
 include(CTest)
+
+# check if project is standalone or embedded
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  set(IS_ROOT_PROJECT ON)
+else()
+  set(IS_ROOT_PROJECT OFF)
+endif()
 
 # ---------------------------------------------------------------------------
 # Options
 # ---------------------------------------------------------------------------
-option(SIOXX_BUILD_EXAMPLES "Build example programs" ON)
-option(SIOXX_BUILD_TESTS "Build unit tests" ON)
+option(SIOXX_BUILD_EXAMPLES "Build example programs" ${IS_ROOT_PROJECT})
+option(SIOXX_BUILD_TESTS "Build unit tests" ${IS_ROOT_PROJECT})
 option(SIOXX_USE_SYSTEM_BOOST "Use system-installed boost instead of fetching it" OFF)
 option(SIOXX_USE_SYSTEM_JSON "Use system-installed nlohmann_json instead of fetching it" OFF)
 
@@ -33,6 +41,7 @@ file(
   EXPECTED_HASH SHA256=1c40fc102ce9625d7de7eb14f541cab30cc3138dca627f0b0ec40293ce6c2934
 )
 include(${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake)
+CPMUsePackageLock(package-lock.cmake)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -43,17 +52,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 if(SIOXX_USE_SYSTEM_BOOST)
   find_package(Boost 1.90.0 REQUIRED COMPONENTS asio beast)
 else()
-  CPMAddPackage(
-    NAME Boost
-    VERSION 1.90.0
-    URL https://github.com/boostorg/boost/releases/download/boost-1.90.0/boost-1.90.0-cmake.tar.xz
-    URL_HASH SHA256=aca59f889f0f32028ad88ba6764582b63c916ce5f77b31289ad19421a96c555f
-    OPTIONS
-    "BOOST_ENABLE_CMAKE ON"
-    "BUILD_SHARED_LIBS OFF"
-    "BOOST_SKIP_INSTALL_RULES OFF"
-    "BOOST_INCLUDE_LIBRARIES asio\\\;beast"
-  )
+  CPMGetPackage(Boost)
 endif()
 
 # TLS support for wss://
@@ -64,12 +63,7 @@ find_package(Threads REQUIRED)
 if(SIOXX_USE_SYSTEM_JSON)
   find_package(nlohmann_json 3.12 REQUIRED)
 else()
-  CPMAddPackage(
-    NAME nlohmann_json
-    GITHUB_REPOSITORY nlohmann/json
-    VERSION 3.12.0
-    OPTIONS "JSON_BuildTests OFF" "JSON_Install OFF"
-  )
+  CPMGetPackage(nlohmann_json)
   set(SIOXX_VENDORED_JSON_TARGET nlohmann_json)
 endif()
 
@@ -84,8 +78,8 @@ add_library(sioxx
   src/http_polling_transport.cpp
   src/engineio_client.cpp
   src/reconnection.cpp
-  src/socketio_socket.cpp
-  src/socketio_client.cpp
+  src/socket.cpp
+  src/client.cpp
 )
 add_library(sioxx::sioxx ALIAS sioxx)
 
@@ -93,6 +87,8 @@ target_include_directories(sioxx
   PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
+  PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 target_link_libraries(sioxx
@@ -143,7 +139,6 @@ endif()
 # ---------------------------------------------------------------------------
 # Install / export (so downstream projects can do find_package(sioxx))
 # ---------------------------------------------------------------------------
-include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
 install(TARGETS sioxx ${SIOXX_VENDORED_JSON_TARGET}

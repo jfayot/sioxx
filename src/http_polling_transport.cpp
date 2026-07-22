@@ -1,4 +1,4 @@
-#include "sioxx/http_polling_transport.hpp"
+#include "http_polling_transport.hpp"
 
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ssl/error.hpp>
@@ -8,7 +8,7 @@
 #include <boost/beast/ssl.hpp>
 #include <stdexcept>
 
-#include "sioxx/polling_protocol.hpp"
+#include "polling_protocol.hpp"
 
 namespace sioxx
 {

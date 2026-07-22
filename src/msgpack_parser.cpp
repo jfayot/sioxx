@@ -1,9 +1,9 @@
-#include "sioxx/msgpack_parser.hpp"
+#include "msgpack_parser.hpp"
 
 namespace sioxx
 {
 
-void msgpack_parser::encode(const socketio_packet& packet,
+void msgpack_parser::encode(const packet& packet,
                             const frame_writer& write) const
 {
   json obj = json::object();
@@ -18,14 +18,14 @@ void msgpack_parser::encode(const socketio_packet& packet,
 }
 
 bool msgpack_parser::decode(const std::string& payload, bool is_binary,
-                            socketio_packet& out)
+                            packet& out)
 {
   if (!is_binary) return false;
   try
   {
     std::vector<uint8_t> bytes(payload.begin(), payload.end());
     json obj = json::from_msgpack(bytes);
-    out.type = static_cast<socketio_packet_type>(obj.value("type", 0));
+    out.type = static_cast<packet_type>(obj.value("type", 0));
     out.nsp = obj.value("nsp", std::string("/"));
     out.id =
       obj.contains("id") && !obj["id"].is_null() ? obj["id"].get<int>() : -1;

@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include <sioxx/socketio_client.hpp>
+#include <sioxx/client.hpp>
 #include <stdexcept>
 
 using namespace sioxx;
@@ -11,9 +11,9 @@ namespace
 class custom_parser final : public parser_base
 {
  public:
-  void encode(const socketio_packet&, const frame_writer&) const override {}
+  void encode(const packet&, const frame_writer&) const override {}
 
-  bool decode(const std::string&, bool, socketio_packet&) override
+  bool decode(const std::string&, bool, packet&) override
   {
     return false;
   }

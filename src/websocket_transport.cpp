@@ -1,4 +1,4 @@
-#include "sioxx/websocket_transport.hpp"
+#include "websocket_transport.hpp"
 
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ip/tcp.hpp>

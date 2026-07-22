@@ -1,68 +1,68 @@
-#include "sioxx/socketio_socket.hpp"
+#include "sioxx/socket.hpp"
 
-#include "sioxx/socketio_client.hpp"
+#include "client_impl.hpp"
 
 namespace sioxx
 {
 
-socketio_socket::socketio_socket(std::weak_ptr<socketio_client_impl> client,
+socket::socket(std::weak_ptr<client_impl> client,
                                  std::string nsp)
     : client_(std::move(client)), nsp_(std::move(nsp))
 {
 }
 
-void socketio_socket::on(const std::string& event, event_listener listener)
+void socket::on(const std::string& event, event_listener listener)
 {
   std::lock_guard<std::mutex> lock(mutex_);
   listeners_[event] = std::move(listener);
 }
 
-void socketio_socket::off(const std::string& event)
+void socket::off(const std::string& event)
 {
   std::lock_guard<std::mutex> lock(mutex_);
   listeners_.erase(event);
 }
 
-void socketio_socket::off_all()
+void socket::off_all()
 {
   std::lock_guard<std::mutex> lock(mutex_);
   listeners_.clear();
 }
 
-void socketio_socket::on_connect(connect_listener listener)
+void socket::on_connect(connect_listener listener)
 {
   std::lock_guard<std::mutex> lock(mutex_);
   on_connect_ = std::move(listener);
 }
 
-void socketio_socket::on_disconnect(disconnect_listener listener)
+void socket::on_disconnect(disconnect_listener listener)
 {
   std::lock_guard<std::mutex> lock(mutex_);
   on_disconnect_ = std::move(listener);
 }
 
-void socketio_socket::connect()
+void socket::connect()
 {
-  socketio_packet packet;
-  packet.type = socketio_packet_type::connect;
+  packet packet;
+  packet.type = packet_type::connect;
   packet.nsp = nsp_;
   packet.data = json();
   if (auto c = client_.lock()) c->send_packet(packet);
 }
 
-void socketio_socket::disconnect()
+void socket::disconnect()
 {
-  socketio_packet packet;
-  packet.type = socketio_packet_type::disconnect;
+  packet packet;
+  packet.type = packet_type::disconnect;
   packet.nsp = nsp_;
   if (auto c = client_.lock()) c->send_packet(packet);
   connected_ = false;
 }
 
-void socketio_socket::emit(const std::string& event, message data)
+void socket::emit(const std::string& event, message data)
 {
-  socketio_packet packet;
-  packet.type = socketio_packet_type::event;
+  packet packet;
+  packet.type = packet_type::event;
   packet.nsp = nsp_;
   json arr = json::array();
   arr.push_back(event);
@@ -78,7 +78,7 @@ void socketio_socket::emit(const std::string& event, message data)
   if (auto c = client_.lock()) c->send_packet(packet);
 }
 
-void socketio_socket::emit(const std::string& event, message data,
+void socket::emit(const std::string& event, message data,
                            ack_callback callback)
 {
   int id;
@@ -88,8 +88,8 @@ void socketio_socket::emit(const std::string& event, message data,
     pending_acks_[id] = std::move(callback);
   }
 
-  socketio_packet packet;
-  packet.type = socketio_packet_type::event;
+  packet packet;
+  packet.type = packet_type::event;
   packet.nsp = nsp_;
   packet.id = id;
   json arr = json::array();
@@ -106,7 +106,7 @@ void socketio_socket::emit(const std::string& event, message data,
   if (auto c = client_.lock()) c->send_packet(packet);
 }
 
-void socketio_socket::dispatch_event(const std::string& event, message data)
+void socket::dispatch_event(const std::string& event, message data)
 {
   event_listener listener;
   {
@@ -118,7 +118,7 @@ void socketio_socket::dispatch_event(const std::string& event, message data)
   listener(event, std::move(data));
 }
 
-void socketio_socket::dispatch_ack(int id, message data)
+void socket::dispatch_ack(int id, message data)
 {
   ack_callback cb;
   {
@@ -131,7 +131,7 @@ void socketio_socket::dispatch_ack(int id, message data)
   if (cb) cb(std::move(data));
 }
 
-void socketio_socket::mark_connected(bool connected,
+void socket::mark_connected(bool connected,
                                      const std::string& disconnect_reason)
 {
   bool was_connected = connected_;
