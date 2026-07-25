@@ -1,7 +1,5 @@
 # Changelog
 
-All notable changes to this project are documented in this file.
-
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -9,60 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0] - 2026-07-22
 
-### Breaking changes
+### Breaking changes :mega:
 
 - Hid implementation details from the public includes
 - Renamed client and related classes for consistency
 
-### Changes
+### Additions :tada:
 
 - Split gh workflow into build per platform and dedicated release workflow
 - Introduced package-lock.cmake for centralized dependency management
 
 ## [0.0.6] - 2026-07-19
 
-### Added
+### Additions :tada:
 
-- A new SIOXX_USE_SYSTEM_BOOST to allow boost system dependency
+- Added new SIOXX_USE_SYSTEM_BOOST to allow boost system dependency
 
 ## [0.0.5] - 2026-07-15
 
-### Added
+### Additions :tada:
 
-- A public parser factory for supplying application-defined Socket.IO packet
+- Added public parser factory for supplying application-defined Socket.IO packet
   strategies while retaining the built-in JSON and MessagePack parsers.
-- A custom CBOR parser example for the C++ client.
-- A matching CBOR option for the bundled Node.js test server, including
+- Added custom CBOR parser example for the C++ client.
+- Added matching CBOR option for the bundled Node.js test server, including
   WebSocket and HTTP long-polling scripts.
-
-### Changed
-
 - Custom parser decoding may maintain per-client state.
 
 ## [0.0.4] - 2026-07-14
 
-### Added
+### Additions :tada:
 
-- Exponential reconnection backoff with a configurable maximum delay and
+- Added exponential reconnection backoff with a configurable maximum delay and
   symmetric jitter.
 
-### Fixed
+### Fixes :wrench:
 
-- GitHub Actions release workflow execution for version tags.
+- Fixed gh action release workflow execution for version tags.
 
 ## [0.0.3] - 2026-07-14
 
-### Added
+### Additions :tada:
 
-- Engine.IO HTTP long-polling transport support and WebSocket fallback.
+- Added Engine.IO HTTP long-polling transport support and WebSocket fallback.
 
 ## [0.0.2] - 2026-07-14
 
-### Fixed
+### Fixes :wrench:
 
-- MessagePack dependency/version handling.
-- WebSocket write-queue and recursive-mutex deadlocks.
-- Windows builds and test configuration in CMake and VS Code.
+- Fixed MessagePack dependency/version handling.
+- Fixed WebSocket write-queue and recursive-mutex deadlocks.
+- Fixed windows builds and test configuration in CMake and VS Code.
 
 [Unreleased]: https://github.com/jfayot/sioxx/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/jfayot/sioxx/compare/v0.0.6...v0.1.0
