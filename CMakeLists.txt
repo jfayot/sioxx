@@ -21,6 +21,7 @@ endif()
 # ---------------------------------------------------------------------------
 option(SIOXX_BUILD_EXAMPLES "Build example programs" ${IS_ROOT_PROJECT})
 option(SIOXX_BUILD_TESTS "Build unit tests" ${IS_ROOT_PROJECT})
+option(SIOXX_BUILD_DOCS "Build documentation" ${IS_ROOT_PROJECT})
 option(SIOXX_USE_SYSTEM_BOOST "Use system-installed boost instead of fetching it" OFF)
 option(SIOXX_USE_SYSTEM_JSON "Use system-installed nlohmann_json instead of fetching it" OFF)
 
@@ -134,6 +135,13 @@ endif()
 # ---------------------------------------------------------------------------
 if(SIOXX_BUILD_TESTS)
   add_subdirectory(tests)
+endif()
+
+# ---------------------------------------------------------------------------
+# Documentation
+# ---------------------------------------------------------------------------
+if(SIOXX_BUILD_DOCS)
+  add_subdirectory (docs)
 endif()
 
 # ---------------------------------------------------------------------------

@@ -1,8 +1,13 @@
+/**
+ * @file socket.hpp
+ * @brief Represents a Socket.IO namespace connection.
+ *
+ * A `socket` is obtained from a `client` via `client::socket("/")` (or any
+ * other namespace).  It provides event registration, emission (with optional
+ * acknowledgements), and explicit connect/disconnect handling.
+ */
+
 #pragma once
-// sioxx/socket.hpp
-//
-// Represents one socket.io namespace connection ("/", "/chat", ...),
-// mirroring sio::socket from the original socket.io-client-cpp.
 
 #include <functional>
 #include <map>
@@ -15,50 +20,127 @@
 namespace sioxx
 {
 
-class client_impl;  // fwd decl, defined in client.hpp/.cpp
+class client_impl;
 
+/**
+ * @class socket
+ * @brief One namespace‑scoped communication channel.
+ *
+ * The class mirrors the API of the original `socket.io-client-cpp` socket.
+ * Listeners are stored per‑event name; registering a listener for an existing
+ * name overwrites the previous one (consistent with the reference client).
+ *
+ * All public methods are thread‑safe; internal state is protected by a mutex.
+ */
 class socket : public std::enable_shared_from_this<socket>
 {
  public:
+  /** @brief Type of a generic event listener (receives event name & payload). */
   using event_listener =
     std::function<void(const std::string& event, message data)>;
+
+  /** @brief Callback invoked when a server ACK arrives for an emitted event. */
   using ack_callback = std::function<void(message data)>;
+
+  /** @brief Listener for the *connect* event of this namespace. */
   using connect_listener = std::function<void()>;
+
+  /** @brief Listener for the *disconnect* event of this namespace. */
   using disconnect_listener = std::function<void(const std::string& reason)>;
 
+  /**
+   * @brief Construct a socket bound to a client and a namespace.
+   *
+   * @param client   Weak reference to the owning `client_impl`.
+   * @param nsp      Namespace string (e.g. `"/chat"`).
+   */
   socket(std::weak_ptr<client_impl> client, std::string nsp);
 
+  /** @brief Return the namespace this socket belongs to. */
   const std::string& nsp() const { return nsp_; }
+
+  /** @brief Whether the namespace is currently connected. */
   bool connected() const { return connected_; }
 
-  // Register a listener for a named event. Overwrites any previous
-  // listener for the same event name (matches sio::socket::on semantics).
+  /** @name Event registration */
+  /** @{ */
+  /**
+   * @brief Register a listener for a specific event name.
+   *
+   * If a listener for the same name already exists it is replaced.
+   *
+   * @param event    Name of the event (e.g. `"message"`).
+   * @param listener Callable that receives the event name and its payload.
+   */
   void on(const std::string& event, event_listener listener);
+
+  /** @brief Remove the listener for a given event name. */
   void off(const std::string& event);
+
+  /** @brief Remove **all** registered event listeners. */
   void off_all();
+  /** @} */
 
-  // Fired when *this* namespace's CONNECT is acknowledged by the server --
-  // i.e. the earliest safe point to start emitting on this socket. Since
-  // connect()/emit() are asynchronous, emitting right after
-  // client.connect() (before this fires) will silently drop the packet
-  // because the underlying engine.io connection isn't open yet.
+  /** @name Connection lifecycle callbacks */
+  /** @{ */
+  /** @brief Set a callback invoked when this namespace receives a CONNECT. */
   void on_connect(connect_listener listener);
-  void on_disconnect(disconnect_listener listener);
 
-  // emit without expecting an ack.
+  /** @brief Set a callback invoked when this namespace receives a DISCONNECT. */
+  void on_disconnect(disconnect_listener listener);
+  /** @} */
+
+  /** @name Emission */
+  /** @{ */
+  /**
+   * @brief Emit an event without expecting an acknowledgement.
+   *
+   * @param event   Event name.
+   * @param data    Payload (default empty JSON array).  May be any JSON value.
+   */
   void emit(const std::string& event, message data = json::array());
 
-  // emit with an ack callback invoked when the server acknowledges.
-  void emit(const std::string& event, message data, ack_callback callback);
+  /**
+   * @brief Emit an event and request an acknowledgement.
+   *
+   * @param event    Event name.
+   * @param data     Payload.
+   * @param callback Function called when the server ACK arrives.
+   */
+  void emit(const std::string& event,
+            message data,
+            ack_callback callback);
+  /** @} */
 
-  void connect();     // send a CONNECT packet for this namespace
-  void disconnect();  // send a DISCONNECT packet for this namespace
+  /** @name Namespace control */
+  /** @{ */
+  /** @brief Send a CONNECT packet for this namespace. */
+  void connect();
 
-  // --- internal, called by client_impl ---
+  /** @brief Send a DISCONNECT packet for this namespace. */
+  void disconnect();
+  /** @} */
+
+  /** @name Internal callbacks – called by `client_impl` */
+  /** @{ */
+  /** @brief Deliver an incoming event from the server. */
   void dispatch_event(const std::string& event, message data);
+
+  /** @brief Deliver an incoming ACK from the server. */
   void dispatch_ack(int id, message data);
+
+  /**
+   * @brief Mark the socket as (dis)connected.
+   *
+   * Called by the client implementation after a successful CONNECT or when a
+   * DISCONNECT packet is received.
+   *
+   * @param connected          New connection state.
+   * @param disconnect_reason  Optional reason string (empty if none).
+   */
   void mark_connected(bool connected,
                       const std::string& disconnect_reason = "");
+  /** @} */
 
  private:
   std::weak_ptr<client_impl> client_;

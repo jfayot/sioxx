@@ -1,3 +1,14 @@
+/**
+ * @file sioxx.hpp
+ * @brief Master header that pulls in the complete public API of the sioxx library.
+ *
+ * Including this file is sufficient for most users – it brings in the client,
+ * client options, message type, packet definition, parser interface and socket
+ * namespace class.
+ *
+ * @note The header uses IWYU‑style `#include` directives with `export` pragma
+ *       so that downstream translation units see the full definitions.
+ */
 #pragma once
 
 #include "sioxx/client.hpp"            // IWYU pragma: export

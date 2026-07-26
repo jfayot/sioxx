@@ -1,3 +1,11 @@
+/**
+ * @file packet.hpp
+ * @brief Low‑level representation of an Engine.IO / Socket.IO packet.
+ *
+ * Packets travel across the transport layer (WebSocket or HTTP polling) and
+ * are encoded/decoded by a `parser_base` implementation.
+ */
+
 #pragma once
 
 #include <string>
@@ -7,24 +15,40 @@
 namespace sioxx
 {
 
+/**
+ * @enum packet_type
+ * @brief Enumerates the different Socket.IO packet kinds.
+ *
+ * Values match the official Socket.IO protocol specification.
+ */
 enum class packet_type : int
 {
-  connect = 0,
-  disconnect = 1,
-  event = 2,
-  ack = 3,
-  connect_error = 4,
-  binary_event = 5,
-  binary_ack = 6
+  connect      = 0,   ///< Namespace connection request
+  disconnect   = 1,   ///< Namespace disconnection
+  event        = 2,   ///< Regular event with optional data
+  ack          = 3,   ///< Acknowledgement for a previous event
+  connect_error= 4,   ///< Connection error payload
+  binary_event = 5,   ///< Event that carries binary attachments
+  binary_ack   = 6    ///< Ack that carries binary attachments
 };
 
+/**
+ * @struct packet
+ * @brief Complete packet structure as used by parsers.
+ *
+ * - `type`      – one of `packet_type`.
+ * - `nsp`       – namespace (default "/").
+ * - `id`        – ACK identifier (‑1 if not used).
+ * - `data`      – JSON payload (`message`).
+ * - `attachments` – number of binary attachments (relevant for binary packets).
+ */
 struct packet
 {
-  packet_type type{packet_type::event};
-  std::string nsp{"/"};
-  int id{-1};
-  json data;
-  int attachments{0};
+  packet_type type{packet_type::event};   ///< Packet type
+  std::string nsp{"/"};                   ///< Namespace
+  int         id{-1};                     ///< ACK identifier
+  json        data;                       ///< Payload (JSON value)
+  int         attachments{0};             ///< Binary attachment count
 };
 
 }  // namespace sioxx
