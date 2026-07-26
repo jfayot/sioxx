@@ -5,6 +5,9 @@
 ![Linux](https://github.com/jfayot/sioxx/actions/workflows/build-linux.yml/badge.svg)
 ![macOS](https://github.com/jfayot/sioxx/actions/workflows/build-macos.yml/badge.svg)
 ![Windows](https://github.com/jfayot/sioxx/actions/workflows/build-windows.yml/badge.svg)
+![Documentation](https://github.com/jfayot/sioxx/actions/workflows/docs.yml/badge.svg)
+
+[Documentation](https://jfayot.github.io/sioxx/)
 
 A C++ implementation of `socket.io`'s client functionality with the following stack:
 
