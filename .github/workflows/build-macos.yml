@@ -17,6 +17,7 @@ jobs:
     - name: Configure CMake
       run: >
         cmake -B build
+        -DSIOXX_BUILD_DOCS=OFF
         -DCMAKE_CXX_COMPILER=clang++
         -DCMAKE_C_COMPILER=clang
         -DCMAKE_BUILD_TYPE=Release
