@@ -35,7 +35,8 @@ class client_impl;
 class socket : public std::enable_shared_from_this<socket>
 {
  public:
-  /** @brief Type of a generic event listener (receives event name & payload). */
+  /** @brief Type of a generic event listener (receives event name & payload).
+   */
   using event_listener =
     std::function<void(const std::string& event, message data)>;
 
@@ -86,7 +87,8 @@ class socket : public std::enable_shared_from_this<socket>
   /** @brief Set a callback invoked when this namespace receives a CONNECT. */
   void on_connect(connect_listener listener);
 
-  /** @brief Set a callback invoked when this namespace receives a DISCONNECT. */
+  /** @brief Set a callback invoked when this namespace receives a DISCONNECT.
+   */
   void on_disconnect(disconnect_listener listener);
   /** @} */
 
@@ -107,9 +109,7 @@ class socket : public std::enable_shared_from_this<socket>
    * @param data     Payload.
    * @param callback Function called when the server ACK arrives.
    */
-  void emit(const std::string& event,
-            message data,
-            ack_callback callback);
+  void emit(const std::string& event, message data, ack_callback callback);
   /** @} */
 
   /** @name Namespace control */
@@ -121,7 +121,7 @@ class socket : public std::enable_shared_from_this<socket>
   void disconnect();
   /** @} */
 
-  /** @name Internal callbacks – called by `client_impl` */
+  /** @name Internal callbacks – called by client_impl */
   /** @{ */
   /** @brief Deliver an incoming event from the server. */
   void dispatch_event(const std::string& event, message data);

@@ -23,13 +23,13 @@ namespace sioxx
  */
 enum class packet_type : int
 {
-  connect      = 0,   ///< Namespace connection request
-  disconnect   = 1,   ///< Namespace disconnection
-  event        = 2,   ///< Regular event with optional data
-  ack          = 3,   ///< Acknowledgement for a previous event
-  connect_error= 4,   ///< Connection error payload
+  connect = 0,        ///< Namespace connection request
+  disconnect = 1,     ///< Namespace disconnection
+  event = 2,          ///< Regular event with optional data
+  ack = 3,            ///< Acknowledgement for a previous event
+  connect_error = 4,  ///< Connection error payload
   binary_event = 5,   ///< Event that carries binary attachments
-  binary_ack   = 6    ///< Ack that carries binary attachments
+  binary_ack = 6      ///< Ack that carries binary attachments
 };
 
 /**
@@ -44,11 +44,11 @@ enum class packet_type : int
  */
 struct packet
 {
-  packet_type type{packet_type::event};   ///< Packet type
-  std::string nsp{"/"};                   ///< Namespace
-  int         id{-1};                     ///< ACK identifier
-  json        data;                       ///< Payload (JSON value)
-  int         attachments{0};             ///< Binary attachment count
+  packet_type type{packet_type::event};  ///< Packet type
+  std::string nsp{"/"};                  ///< Namespace
+  int id{-1};                            ///< ACK identifier
+  json data;                             ///< Payload (JSON value)
+  int attachments{0};                    ///< Binary attachment count
 };
 
 }  // namespace sioxx

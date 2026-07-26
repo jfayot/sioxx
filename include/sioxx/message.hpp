@@ -21,7 +21,7 @@ using json = nlohmann::json;
 using message = json;
 
 /** @brief Alias for an array of arguments passed to `emit`. */
-using message_list = json;   ///< always a JSON array
+using message_list = json;  ///< always a JSON array
 
 /**
  * @brief Create an empty argument list (`[]`).
@@ -38,8 +38,7 @@ inline message_list make_args() { return json::array(); }
  * @param args   Arguments to be packed.
  * @return A JSON array containing the supplied values.
  */
-template <typename... Args>
-inline message_list make_args(Args&&... args)
+template <typename... Args> inline message_list make_args(Args&&... args)
 {
   json arr = json::array();
   (arr.push_back(json(std::forward<Args>(args))), ...);

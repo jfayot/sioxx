@@ -11,12 +11,12 @@
 
 A C++ implementation of `socket.io`'s client functionality with the following stack:
 
-| | |
-| --- | --- |
-| JSON | **nlohmann-json** |
-| WebSocket | **Boost.Asio** + **Boost.Beast** |
-| Wire protocol | **JSON or MessagePack**, selectable per-client |
-| Build | **modern CMake**, [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake) for nlohmann-json and Boost, full `install(EXPORT ...)` so `find_package(sioxx)` works downstream |
+|               |                                                                                                                                                                         |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| JSON          | **nlohmann-json**                                                                                                                                                       |
+| WebSocket     | **Boost.Asio** + **Boost.Beast**                                                                                                                                        |
+| Wire protocol | **JSON or MessagePack**, selectable per-client                                                                                                                          |
+| Build         | **modern CMake**, [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake) for nlohmann-json and Boost, full `install(EXPORT ...)` so `find_package(sioxx)` works downstream |
 
 ## Building
 
@@ -65,13 +65,14 @@ shared library.
 
 CMake options:
 
-| Option | Default | Meaning |
-| --- | --- | --- |
-| `SIOXX_BUILD_EXAMPLES` | `ON` | build `examples/basic_client.cpp` |
-| `SIOXX_BUILD_TESTS` | `ON` | build and register the GoogleTest suite in `tests/` |
-| `SIOXX_USE_SYSTEM_BOOST` | `OFF` | use an already-installed `Boost` package instead of fetching one |
-| `SIOXX_USE_SYSTEM_JSON` | `OFF` | use an already-installed `nlohmann_json` package instead of fetching one |
-| `BUILD_SHARED_LIBS` | `OFF` | build sioxx as a shared library instead of a static library |
+| Option                   | Default | Meaning                                                                  |
+| ------------------------ | ------- | ------------------------------------------------------------------------ |
+| `SIOXX_BUILD_EXAMPLES`   | `ON`    | build `examples/basic_client.cpp`                                        |
+| `SIOXX_BUILD_TESTS`      | `ON`    | build and register the GoogleTest suite in `tests/`                      |
+| `SIOXX_BUILD_DOCS`       | `OFF`   | build the documentation                                                  |
+| `SIOXX_USE_SYSTEM_BOOST` | `OFF`   | use an already-installed `Boost` package instead of fetching one         |
+| `SIOXX_USE_SYSTEM_JSON`  | `OFF`   | use an already-installed `nlohmann_json` package instead of fetching one |
+| `BUILD_SHARED_LIBS`      | `OFF`   | build sioxx as a shared library instead of a static library              |
 
 ## Testing
 
@@ -125,6 +126,39 @@ with `pnpm start:cbor`.
 The server and client parser modes must match. The test server defaults to
 port `3000`; override it with `PORT=3001 pnpm start` if needed. See the
 [test-server README](examples/test_server/README.md) for details.
+
+## Build documentation
+
+The API documentation is generated with Doxygen and Sphinx using the Breathe
+extension and the Read the Docs theme. Install Doxygen and Graphviz, then
+install the Python dependencies:
+
+```bash
+# Debian/Ubuntu
+sudo apt install doxygen graphviz
+
+python -m pip install -r docs/requirements.txt
+```
+
+Configure a documentation build and build the `Sphinx` target:
+
+```bash
+cmake -S . -B build-docs \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DSIOXX_BUILD_DOCS=ON \
+  -DSIOXX_BUILD_TESTS=OFF \
+  -DSIOXX_BUILD_EXAMPLES=OFF
+cmake --build build-docs --target Sphinx --parallel
+```
+
+Open `build-docs/docs/docs/sphinx/index.html` in a browser to view the
+generated site. Building the default target also generates both the Doxygen
+and Sphinx documentation when `SIOXX_BUILD_DOCS=ON`. To install the generated
+HTML alongside the library, run:
+
+```bash
+cmake --install build-docs --prefix /usr/local
+```
 
 ## API sketch
 

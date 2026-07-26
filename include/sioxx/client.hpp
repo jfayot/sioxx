@@ -4,7 +4,7 @@
  *        `socket.io-client-cpp` library.
  *
  * A `sioxx::client` owns an internal implementation (`client_impl`) and
- * provides a thin, RAII‑friendly façade for connecting to a Socket.IO server,
+ * provides a thin, RAII‑friendly facade for connecting to a Socket.IO server,
  * obtaining namespace sockets and registering lifecycle listeners.
  */
 
@@ -41,32 +41,32 @@ class client
 {
  public:
   /**
-  * @brief Construct a client with optional configuration.
-  * @param options  Client options; defaults to an empty `client_options`.
-  */
+   * @brief Construct a client with optional configuration.
+   * @param options  Client options; defaults to an empty `client_options`.
+   */
   explicit client(client_options options = {});
 
   /** @brief Destructor – cleans up the internal implementation. */
   ~client();
 
   /**
-  * @brief Open a connection to the given URI.
-  * @param uri  Full URL (e.g. `wss://host:port/path`).
-  */
+   * @brief Open a connection to the given URI.
+   * @param uri  Full URL (e.g. `wss://host:port/path`).
+   */
   void connect(const std::string& uri);
 
   /** @brief Close the underlying Engine.IO connection. */
   void close();
 
   /**
-  * @brief Obtain a socket for a specific namespace.
-  *
-  * @param nsp  Namespace string (default is the root namespace `/`).
-  * @return A shared pointer to a `sioxx::socket` bound to this client.
-  *
-  * The returned socket can be used to register event listeners, emit events,
-  * and manually connect/disconnect the namespace.
-  */
+   * @brief Obtain a socket for a specific namespace.
+   *
+   * @param nsp  Namespace string (default is the root namespace `/`).
+   * @return A shared pointer to a `sioxx::socket` bound to this client.
+   *
+   * The returned socket can be used to register event listeners, emit events,
+   * and manually connect/disconnect the namespace.
+   */
   std::shared_ptr<sioxx::socket> socket(const std::string& nsp = "/");
 
   /** @name Lifecycle listeners */

@@ -5,8 +5,8 @@
 
 #pragma once
 
-#include <functional>
 #include <chrono>
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -28,8 +28,8 @@ namespace sioxx
  */
 enum class parser_kind
 {
-  json,      ///< Text protocol (default)
-  msgpack    ///< Binary MessagePack protocol
+  json,    ///< Text protocol (default)
+  msgpack  ///< Binary MessagePack protocol
 };
 
 /**
@@ -64,17 +64,16 @@ struct client_options
   /** @brief Extra HTTP/WebSocket headers to send on the upgrade request. */
   std::vector<std::pair<std::string, std::string>> extra_headers;
 
-  /** @brief Reconnection policy.
-   *
-   * * `reconnect_attempts` – number of retry attempts (0 disables
-   *   reconnection).
-   * * `reconnect_delay` – initial back‑off delay (doubles each attempt).
-   * * `reconnect_delay_max` – maximum back‑off delay.
-   * * `reconnect_randomization_factor` – jitter factor (0‑1 range).
-   */
+  /** @brief Number of retry attempts; zero disables reconnection. */
   int reconnect_attempts{0};
+
+  /** @brief Initial back-off delay, doubled after each failed attempt. */
   std::chrono::milliseconds reconnect_delay{2000};
+
+  /** @brief Maximum back-off delay between reconnection attempts. */
   std::chrono::milliseconds reconnect_delay_max{30000};
+
+  /** @brief Jitter factor applied to delays, in the range 0 to 1. */
   double reconnect_randomization_factor{0.5};
 };
 

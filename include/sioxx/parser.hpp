@@ -61,8 +61,7 @@ class parser_base
    * @return `true` if the packet was completely decoded; `false` if more
    *         data is required (e.g., waiting for binary attachments).
    */
-  virtual bool decode(const std::string& payload,
-                      bool is_binary,
+  virtual bool decode(const std::string& payload, bool is_binary,
                       packet& out) = 0;
 
   /**

@@ -3,9 +3,9 @@ name: Build Linux
 on:
   workflow_call:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   build:
@@ -20,19 +20,18 @@ jobs:
             cxx: clang++
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Configure CMake
-      run: >
-        cmake -B build
-        -DSIOXX_BUILD_DOCS=OFF
-        -DCMAKE_CXX_COMPILER=${{ matrix.compiler.cxx }}
-        -DCMAKE_C_COMPILER=${{ matrix.compiler.cc }}
-        -DCMAKE_BUILD_TYPE=Release
-        -S .
+      - name: Configure CMake
+        run: >
+          cmake -B build
+          -DCMAKE_CXX_COMPILER=${{ matrix.compiler.cxx }}
+          -DCMAKE_C_COMPILER=${{ matrix.compiler.cc }}
+          -DCMAKE_BUILD_TYPE=Release
+          -S .
 
-    - name: Build
-      run: cmake --build build --config Release
+      - name: Build
+        run: cmake --build build --config Release
 
-    - name: Test
-      run: ctest --test-dir build --build-config Release --output-on-failure
+      - name: Test
+        run: ctest --test-dir build --build-config Release --output-on-failure
