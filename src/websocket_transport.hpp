@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SIOXX_SRC_WEBSOCKET_TRANSPORT_HPP
+#define SIOXX_SRC_WEBSOCKET_TRANSPORT_HPP
 #include <atomic>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
@@ -81,3 +82,5 @@ class websocket_transport final
 };
 
 }  // namespace sioxx
+
+#endif  // SIOXX_SRC_WEBSOCKET_TRANSPORT_HPP

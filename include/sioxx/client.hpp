@@ -8,7 +8,8 @@
  * obtaining namespace sockets and registering lifecycle listeners.
  */
 
-#pragma once
+#ifndef SIOXX_CLIENT_HPP
+#define SIOXX_CLIENT_HPP
 
 #include <functional>
 #include <memory>
@@ -86,3 +87,5 @@ class client
 };
 
 }  // namespace sioxx
+
+#endif  // SIOXX_CLIENT_HPP

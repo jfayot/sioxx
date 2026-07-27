@@ -54,7 +54,7 @@ int main(int argc, char** argv)
   auto sock = client.socket("/your_namespace");
 
   sock->on(
-    "your_message", [](const std::string& event, sioxx::message data)
+    "your_message", [](const std::string& event, const sioxx::message& data)
     { std::cout << "[event] " << event << " -> " << data.dump() << "\n"; });
 
   sock->on_connect(
@@ -65,7 +65,7 @@ int main(int argc, char** argv)
       sock->emit("hello", sioxx::json{"world"});
 
       sock->emit("ping_ack", sioxx::json::array({1, 2, 3}),
-                 [](sioxx::message reply)
+                 [](const sioxx::message& reply)
                  { std::cout << "[ack] " << reply.dump() << "\n"; });
     });
 

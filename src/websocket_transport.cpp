@@ -20,8 +20,15 @@ websocket_transport::websocket_transport()
 
 websocket_transport::~websocket_transport()
 {
-  close();
+  // Do not call close() here: it uses shared_from_this(), which is invalid
+  // once destruction has started. Destructors must also not invoke user
+  // callbacks, since an exception escaping a destructor terminates the
+  // process.
+  closing_ = true;
+  state_ = transport_state::closed;
+  resolver_.cancel();
   work_guard_.reset();
+  ioc_.stop();
   if (io_thread_.joinable())
   {
     if (io_thread_.get_id() == std::this_thread::get_id())
@@ -70,7 +77,8 @@ void websocket_transport::run_plain()
   auto self = shared_from_this();
   resolver_.async_resolve(
     url_.host, url_.port,
-    [this, self](beast::error_code ec, tcp::resolver::results_type results)
+    [this, self](beast::error_code ec,
+                 const tcp::resolver::results_type& results)
     {
       if (ec) return fail("resolve", ec);
 
@@ -82,7 +90,7 @@ void websocket_transport::run_plain()
         .async_connect(
           results,
           [this, self](beast::error_code ec2,
-                       tcp::resolver::results_type::endpoint_type)
+                       const tcp::resolver::results_type::endpoint_type&)
           {
             if (ec2) return fail("connect", ec2);
             beast::get_lowest_layer(*ws_plain_).expires_never();
@@ -117,7 +125,8 @@ void websocket_transport::run_tls()
 
   resolver_.async_resolve(
     url_.host, url_.port,
-    [this, self](beast::error_code ec, tcp::resolver::results_type results)
+    [this, self](beast::error_code ec,
+                 const tcp::resolver::results_type& results)
     {
       if (ec) return fail("resolve", ec);
 
@@ -137,7 +146,7 @@ void websocket_transport::run_tls()
       beast::get_lowest_layer(*ws_tls_).async_connect(
         results,
         [this, self](beast::error_code ec2,
-                     tcp::resolver::results_type::endpoint_type)
+                     const tcp::resolver::results_type::endpoint_type&)
         {
           if (ec2) return fail("connect", ec2);
           ws_tls_->next_layer().async_handshake(

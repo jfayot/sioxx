@@ -14,8 +14,9 @@ std::chrono::milliseconds reconnect_delay_for_attempt(
   const auto maximum = std::max<int64_t>(0, max_delay.count());
   const int exponent = std::max(0, attempt - 1);
   const long double multiplier = std::ldexp(1.0L, std::min(exponent, 62));
-  const long double exponential = std::min<long double>(
-    static_cast<long double>(maximum), initial * multiplier);
+  const long double exponential =
+    std::min<long double>(static_cast<long double>(maximum),
+                          static_cast<long double>(initial) * multiplier);
   const double factor = std::clamp(jitter_factor, 0.0, 1.0);
   const double sample = std::clamp(jitter_sample, 0.0, 1.0);
   const long double delayed = std::min<long double>(

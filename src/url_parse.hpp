@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SIOXX_SRC_URL_PARSE_HPP
+#define SIOXX_SRC_URL_PARSE_HPP
 // sioxx/url_parse.hpp
 //
 // Tiny, dependency-free ws(s):// URL splitter used by websocket_transport.
@@ -24,3 +25,5 @@ struct url_parts
 url_parts parse_ws_url(const std::string& url);
 
 }  // namespace sioxx
+
+#endif  // SIOXX_SRC_URL_PARSE_HPP

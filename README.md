@@ -76,7 +76,20 @@ CMake options:
 | `SIOXX_BUILD_DOCS`       | `OFF`   | build the documentation                                                  |
 | `SIOXX_USE_SYSTEM_BOOST` | `OFF`   | use an already-installed `Boost` package instead of fetching one         |
 | `SIOXX_USE_SYSTEM_JSON`  | `OFF`   | use an already-installed `nlohmann_json` package instead of fetching one |
+| `SIOXX_ENABLE_CLANG_TIDY`| `OFF`   | run `clang-tidy` while compiling sioxx targets                           |
 | `BUILD_SHARED_LIBS`      | `OFF`   | build sioxx as a shared library instead of a static library              |
+
+### Static analysis
+
+Install `clang-tidy`, then enable it when configuring:
+
+```bash
+cmake -S . -B build-tidy -DSIOXX_ENABLE_CLANG_TIDY=ON
+cmake --build build-tidy -j
+```
+
+The checks are configured in `.clang-tidy`. Only sioxx library, example, and
+test targets are analyzed; fetched dependencies are excluded.
 
 ## Testing
 

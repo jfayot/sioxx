@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SIOXX_SRC_MSGPACK_PARSER_HPP
+#define SIOXX_SRC_MSGPACK_PARSER_HPP
 #include "sioxx/parser.hpp"
 
 namespace sioxx
@@ -15,11 +16,11 @@ namespace sioxx
 class msgpack_parser final : public parser_base
 {
  public:
-  void encode(const packet& packet,
-              const frame_writer& write) const override;
-  bool decode(const std::string& payload, bool is_binary,
-              packet& out) override;
+  void encode(const packet& packet, const frame_writer& write) const override;
+  bool decode(const std::string& payload, bool is_binary, packet& out) override;
   std::string name() const override { return "msgpack"; }
 };
 
 }  // namespace sioxx
+
+#endif  // SIOXX_SRC_MSGPACK_PARSER_HPP

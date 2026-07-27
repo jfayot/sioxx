@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SIOXX_SRC_TRANSPORT_HPP
+#define SIOXX_SRC_TRANSPORT_HPP
 #include <functional>
 #include <string>
 
@@ -47,3 +48,5 @@ class transport_base
 };
 
 }  // namespace sioxx
+
+#endif  // SIOXX_SRC_TRANSPORT_HPP

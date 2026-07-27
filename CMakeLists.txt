@@ -24,6 +24,15 @@ option(SIOXX_BUILD_TESTS "Build unit tests" ${IS_ROOT_PROJECT})
 option(SIOXX_BUILD_DOCS "Build documentation" OFF)
 option(SIOXX_USE_SYSTEM_BOOST "Use system-installed boost instead of fetching it" OFF)
 option(SIOXX_USE_SYSTEM_JSON "Use system-installed nlohmann_json instead of fetching it" OFF)
+option(SIOXX_ENABLE_CLANG_TIDY "Run clang-tidy while compiling sioxx targets" OFF)
+
+if(SIOXX_ENABLE_CLANG_TIDY)
+  find_program(SIOXX_CLANG_TIDY_EXECUTABLE NAMES clang-tidy REQUIRED)
+  set(SIOXX_CLANG_TIDY_COMMAND
+    ${SIOXX_CLANG_TIDY_EXECUTABLE}
+    --config-file=${PROJECT_SOURCE_DIR}/.clang-tidy
+  )
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -83,6 +92,12 @@ add_library(sioxx
   src/client.cpp
 )
 add_library(sioxx::sioxx ALIAS sioxx)
+
+if(SIOXX_ENABLE_CLANG_TIDY)
+  set_target_properties(sioxx PROPERTIES
+    CXX_CLANG_TIDY "${SIOXX_CLANG_TIDY_COMMAND}"
+  )
+endif()
 
 target_include_directories(sioxx
   PUBLIC

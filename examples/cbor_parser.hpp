@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SIOXX_EXAMPLES_CBOR_PARSER_HPP
+#define SIOXX_EXAMPLES_CBOR_PARSER_HPP
 
 #include <cstdint>
 #include <exception>
@@ -38,8 +39,7 @@ class cbor_parser final : public sioxx::parser_base
       const sioxx::json object = sioxx::json::from_cbor(bytes);
       if (!object.is_object()) return false;
 
-      out.type =
-        static_cast<sioxx::packet_type>(object.value("type", 0));
+      out.type = static_cast<sioxx::packet_type>(object.value("type", 0));
       out.nsp = object.value("nsp", std::string("/"));
       out.id = object.contains("id") && !object["id"].is_null()
                  ? object["id"].get<int>()
@@ -56,3 +56,5 @@ class cbor_parser final : public sioxx::parser_base
 
   std::string name() const override { return "cbor"; }
 };
+
+#endif  // SIOXX_EXAMPLES_CBOR_PARSER_HPP

@@ -6,7 +6,8 @@
  * are encoded/decoded by a `parser_base` implementation.
  */
 
-#pragma once
+#ifndef SIOXX_PACKET_HPP
+#define SIOXX_PACKET_HPP
 
 #include <string>
 
@@ -52,3 +53,5 @@ struct packet
 };
 
 }  // namespace sioxx
+
+#endif  // SIOXX_PACKET_HPP

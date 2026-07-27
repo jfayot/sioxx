@@ -1,0 +1,6 @@
+Checks: >
+  -*,
+  portability-*,
+WarningsAsErrors: ""
+HeaderFilterRegex: ".*/sioxx/(include/sioxx|src)/.*"
+FormatStyle: file

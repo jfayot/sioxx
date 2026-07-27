@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SIOXX_SRC_CLIENT_IMPL_HPP
+#define SIOXX_SRC_CLIENT_IMPL_HPP
 
 #include <functional>
 #include <map>
@@ -15,8 +16,7 @@
 namespace sioxx
 {
 
-class client_impl
-    : public std::enable_shared_from_this<client_impl>
+class client_impl : public std::enable_shared_from_this<client_impl>
 {
  public:
   using connect_handler = std::function<void()>;
@@ -60,3 +60,5 @@ class client_impl
 };
 
 }  // namespace sioxx
+
+#endif  // SIOXX_SRC_CLIENT_IMPL_HPP

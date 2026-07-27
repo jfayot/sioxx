@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SIOXX_SRC_RECONNECTION_HPP
+#define SIOXX_SRC_RECONNECTION_HPP
 
 #include <chrono>
 
@@ -12,3 +13,5 @@ std::chrono::milliseconds reconnect_delay_for_attempt(
   double jitter_factor, int attempt, double jitter_sample);
 
 }  // namespace sioxx
+
+#endif  // SIOXX_SRC_RECONNECTION_HPP

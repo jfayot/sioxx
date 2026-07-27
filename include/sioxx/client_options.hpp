@@ -3,7 +3,8 @@
  * @brief Configuration options that control the behaviour of a sioxx client.
  */
 
-#pragma once
+#ifndef SIOXX_CLIENT_OPTIONS_HPP
+#define SIOXX_CLIENT_OPTIONS_HPP
 
 #include <chrono>
 #include <functional>
@@ -78,3 +79,5 @@ struct client_options
 };
 
 }  // namespace sioxx
+
+#endif  // SIOXX_CLIENT_OPTIONS_HPP

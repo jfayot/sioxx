@@ -13,8 +13,7 @@ namespace
 // exercising the local listener/ack bookkeeping we care about here.
 std::shared_ptr<socket> make_socket(std::string nsp = "/")
 {
-  return std::make_shared<socket>(
-    std::weak_ptr<client_impl>{}, std::move(nsp));
+  return std::make_shared<socket>(std::weak_ptr<client_impl>{}, std::move(nsp));
 }
 
 }  // namespace
@@ -68,7 +67,7 @@ TEST(Socket, DispatchIgnoresUnregisteredEvent)
 {
   auto sock = make_socket();
   int call_count = 0;
-  sock->on("known", [&](const std::string&, message) { ++call_count; });
+  sock->on("known", [&](const std::string&, const message&) { ++call_count; });
 
   EXPECT_NO_THROW(sock->dispatch_event("unknown", json::array()));
   EXPECT_EQ(call_count, 0);
@@ -78,8 +77,8 @@ TEST(Socket, OnOverwritesPreviousListenerForSameEvent)
 {
   auto sock = make_socket();
   int first_calls = 0, second_calls = 0;
-  sock->on("x", [&](const std::string&, message) { ++first_calls; });
-  sock->on("x", [&](const std::string&, message) { ++second_calls; });
+  sock->on("x", [&](const std::string&, const message&) { ++first_calls; });
+  sock->on("x", [&](const std::string&, const message&) { ++second_calls; });
 
   sock->dispatch_event("x", json::array());
 
@@ -91,8 +90,8 @@ TEST(Socket, OffRemovesOnlyTheNamedListener)
 {
   auto sock = make_socket();
   int a_calls = 0, b_calls = 0;
-  sock->on("a", [&](const std::string&, message) { ++a_calls; });
-  sock->on("b", [&](const std::string&, message) { ++b_calls; });
+  sock->on("a", [&](const std::string&, const message&) { ++a_calls; });
+  sock->on("b", [&](const std::string&, const message&) { ++b_calls; });
 
   sock->off("a");
   sock->dispatch_event("a", json::array());
@@ -106,8 +105,8 @@ TEST(Socket, OffAllRemovesEveryListener)
 {
   auto sock = make_socket();
   int calls = 0;
-  sock->on("a", [&](const std::string&, message) { ++calls; });
-  sock->on("b", [&](const std::string&, message) { ++calls; });
+  sock->on("a", [&](const std::string&, const message&) { ++calls; });
+  sock->on("b", [&](const std::string&, const message&) { ++calls; });
 
   sock->off_all();
   sock->dispatch_event("a", json::array());
@@ -144,8 +143,10 @@ TEST(Socket, AckIdsIncrementPerCall)
   auto sock = make_socket();
   std::vector<int> received_ids;
 
-  sock->emit("a", json::array(), [&](message) { received_ids.push_back(0); });
-  sock->emit("b", json::array(), [&](message) { received_ids.push_back(1); });
+  sock->emit("a", json::array(),
+             [&](const message&) { received_ids.push_back(0); });
+  sock->emit("b", json::array(),
+             [&](const message&) { received_ids.push_back(1); });
 
   sock->dispatch_ack(1, json::array());
   sock->dispatch_ack(0, json::array());
@@ -165,7 +166,7 @@ TEST(Socket, DispatchAckIsConsumedOnce)
 {
   auto sock = make_socket();
   int calls = 0;
-  sock->emit("once", json::array(), [&](message) { ++calls; });
+  sock->emit("once", json::array(), [&](const message&) { ++calls; });
 
   sock->dispatch_ack(0, json::array());
   sock->dispatch_ack(0, json::array());  // second delivery for same id: no-op

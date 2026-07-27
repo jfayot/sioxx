@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SIOXX_SRC_HTTP_POLLING_TRANSPORT_HPP
+#define SIOXX_SRC_HTTP_POLLING_TRANSPORT_HPP
 
 #include <atomic>
 #include <boost/beast/http.hpp>
@@ -57,3 +58,5 @@ class http_polling_transport final
 };
 
 }  // namespace sioxx
+
+#endif  // SIOXX_SRC_HTTP_POLLING_TRANSPORT_HPP

@@ -10,7 +10,8 @@
  * @note The header uses IWYU‑style `#include` directives with `export` pragma
  *       so that downstream translation units see the full definitions.
  */
-#pragma once
+#ifndef SIOXX_SIOXX_HPP
+#define SIOXX_SIOXX_HPP
 
 #include "sioxx/client.hpp"          // IWYU pragma: export
 #include "sioxx/client_options.hpp"  // IWYU pragma: export
@@ -18,3 +19,5 @@
 #include "sioxx/packet.hpp"          // IWYU pragma: export
 #include "sioxx/parser.hpp"          // IWYU pragma: export
 #include "sioxx/socket.hpp"          // IWYU pragma: export
+
+#endif  // SIOXX_SIOXX_HPP

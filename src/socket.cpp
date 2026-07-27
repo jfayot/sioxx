@@ -5,8 +5,7 @@
 namespace sioxx
 {
 
-socket::socket(std::weak_ptr<client_impl> client,
-                                 std::string nsp)
+socket::socket(std::weak_ptr<client_impl> client, std::string nsp)
     : client_(std::move(client)), nsp_(std::move(nsp))
 {
 }
@@ -59,7 +58,7 @@ void socket::disconnect()
   connected_ = false;
 }
 
-void socket::emit(const std::string& event, message data)
+void socket::emit(const std::string& event, const message& data)
 {
   packet packet;
   packet.type = packet_type::event;
@@ -78,8 +77,8 @@ void socket::emit(const std::string& event, message data)
   if (auto c = client_.lock()) c->send_packet(packet);
 }
 
-void socket::emit(const std::string& event, message data,
-                           ack_callback callback)
+void socket::emit(const std::string& event, const message& data,
+                  ack_callback callback)
 {
   int id;
   {
@@ -132,7 +131,7 @@ void socket::dispatch_ack(int id, message data)
 }
 
 void socket::mark_connected(bool connected,
-                                     const std::string& disconnect_reason)
+                            const std::string& disconnect_reason)
 {
   bool was_connected = connected_;
   connected_ = connected;

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SIOXX_SRC_POLLING_PROTOCOL_HPP
+#define SIOXX_SRC_POLLING_PROTOCOL_HPP
 
 #include <string>
 
@@ -10,3 +11,5 @@ std::string polling_encode_binary(const std::string& payload);
 bool polling_decode_binary(const std::string& packet, std::string& payload);
 
 }  // namespace sioxx::detail
+
+#endif  // SIOXX_SRC_POLLING_PROTOCOL_HPP

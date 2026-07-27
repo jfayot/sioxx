@@ -7,7 +7,8 @@
  * acknowledgements), and explicit connect/disconnect handling.
  */
 
-#pragma once
+#ifndef SIOXX_SOCKET_HPP
+#define SIOXX_SOCKET_HPP
 
 #include <functional>
 #include <map>
@@ -100,7 +101,7 @@ class socket : public std::enable_shared_from_this<socket>
    * @param event   Event name.
    * @param data    Payload (default empty JSON array).  May be any JSON value.
    */
-  void emit(const std::string& event, message data = json::array());
+  void emit(const std::string& event, const message& data = json::array());
 
   /**
    * @brief Emit an event and request an acknowledgement.
@@ -109,7 +110,8 @@ class socket : public std::enable_shared_from_this<socket>
    * @param data     Payload.
    * @param callback Function called when the server ACK arrives.
    */
-  void emit(const std::string& event, message data, ack_callback callback);
+  void emit(const std::string& event, const message& data,
+            ack_callback callback);
   /** @} */
 
   /** @name Namespace control */
@@ -156,3 +158,5 @@ class socket : public std::enable_shared_from_this<socket>
 };
 
 }  // namespace sioxx
+
+#endif  // SIOXX_SOCKET_HPP

@@ -6,7 +6,8 @@
  * types.  sioxx simply aliases `nlohmann::json` – which already supports all
  * required JSON primitives **and** binary blobs (`json::binary_t`).
  */
-#pragma once
+#ifndef SIOXX_MESSAGE_HPP
+#define SIOXX_MESSAGE_HPP
 
 #include <nlohmann/json.hpp>
 #include <vector>
@@ -72,3 +73,5 @@ inline message binary_message(std::vector<uint8_t> bytes)
 }
 
 }  // namespace sioxx
+
+#endif  // SIOXX_MESSAGE_HPP

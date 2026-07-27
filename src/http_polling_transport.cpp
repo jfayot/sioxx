@@ -86,7 +86,10 @@ http_polling_transport::http_polling_transport() = default;
 
 http_polling_transport::~http_polling_transport()
 {
-  close();
+  // close() may notify user code. Avoid invoking potentially throwing
+  // callbacks from this noexcept destructor.
+  closing_ = true;
+  state_ = transport_state::closed;
   if (poll_thread_.joinable())
   {
     if (poll_thread_.get_id() == std::this_thread::get_id())

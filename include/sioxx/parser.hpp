@@ -10,7 +10,8 @@
  * `parser_factory`.
  */
 
-#pragma once
+#ifndef SIOXX_PARSER_HPP
+#define SIOXX_PARSER_HPP
 
 #include <functional>
 #include <string>
@@ -72,3 +73,5 @@ class parser_base
 };
 
 }  // namespace sioxx
+
+#endif  // SIOXX_PARSER_HPP

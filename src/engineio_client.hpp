@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SIOXX_SRC_ENGINEIO_CLIENT_HPP
+#define SIOXX_SRC_ENGINEIO_CLIENT_HPP
 // sioxx/engineio_client.hpp
 //
 // Engine.IO v4 client: owns the websocket transport, performs the OPEN
@@ -77,3 +78,5 @@ class engineio_client : public std::enable_shared_from_this<engineio_client>
 };
 
 }  // namespace sioxx
+
+#endif  // SIOXX_SRC_ENGINEIO_CLIENT_HPP
