@@ -88,8 +88,7 @@ cmake -S . -B build-tidy -DSIOXX_ENABLE_CLANG_TIDY=ON
 cmake --build build-tidy -j
 ```
 
-The checks are configured in `.clang-tidy`. Only sioxx library, example, and
-test targets are analyzed; fetched dependencies are excluded.
+The checks are configured in `.clang-tidy`. Only sioxx library is analyzed; fetched dependencies are excluded.
 
 ## Testing
 
