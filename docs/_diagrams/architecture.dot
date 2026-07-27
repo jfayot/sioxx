@@ -1,0 +1,137 @@
+digraph sioxx_architecture {
+  graph [
+    rankdir=TB,
+    bgcolor="transparent",
+    fontname="Helvetica",
+    fontsize=12,
+    nodesep=0.35,
+    ranksep=0.55,
+    pad=0.15,
+    compound=true
+  ];
+  node [
+    shape=box,
+    style="rounded,filled",
+    fillcolor="#f8fafc",
+    color="#64748b",
+    fontcolor="#172033",
+    fontname="Helvetica",
+    fontsize=11,
+    margin="0.16,0.10"
+  ];
+  edge [
+    color="#64748b",
+    fontcolor="#475569",
+    fontname="Helvetica",
+    fontsize=9,
+    arrowsize=0.7
+  ];
+
+  application [
+    label="Application\ncallbacks and business logic",
+    fillcolor="#eff6ff",
+    color="#2563eb"
+  ];
+
+  subgraph cluster_public {
+    label="Public C++ API";
+    color="#93c5fd";
+    fontcolor="#1d4ed8";
+    style="rounded";
+
+    client [label="sioxx::client\nconnection lifecycle"];
+    socket [label="sioxx::socket\nnamespace events and ACKs"];
+    options [label="sioxx::client_options\nTLS, parser, transport,\nreconnection"];
+
+    { rank=same; client; socket; options; }
+  }
+
+  subgraph cluster_socketio {
+    label="Socket.IO layer";
+    color="#c4b5fd";
+    fontcolor="#6d28d9";
+    style="rounded";
+
+    client_impl [
+      label="sioxx::client_impl\nnamespace registry and\npacket dispatch",
+      fillcolor="#f5f3ff"
+    ];
+    parser [
+      label="sioxx::parser_base strategy\nJSON | MessagePack | custom",
+      fillcolor="#f5f3ff"
+    ];
+    reconnect [
+      label="reconnection policy\nback-off and jitter",
+      fillcolor="#f5f3ff"
+    ];
+
+    { rank=same; parser; client_impl; reconnect; }
+  }
+
+  subgraph cluster_engineio {
+    label="Engine.IO v4 layer";
+    color="#86efac";
+    fontcolor="#15803d";
+    style="rounded";
+
+    engineio [
+      label="sioxx::engineio_client\nhandshake, framing,\nping/pong heartbeat",
+      fillcolor="#f0fdf4"
+    ];
+  }
+
+  subgraph cluster_transport {
+    label="Transport layer";
+    color="#fbbf24";
+    fontcolor="#a16207";
+    style="rounded";
+
+    transport [
+      label="sioxx::transport_base\nopen | send | receive | close",
+      fillcolor="#fffbeb"
+    ];
+    websocket [
+      label="sioxx::websocket_transport\nws:// and wss://",
+      fillcolor="#fffbeb"
+    ];
+    polling [
+      label="sioxx::http_polling_transport\nHTTP(S) GET/POST loop",
+      fillcolor="#fffbeb"
+    ];
+
+    { rank=same; websocket; polling; }
+  }
+
+  dependencies [
+    label="Boost.Asio + Boost.Beast\nOpenSSL + nlohmann/json",
+    fillcolor="#f8fafc"
+  ];
+  server [
+    label="Socket.IO server\nEngine.IO v4 endpoint",
+    shape=box3d,
+    fillcolor="#fff7ed",
+    color="#ea580c"
+  ];
+
+  application -> client [label="connect / close"];
+  application -> socket [label="on / emit"];
+  options -> client [label="configures", style=dashed];
+
+  client -> client_impl [label="RAII façade"];
+  socket -> client_impl [label="outgoing packets"];
+  client_impl -> socket [label="events / ACKs"];
+  client_impl -> parser [label="encode / decode"];
+  client_impl -> reconnect [label="schedules retries"];
+  client_impl -> engineio [label="message frames"];
+
+  engineio -> transport [label="owns one transport"];
+  transport -> websocket [label="preferred", style=dashed];
+  transport -> polling [label="fallback or forced", style=dashed];
+
+  parser -> dependencies [label="JSON values", style=dotted];
+  websocket -> dependencies [label="I/O and TLS", style=dotted];
+  polling -> dependencies [label="HTTP and TLS", style=dotted];
+
+  websocket -> server [label="WebSocket frames"];
+  polling -> server [label="HTTP polling"];
+}

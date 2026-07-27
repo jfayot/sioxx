@@ -1,0 +1,20 @@
+<div class="dropdown sioxx-version-selector">
+  <button class="btn btn-sm dropdown-toggle"
+          type="button"
+          data-bs-toggle="dropdown"
+          aria-expanded="false"
+          aria-label="Select documentation version">
+    {{ current_documentation_version }}
+  </button>
+  <ul class="dropdown-menu">
+    {% for item in documentation_versions %}
+    <li>
+      <a class="dropdown-item{% if item.version == current_documentation_version %} active{% endif %}"
+         href="{{ item.url }}"
+         {% if item.version == current_documentation_version %}aria-current="true"{% endif %}>
+        {{ item.name }}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+</div>

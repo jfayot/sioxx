@@ -7,8 +7,6 @@
 ![Windows](https://github.com/jfayot/sioxx/actions/workflows/build-windows.yml/badge.svg)
 ![Documentation](https://github.com/jfayot/sioxx/actions/workflows/docs.yml/badge.svg)
 
-[Documentation](https://jfayot.github.io/sioxx/)
-
 A C++ implementation of `socket.io`'s client functionality with the following stack:
 
 |               |                                                                                                                                                                         |
@@ -17,6 +15,12 @@ A C++ implementation of `socket.io`'s client functionality with the following st
 | WebSocket     | **Boost.Asio** + **Boost.Beast**                                                                                                                                        |
 | Wire protocol | **JSON or MessagePack**, selectable per-client                                                                                                                          |
 | Build         | **modern CMake**, [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake) for nlohmann-json and Boost, full `install(EXPORT ...)` so `find_package(sioxx)` works downstream |
+
+## Documentation
+
+**[Read the sioxx documentation](https://jfayot.github.io/sioxx/)** for an
+overview of the library, architecture, usage examples, and the complete C++
+API reference.
 
 ## Building
 
@@ -130,15 +134,22 @@ port `3000`; override it with `PORT=3001 pnpm start` if needed. See the
 ## Build documentation
 
 The API documentation is generated with Doxygen and Sphinx using the Breathe
-extension and the Read the Docs theme. Install Doxygen and Graphviz, then
-install the Python dependencies:
+extension and the PyData Sphinx theme. Graphviz's `dot` executable is required
+to render the architecture diagram. Install Doxygen and Graphviz, then install
+the Python dependencies:
 
 ```bash
 # Debian/Ubuntu
 sudo apt install doxygen graphviz
 
+# macOS
+brew install doxygen graphviz
+
 python -m pip install -r docs/requirements.txt
 ```
+
+Verify that Graphviz is available with `dot -V` before building the
+documentation.
 
 Configure a documentation build and build the `Sphinx` target:
 
@@ -151,7 +162,7 @@ cmake -S . -B build-docs \
 cmake --build build-docs --target Sphinx --parallel
 ```
 
-Open `build-docs/docs/docs/sphinx/index.html` in a browser to view the
+Open `build-docs/docs/sphinx/index.html` in a browser to view the
 generated site. Building the default target also generates both the Doxygen
 and Sphinx documentation when `SIOXX_BUILD_DOCS=ON`. To install the generated
 HTML alongside the library, run:

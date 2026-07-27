@@ -1,86 +1,75 @@
-sioxx API Reference
-===================
-
-.. This page is populated from Doxygen XML through Breathe.
-   The Breathe project name used below must match breathe_projects in conf.py.
+sioxx
+=====
 
 .. default-domain:: cpp
 
+A modern Socket.IO client for C++
+---------------------------------
+
 ``sioxx`` is a C++ Socket.IO client built on Boost.Asio, Boost.Beast and
-nlohmann/json. It implements Engine.IO v4 and supports JSON, MessagePack,
-WebSocket, TLS, HTTP long-polling, namespaces, acknowledgements and automatic
-reconnection.
+nlohmann/json. It speaks Engine.IO v4 and gives C++ applications the familiar
+Socket.IO model: connect a client, open namespace sockets, listen for events,
+emit values, and handle acknowledgements.
 
-.. contents:: API contents
-   :local:
-   :depth: 2
+.. code-block:: cpp
 
-Client
-------
+   sioxx::client client;
+   auto chat = client.socket("/chat");
 
-The :cpp:class:`sioxx::client` class is the main entry point. Configure it
-with :cpp:struct:`sioxx::client_options`, obtain namespace sockets with
-:cpp:func:`sioxx::client::socket`, and then connect to the server.
+   chat->on("message", [](const std::string&, sioxx::message data) {
+       std::cout << data.dump() << '\n';
+   });
 
-.. doxygenenum:: sioxx::parser_kind
-   :project: sioxx
+   client.connect("wss://example.com");
 
-.. doxygenstruct:: sioxx::client_options
-   :project: sioxx
-   :members:
+Why sioxx?
+----------
 
-.. doxygenclass:: sioxx::client
-   :project: sioxx
-   :members:
-   :protected-members:
+The established C++ Socket.IO client carries its own JSON and WebSocket
+stacks and predates modern target-based CMake. ``sioxx`` was created for
+applications that already use Boost and nlohmann/json and should not need a
+second set of overlapping dependencies.
 
-Socket
-------
+Its public API keeps the small, event-driven shape expected from a Socket.IO
+client while rebuilding the protocol and transport layers around current C++
+libraries. The design and implementation trade-offs are described in
+`sioxx — a modern C++ socket.io client
+<https://dev.to/jfayot/sioxx-a-modern-c-socketio-client-nlohmannjson-boostbeast-json-or-messagepack-1hj1>`_.
 
-A :cpp:class:`sioxx::socket` represents a single Socket.IO namespace.
-It provides event listeners, event emission, acknowledgements and namespace
-connection lifecycle callbacks.
-
-.. doxygenclass:: sioxx::socket
-   :project: sioxx
-   :members:
-   :protected-members:
-
-Messages
+Features
 --------
 
-Socket.IO values are represented directly with ``nlohmann::json``.
-``sioxx::json`` and ``sioxx::message`` are aliases for
-``nlohmann::json``, while ``sioxx::message_list`` represents an array of
-event arguments.
+* Engine.IO v4 and Socket.IO namespace support.
+* WebSocket and secure WebSocket transports through Boost.Beast and OpenSSL.
+* HTTP long-polling fallback, or a polling-only mode when required.
+* JSON and MessagePack wire protocols selectable for each client.
+* Custom parser strategies for other wire formats.
+* Event listeners, event emission, acknowledgements, and lifecycle callbacks.
+* Configurable reconnection with capped exponential back-off and jitter.
+* Modern CMake targets, installation, and downstream ``find_package(sioxx)``.
 
-.. doxygenfile:: message.hpp
-   :project: sioxx
+Architecture
+------------
 
-Parser extension API
---------------------
+The public API separates Socket.IO packet handling from the Engine.IO
+connection and its concrete transports. A parser strategy translates between
+Socket.IO packets and Engine.IO message frames, while namespace sockets route
+events and acknowledgements back to the application.
 
-Applications can provide a custom wire-format parser by deriving from
-:cpp:class:`sioxx::parser_base` and assigning a factory to
-:cpp:member:`sioxx::client_options::parser_factory`.
+.. graphviz:: _diagrams/architecture.dot
+   :alt: Layered architecture of the sioxx library
+   :align: center
 
-.. doxygenenum:: sioxx::packet_type
-   :project: sioxx
+Where to go next
+----------------
 
-.. doxygenstruct:: sioxx::packet
-   :project: sioxx
-   :members:
+Read :doc:`examples` for complete usage patterns or go directly to the
+:doc:`api` reference.
 
-.. doxygentypedef:: sioxx::frame_writer
-   :project: sioxx
+.. toctree::
+   :hidden:
+   :maxdepth: 2
 
-.. doxygenclass:: sioxx::parser_base
-   :project: sioxx
-   :members:
-   :protected-members:
-
-Related links
--------------
-
-* `Source repository <https://github.com/jfayot/sioxx>`_
-* `Issue tracker <https://github.com/jfayot/sioxx/issues>`_
+   Home <self>
+   Examples <examples>
+   API <api>

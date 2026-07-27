@@ -1,0 +1,95 @@
+:root {
+  --pst-color-primary: #1f6feb;
+  --pst-color-link: #1f6feb;
+  --pst-color-link-hover: #174ea6;
+}
+
+.navbar-header-items {
+  min-height: 4rem;
+}
+
+.navbar-brand {
+  font-size: 1.45rem;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+}
+
+.navbar-brand img {
+  height: 2.5rem;
+  width: 2.5rem;
+}
+
+.bd-navbar-elements .nav-link {
+  font-weight: 600;
+}
+
+.navbar-persistent--container {
+  margin-inline-start: 0.75rem;
+}
+
+.navbar-persistent--mobile {
+  margin-inline-start: auto;
+  padding-inline-start: 0.75rem;
+}
+
+.sioxx-github-stats {
+  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.3rem;
+  margin-left: 0.5rem;
+}
+
+.sioxx-version-selector .dropdown-toggle {
+  border-color: var(--pst-color-border);
+  color: var(--pst-color-text-base);
+  min-width: 5rem;
+}
+
+.sioxx-github-stats a {
+  display: inline-flex;
+  text-decoration: none;
+}
+
+.sioxx-github-stats img {
+  height: 20px;
+  max-width: none;
+}
+
+.sioxx-github-link {
+  align-items: center;
+  color: var(--pst-color-text-base);
+  font-size: 1.25rem;
+  justify-content: center;
+  margin-left: 0.15rem;
+}
+
+.bd-main .bd-content .bd-article-container {
+  max-width: 58rem;
+}
+
+.bd-article h1 {
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+
+div.graphviz,
+div.graphviz > object.graphviz {
+  background-color: transparent;
+}
+
+html[data-theme="dark"] div.graphviz > object.graphviz {
+  filter: brightness(0.85) invert(0.9) hue-rotate(180deg);
+}
+
+@media (max-width: 1199.98px) {
+  .sioxx-github-stats img {
+    display: none;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .navbar-persistent--mobile .search-button__kbd-shortcut {
+    display: none;
+  }
+}

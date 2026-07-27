@@ -64,10 +64,10 @@ jobs:
         run: cmake --build build --target Sphinx --parallel
 
       - name: Verify generated site
-        run: test -f build/docs/docs/sphinx/index.html
+        run: test -f build/docs/sphinx/index.html
 
       - name: Disable Jekyll processing
-        run: touch build/docs/docs/sphinx/.nojekyll
+        run: touch build/docs/sphinx/.nojekyll
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
@@ -75,7 +75,7 @@ jobs:
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: build/docs/docs/sphinx
+          path: build/docs/sphinx
 
   deploy:
     name: Deploy documentation

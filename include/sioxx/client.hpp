@@ -4,7 +4,7 @@
  *        `socket.io-client-cpp` library.
  *
  * A `sioxx::client` owns an internal implementation (`client_impl`) and
- * provides a thin, RAII‑friendly facade for connecting to a Socket.IO server,
+ * provides a thin, RAII‑friendly façade for connecting to a Socket.IO server,
  * obtaining namespace sockets and registering lifecycle listeners.
  */
 
