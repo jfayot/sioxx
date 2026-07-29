@@ -32,6 +32,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Cache fetched dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache/fetchcontent
+          key: fetchcontent-docs-${{ runner.os }}-${{ hashFiles('cmake/SioxxBuildHelpers.cmake') }}
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -56,6 +62,7 @@ jobs:
         run: |
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Release \
+            -DFETCHCONTENT_BASE_DIR="$PWD/.cache/fetchcontent" \
             -DSIOXX_BUILD_DOCS=ON \
             -DSIOXX_BUILD_TESTS=OFF \
             -DSIOXX_BUILD_EXAMPLES=OFF

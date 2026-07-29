@@ -94,6 +94,7 @@ target_compile_definitions(sioxx
 
 if(WIN32)
   target_link_libraries(sioxx PRIVATE ws2_32 mswsock)
+  set_target_properties(sioxx PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 
 if(MSVC)

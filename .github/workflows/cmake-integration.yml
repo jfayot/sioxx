@@ -15,6 +15,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache fetched dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache/fetchcontent
+          key: fetchcontent-integration-${{ runner.os }}-${{ hashFiles('cmake/SioxxBuildHelpers.cmake', 'tests/CMakeLists.txt') }}
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -27,6 +33,7 @@ jobs:
           cmake -S . -B build-install -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX="$PWD/stage" \
+            -DFETCHCONTENT_BASE_DIR="$PWD/.cache/fetchcontent" \
             -DSIOXX_BUILD_EXAMPLES=OFF \
             -DSIOXX_BUILD_TESTS=OFF
           cmake --build build-install --target install
@@ -46,8 +53,7 @@ jobs:
             -DBUILD_SHARED_LIBS=ON \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX="$PWD/stage-fetched-shared" \
-            -DFETCHCONTENT_SOURCE_DIR_BOOST="$PWD/build-install/_deps/boost-src" \
-            -DFETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON="$PWD/build-install/_deps/nlohmann_json-src" \
+            -DFETCHCONTENT_BASE_DIR="$PWD/.cache/fetchcontent" \
             -DSIOXX_BUILD_EXAMPLES=OFF \
             -DSIOXX_BUILD_TESTS=OFF
           cmake --build build-fetched-shared --target install
@@ -65,8 +71,7 @@ jobs:
         run: |
           cmake -S tests/integration/subproject -B build-subproject -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DFETCHCONTENT_SOURCE_DIR_BOOST="$PWD/build-install/_deps/boost-src" \
-            -DFETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON="$PWD/build-install/_deps/nlohmann_json-src"
+            -DFETCHCONTENT_BASE_DIR="$PWD/.cache/fetchcontent"
           cmake --build build-subproject
           ctest --test-dir build-subproject --output-on-failure
           if cmake --build build-subproject --target install; then
@@ -130,11 +135,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Cache fetched dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache/fetchcontent
+          key: fetchcontent-integration-${{ runner.os }}-${{ hashFiles('cmake/SioxxBuildHelpers.cmake') }}
+
       - name: Configure
         run: >
           cmake
           -S .
           -B build-install
+          "-DFETCHCONTENT_BASE_DIR=${{ github.workspace }}/.cache/fetchcontent"
           -DSIOXX_BUILD_EXAMPLES=OFF
           -DSIOXX_BUILD_TESTS=OFF
 
@@ -156,14 +168,23 @@ jobs:
       - name: Test installed-package consumer
         run: ctest --test-dir build-consumer --build-config Release --output-on-failure
 
+      - name: Cache vcpkg binary packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache/vcpkg
+          key: vcpkg-${{ runner.os }}-${{ runner.arch }}-x64-windows-${{ hashFiles('.github/workflows/cmake-integration.yml') }}
+
       - name: Install system dependencies with vcpkg
-        run: >
-          vcpkg install
-          boost-asio
-          boost-beast
-          nlohmann-json
-          openssl
-          --triplet x64-windows
+        env:
+          VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.cache/vcpkg,readwrite
+        run: |
+          New-Item -ItemType Directory -Force "${{ github.workspace }}/.cache/vcpkg" | Out-Null
+          vcpkg install `
+            boost-asio `
+            boost-beast `
+            nlohmann-json `
+            openssl `
+            --triplet x64-windows
 
       - name: Configure system-dependency shared library
         run: >
