@@ -168,17 +168,27 @@ jobs:
       - name: Test installed-package consumer
         run: ctest --test-dir build-consumer --build-config Release --output-on-failure
 
-      - name: Cache vcpkg binary packages
+      - name: Read runner image version
+        id: runner-image
+        run: '"version=$env:ImageVersion" >> $env:GITHUB_OUTPUT'
+
+      - name: Cache vcpkg packages and downloads
         uses: actions/cache@v4
         with:
-          path: ${{ github.workspace }}/.cache/vcpkg
-          key: vcpkg-${{ runner.os }}-${{ runner.arch }}-x64-windows-${{ hashFiles('.github/workflows/cmake-integration.yml') }}
+          path: |
+            ${{ github.workspace }}/.cache/vcpkg
+            ${{ github.workspace }}/.cache/vcpkg-downloads
+          key: vcpkg-${{ runner.os }}-${{ runner.arch }}-x64-windows-${{ steps.runner-image.outputs.version }}-v1
+          restore-keys: |
+            vcpkg-${{ runner.os }}-${{ runner.arch }}-x64-windows-
 
       - name: Install system dependencies with vcpkg
         env:
           VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/.cache/vcpkg,readwrite
+          VCPKG_DOWNLOADS: ${{ github.workspace }}/.cache/vcpkg-downloads
         run: |
           New-Item -ItemType Directory -Force "${{ github.workspace }}/.cache/vcpkg" | Out-Null
+          New-Item -ItemType Directory -Force "${{ github.workspace }}/.cache/vcpkg-downloads" | Out-Null
           vcpkg install `
             boost-asio `
             boost-beast `
