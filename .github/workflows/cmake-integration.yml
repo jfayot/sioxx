@@ -8,36 +8,6 @@ on:
     branches: ["main"]
 
 jobs:
-  conan-integration:
-    name: Conan package
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.x"
-
-      - name: Install Conan
-        run: python -m pip install "conan>=2.28,<3"
-
-      - name: Cache Conan packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.conan2/p
-          key: conan-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('conanfile.py', 'tests/packaging/conan/**') }}
-
-      - name: Create and test Conan package
-        run: |
-          conan profile detect --force
-          conan create . --test-folder tests/packaging/conan --build=missing
-          conan create . \
-            --test-folder tests/packaging/conan \
-            -o "sioxx/*:shared=True" \
-            --build=missing
-
   cmake-integration:
     name: Install and subproject
     runs-on: ubuntu-latest

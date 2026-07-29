@@ -20,9 +20,12 @@ jobs:
   cmake-integration:
     uses: ./.github/workflows/cmake-integration.yml
 
+  packaging:
+    uses: ./.github/workflows/packaging.yml
+
   release:
     name: Create GitHub release
-    needs: [build-linux, build-macos, build-windows, cmake-integration]
+    needs: [build-linux, build-macos, build-windows, cmake-integration, packaging]
     runs-on: ubuntu-latest
     permissions:
       contents: write
