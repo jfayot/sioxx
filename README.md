@@ -5,16 +5,17 @@
 ![Linux](https://github.com/jfayot/sioxx/actions/workflows/build-linux.yml/badge.svg)
 ![macOS](https://github.com/jfayot/sioxx/actions/workflows/build-macos.yml/badge.svg)
 ![Windows](https://github.com/jfayot/sioxx/actions/workflows/build-windows.yml/badge.svg)
+![CMake Integration](https://github.com/jfayot/sioxx/actions/workflows/cmake-integration.yml/badge.svg)
 ![Documentation](https://github.com/jfayot/sioxx/actions/workflows/docs.yml/badge.svg)
 
 A C++ implementation of `socket.io`'s client functionality with the following stack:
 
-|               |                                                                                                                                                                         |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| JSON          | **nlohmann-json**                                                                                                                                                       |
-| WebSocket     | **Boost.Asio** + **Boost.Beast**                                                                                                                                        |
-| Wire protocol | **JSON or MessagePack**, selectable per-client                                                                                                                          |
-| Build         | **modern CMake**, [CPM.cmake](https://github.com/cpm-cmake/CPM.cmake) for nlohmann-json and Boost, full `install(EXPORT ...)` so `find_package(sioxx)` works downstream |
+|               |                                                                                                                                    |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| JSON          | **nlohmann-json**                                                                                                                  |
+| WebSocket     | **Boost.Asio** + **Boost.Beast**                                                                                                   |
+| Wire protocol | **JSON or MessagePack**, selectable per-client                                                                                     |
+| Build         | **modern CMake**, `FetchContent` for nlohmann-json and Boost, full `install(EXPORT ...)` so `find_package(sioxx)` works downstream |
 
 ## Documentation
 
@@ -24,15 +25,13 @@ API reference.
 
 ## Building
 
-Requires: CMake ≥ 3.20, a C++17 compiler, Boost ≥ 1.75 (asio + beast),
-OpenSSL. Boost.asio, Boost.beast and nlohmann-json are fetched automatically via the vendored
-[`cmake/CPM.cmake`](cmake/CPM.cmake) unless you pass
-`-DSIOXX_USE_SYSTEM_BOOST=ON` and `-DSIOXX_USE_SYSTEM_JSON=ON`. CPM caches the download under
-`~/.cache/CPM` by default (override with `-DCPM_SOURCE_CACHE=<dir>` or the
-`CPM_SOURCE_CACHE` env var), so repeat configures/CI runs don't re-fetch it.
+**Requires:** CMake ≥ 3.28, a C++17 compiler, Boost 1.90 (asio + beast), nlohmann-json 3.12.0 and OpenSSL.
+
+Boost and nlohmann-json are fetched automatically with CMake's `FetchContent` unless you pass `-DSIOXX_USE_SYSTEM_BOOST=ON` and
+`-DSIOXX_USE_SYSTEM_JSON=ON`.
 
 ```bash
-sudo apt install cmake ccache
+sudo apt install cmake ccache libssl-dev
 
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
@@ -69,15 +68,18 @@ shared library.
 
 CMake options:
 
-| Option                   | Default | Meaning                                                                  |
-| ------------------------ | ------- | ------------------------------------------------------------------------ |
-| `SIOXX_BUILD_EXAMPLES`   | `ON`    | build `examples/basic_client.cpp`                                        |
-| `SIOXX_BUILD_TESTS`      | `ON`    | build and register the GoogleTest suite in `tests/`                      |
-| `SIOXX_BUILD_DOCS`       | `OFF`   | build the documentation                                                  |
-| `SIOXX_USE_SYSTEM_BOOST` | `OFF`   | use an already-installed `Boost` package instead of fetching one         |
-| `SIOXX_USE_SYSTEM_JSON`  | `OFF`   | use an already-installed `nlohmann_json` package instead of fetching one |
-| `SIOXX_ENABLE_CLANG_TIDY`| `OFF`   | run `clang-tidy` while compiling sioxx targets                           |
-| `BUILD_SHARED_LIBS`      | `OFF`   | build sioxx as a shared library instead of a static library              |
+| Option                    | Default | Meaning                                                                  |
+| ------------------------- | ------- | ------------------------------------------------------------------------ |
+| `SIOXX_BUILD_EXAMPLES`    | `ON`    | build `examples/basic_client.cpp`                                        |
+| `SIOXX_BUILD_TESTS`       | `ON`    | build and register the GoogleTest suite in `tests/`                      |
+| `SIOXX_INSTALL`           | `ON`    | generate installation rules                                              |
+| `SIOXX_BUILD_DOCS`        | `OFF`   | build the documentation                                                  |
+| `SIOXX_USE_SYSTEM_BOOST`  | `OFF`   | use an already-installed `Boost` package instead of fetching one         |
+| `SIOXX_USE_SYSTEM_JSON`   | `OFF`   | use an already-installed `nlohmann_json` package instead of fetching one |
+| `SIOXX_ENABLE_CLANG_TIDY` | `OFF`   | run `clang-tidy` while compiling sioxx targets                           |
+| `BUILD_SHARED_LIBS`       | `OFF`   | build sioxx as a shared library instead of a static library              |
+
+**Note:** `SIOXX_BUILD_EXAMPLES`, `SIOXX_BUILD_TESTS` and `SIOXX_INSTALL` default to `OFF` when sioxx is included as a subproject.
 
 ### Static analysis
 
@@ -92,7 +94,7 @@ The checks are configured in `.clang-tidy`. Only sioxx library is analyzed; fetc
 
 ## Testing
 
-Unit tests use GoogleTest (fetched automatically via `CPM.cmake`). Build with `-DSIOXX_BUILD_TESTS=ON` and run via `ctest` or
+Unit tests use GoogleTest (fetched automatically via `FetchContent`). Build with `-DSIOXX_BUILD_TESTS=ON` and run via `ctest` or
 the test binary directly:
 
 ```bash

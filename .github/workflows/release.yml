@@ -17,9 +17,12 @@ jobs:
   build-windows:
     uses: ./.github/workflows/build-windows.yml
 
+  cmake-integration:
+    uses: ./.github/workflows/cmake-integration.yml
+
   release:
     name: Create GitHub release
-    needs: [build-linux, build-macos, build-windows]
+    needs: [build-linux, build-macos, build-windows, cmake-integration]
     runs-on: ubuntu-latest
     permissions:
       contents: write

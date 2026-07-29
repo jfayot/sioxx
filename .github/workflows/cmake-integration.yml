@@ -1,0 +1,197 @@
+name: CMake Integration
+
+on:
+  workflow_call:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  cmake-integration:
+    name: Install and subproject
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            libssl-dev \
+            ninja-build
+
+      - name: Build and install with fetched dependencies
+        run: |
+          cmake -S . -B build-install -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage" \
+            -DSIOXX_BUILD_EXAMPLES=OFF \
+            -DSIOXX_BUILD_TESTS=OFF
+          cmake --build build-install --target install
+
+      - name: Consume installed static library
+        run: |
+          mv "$PWD/stage" "$PWD/relocated-stage"
+          cmake -S tests/integration/consumer -B build-consumer -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$PWD/relocated-stage"
+          cmake --build build-consumer
+          ctest --test-dir build-consumer --output-on-failure
+
+      - name: Build and install shared library with fetched dependencies
+        run: |
+          cmake -S . -B build-fetched-shared -G Ninja \
+            -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage-fetched-shared" \
+            -DFETCHCONTENT_SOURCE_DIR_BOOST="$PWD/build-install/_deps/boost-src" \
+            -DFETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON="$PWD/build-install/_deps/nlohmann_json-src" \
+            -DSIOXX_BUILD_EXAMPLES=OFF \
+            -DSIOXX_BUILD_TESTS=OFF
+          cmake --build build-fetched-shared --target install
+
+      - name: Consume fetched-dependency shared library
+        run: |
+          mv "$PWD/stage-fetched-shared" "$PWD/relocated-stage-fetched-shared"
+          cmake -S tests/integration/consumer -B build-fetched-shared-consumer -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$PWD/relocated-stage-fetched-shared"
+          cmake --build build-fetched-shared-consumer
+          ctest --test-dir build-fetched-shared-consumer --output-on-failure
+
+      - name: Consume sioxx as a subproject without installation rules
+        run: |
+          cmake -S tests/integration/subproject -B build-subproject -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DFETCHCONTENT_SOURCE_DIR_BOOST="$PWD/build-install/_deps/boost-src" \
+            -DFETCHCONTENT_SOURCE_DIR_NLOHMANN_JSON="$PWD/build-install/_deps/nlohmann_json-src"
+          cmake --build build-subproject
+          ctest --test-dir build-subproject --output-on-failure
+          if cmake --build build-subproject --target install; then
+            echo "Subproject unexpectedly generated an install target" >&2
+            exit 1
+          fi
+
+  cmake-system-integration:
+    name: System dependencies
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: brew install boost ninja nlohmann-json openssl
+
+      - name: Build and install static library with system dependencies
+        run: |
+          cmake -S . -B build-system-static -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage-system-static" \
+            -DSIOXX_BUILD_EXAMPLES=OFF \
+            -DSIOXX_BUILD_TESTS=OFF \
+            -DSIOXX_USE_SYSTEM_BOOST=ON \
+            -DSIOXX_USE_SYSTEM_JSON=ON
+          cmake --build build-system-static --target install
+
+      - name: Consume installed system-dependency static library
+        run: |
+          cmake -S tests/integration/consumer -B build-system-static-consumer -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$PWD/stage-system-static"
+          cmake --build build-system-static-consumer
+          ctest --test-dir build-system-static-consumer --output-on-failure
+
+      - name: Build and install shared library with system dependencies
+        run: |
+          cmake -S . -B build-system-shared -G Ninja \
+            -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$PWD/stage-shared" \
+            -DSIOXX_BUILD_EXAMPLES=OFF \
+            -DSIOXX_BUILD_TESTS=OFF \
+            -DSIOXX_USE_SYSTEM_BOOST=ON \
+            -DSIOXX_USE_SYSTEM_JSON=ON
+          cmake --build build-system-shared --target install
+
+      - name: Consume installed shared library
+        run: |
+          cmake -S tests/integration/consumer -B build-shared-consumer -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$PWD/stage-shared"
+          cmake --build build-shared-consumer
+          ctest --test-dir build-shared-consumer --output-on-failure
+
+  cmake-windows-integration:
+    name: Windows installed package
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >
+          cmake
+          -S .
+          -B build-install
+          -DSIOXX_BUILD_EXAMPLES=OFF
+          -DSIOXX_BUILD_TESTS=OFF
+
+      - name: Build and install
+        run: |
+          cmake --build build-install --config Release
+          cmake --install build-install --config Release --prefix "${{ github.workspace }}/stage"
+
+      - name: Configure installed-package consumer
+        run: >
+          cmake
+          -S tests/integration/consumer
+          -B build-consumer
+          "-DCMAKE_PREFIX_PATH=${{ github.workspace }}/stage"
+
+      - name: Build installed-package consumer
+        run: cmake --build build-consumer --config Release
+
+      - name: Test installed-package consumer
+        run: ctest --test-dir build-consumer --build-config Release --output-on-failure
+
+      - name: Install system dependencies with vcpkg
+        run: >
+          vcpkg install
+          boost-asio
+          boost-beast
+          nlohmann-json
+          openssl
+          --triplet x64-windows
+
+      - name: Configure system-dependency shared library
+        run: >
+          cmake
+          -S .
+          -B build-system-shared
+          -DBUILD_SHARED_LIBS=ON
+          "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DSIOXX_BUILD_EXAMPLES=OFF
+          -DSIOXX_BUILD_TESTS=OFF
+          -DSIOXX_USE_SYSTEM_BOOST=ON
+          -DSIOXX_USE_SYSTEM_JSON=ON
+
+      - name: Build and install system-dependency shared library
+        run: |
+          cmake --build build-system-shared --config Release
+          cmake --install build-system-shared --config Release --prefix "${{ github.workspace }}/stage-system-shared"
+
+      - name: Configure system-dependency shared consumer
+        run: >
+          cmake
+          -S tests/integration/consumer
+          -B build-system-shared-consumer
+          "-DCMAKE_PREFIX_PATH=${{ github.workspace }}/stage-system-shared"
+          "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+
+      - name: Build system-dependency shared consumer
+        run: cmake --build build-system-shared-consumer --config Release
+
+      - name: Test system-dependency shared consumer
+        run: ctest --test-dir build-system-shared-consumer --build-config Release --output-on-failure
