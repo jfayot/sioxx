@@ -172,6 +172,12 @@ if(SIOXX_INSTALL)
     install(DIRECTORY "${SIOXX_VENDORED_JSON_SOURCE_DIR}/single_include/nlohmann"
       DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     )
+
+    if(MSVC)
+      install(FILES "${SIOXX_VENDORED_JSON_SOURCE_DIR}/nlohmann_json.natvis"
+        DESTINATION "."
+      )
+    endif()
   endif()
 
   install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/sioxx"
