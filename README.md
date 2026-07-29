@@ -67,7 +67,7 @@ conan create . \
   --build=missing
 ```
 
-Consumers can require `sioxx/0.1.0` and use Conan's `CMakeDeps` and
+Consumers can require `sioxx/0.1.1` and use Conan's `CMakeDeps` and
 `CMakeToolchain` generators. The generated CMake target is `sioxx::sioxx`.
 
 ### Building a shared library
@@ -292,20 +292,21 @@ release-preparation helper with the new version (with or without a leading
 `v`):
 
 ```bash
-./scripts/prepare-release.sh 0.0.5
+version=0.1.1
+./scripts/prepare-release.sh "$version"
 ```
 
-The script updates the CMake project version, turns the current
-`[Unreleased]` entries into a dated `0.0.5` section, creates a fresh
-`[Unreleased]` section, and updates the changelog comparison links. Review
-the result before committing it:
+The script updates the CMake project, Conan package, README, and documentation
+versions. It also turns the current `[Unreleased]` entries into a dated release
+section, creates a fresh `[Unreleased]` section, and updates the changelog
+comparison links. Review the result before committing it:
 
 ```bash
-git diff -- CMakeLists.txt CHANGELOG.md
-git add CMakeLists.txt CHANGELOG.md
-git commit -m "chore: prepare release v0.0.5"
-git tag v0.0.5
-git push origin main v0.0.5
+git diff
+git add CMakeLists.txt CHANGELOG.md conanfile.py README.md docs/_static/versions.json
+git commit -m "chore: prepare release v$version"
+git tag "v$version"
+git push origin main "v$version"
 ```
 
 The tag-triggered GitHub Actions job verifies that the tag matches the CMake

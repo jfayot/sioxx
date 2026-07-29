@@ -4,6 +4,7 @@ build
 build-tidy
 build-shared
 build-docs
+build-release
 install
 logs
 Testing

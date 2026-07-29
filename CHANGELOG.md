@@ -5,6 +5,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-29
+
+### Changes :construction:
+
+- Replaced `CPM.cmake` by pure `FetchContent`.
+- Improved CMake dependency management with header-only Boost fetching and
+  support for system Boost and nlohmann-json packages.
+- Improved installation and package consumption for static and shared
+  libraries across Linux, macOS, and Windows.
+- Added Conan 2 packaging with static and shared consumer tests.
+- Added versioned API documentation generated with Doxygen and Sphinx.
+- Improved CI coverage with dedicated CMake integration and packaging
+  workflows and dependency caching.
+- Added optional `clang-tidy` integration.
+
 ## [0.1.0] - 2026-07-22
 
 ### Breaking changes :mega:
@@ -59,7 +74,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed WebSocket write-queue and recursive-mutex deadlocks.
 - Fixed windows builds and test configuration in CMake and VS Code.
 
-[Unreleased]: https://github.com/jfayot/sioxx/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/jfayot/sioxx/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/jfayot/sioxx/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/jfayot/sioxx/compare/v0.0.6...v0.1.0
 [0.0.6]: https://github.com/jfayot/sioxx/compare/v0.0.5...v0.0.6
 [0.0.5]: https://github.com/jfayot/sioxx/compare/v0.0.4...v0.0.5
