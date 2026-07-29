@@ -305,7 +305,7 @@ comparison links. Review the result before committing it:
 git diff
 git add CMakeLists.txt CHANGELOG.md conanfile.py README.md docs/_static/versions.json
 git commit -m "chore: prepare release v$version"
-git tag "v$version"
+git tag -a "v$version" -m "sioxx v$version"
 git push origin main "v$version"
 ```
 
