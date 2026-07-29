@@ -47,6 +47,28 @@ find_package(sioxx REQUIRED)
 target_link_libraries(my_app PRIVATE sioxx::sioxx)
 ```
 
+### Conan
+
+A Conan 2 recipe is provided for building and packaging sioxx together with
+its Boost, nlohmann-json, and OpenSSL dependencies:
+
+```bash
+conan profile detect --force
+conan create . --test-folder tests/packaging/conan --build=missing
+```
+
+Build the shared-library package with:
+
+```bash
+conan create . \
+  --test-folder tests/packaging/conan \
+  -o sioxx/*:shared=True \
+  --build=missing
+```
+
+Consumers can require `sioxx/0.1.0` and use Conan's `CMakeDeps` and
+`CMakeToolchain` generators. The generated CMake target is `sioxx::sioxx`.
+
 ### Building a shared library
 
 By default, sioxx is built as a static library. To build it as a shared
