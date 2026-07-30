@@ -37,6 +37,7 @@ A C++ implementation of `socket.io`'s client functionality with the following st
   - [Static analysis](#static-analysis)
   - [Building the documentation](#building-the-documentation)
 - [Contributing](#contributing)
+- [AI disclosure](#ai-disclosure)
 - [License](#license)
 
 ## Quick start
@@ -330,6 +331,17 @@ cmake --install build-docs --prefix /usr/local
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 development setup, testing expectations, and pull request guidelines.
+
+## AI disclosure
+
+This project was designed and developed with assistance from AI tools:
+
+| Tool     | Model          | Environment |
+| -------- | -------------- | ----------- |
+| Codex    | `gpt-5.6-sol`  | Codex       |
+| opencode | `gpt-oss:120b` | Local       |
+
+AI-assisted work remains subject to human review and maintainer decisions.
 
 ## License
 

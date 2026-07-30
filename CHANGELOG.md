@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changes :construction:
 
+- Documented the use of Codex and opencode, including the AI models used to
+  assist with project design and development.
 - Reorganized the README around quick-start, usage, configuration, and
   development workflows, with a linked table of contents.
 
