@@ -1,0 +1,51 @@
+name: End-to-end tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: tests/e2e/server/pnpm-lock.yaml
+
+      - name: Install E2E server dependencies
+        run: pnpm --dir tests/e2e/server install --frozen-lockfile
+
+      - name: Cache fetched CMake dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache/fetchcontent
+          key: fetchcontent-e2e-${{ runner.os }}-${{ hashFiles('cmake/SioxxBuildHelpers.cmake', 'tests/CMakeLists.txt') }}
+
+      - name: Configure
+        run: >
+          cmake -S . -B build-e2e
+          -DCMAKE_BUILD_TYPE=Release
+          -DSIOXX_BUILD_TESTS=ON
+          -DSIOXX_BUILD_E2E_TESTS=ON
+          -DFETCHCONTENT_BASE_DIR=${{ github.workspace }}/.cache/fetchcontent
+
+      - name: Build
+        run: cmake --build build-e2e --config Release --parallel
+
+      - name: Run E2E tests
+        run: >
+          ctest --test-dir build-e2e
+          --build-config Release
+          -L e2e
+          --output-on-failure

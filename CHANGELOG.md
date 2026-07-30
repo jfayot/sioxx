@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Additions :tada:
 
+- Added an opt-in GoogleTest end-to-end suite backed by dedicated Node.js
+  Socket.IO servers, covering events, acknowledgements, HTTP polling,
+  automatic fallback, MessagePack with binary data, and multiple namespaces.
 - Added consistent sioxx logo branding to the README and generated Sphinx
   documentation.
 - Added a contributing guide and GitHub issue and pull request templates.
@@ -30,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed the CMake clang-tidy integration passing literal quotes in the
   configuration file path.
+- Split Engine.IO polling payloads containing multiple record-separated
+  packets, preventing intermittent namespace connection timeouts.
+- Fixed unexpected WebSocket closure handling so stopping the Engine.IO
+  heartbeat cannot delay close notification and reconnection.
 - Defined the minimum Windows target version when compiling sioxx.
 
 ## [0.1.1] - 2026-07-29

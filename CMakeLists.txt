@@ -14,6 +14,7 @@ include(GNUInstallDirs)
 # ---------------------------------------------------------------------------
 option(SIOXX_BUILD_EXAMPLES "Build example programs" ${PROJECT_IS_TOP_LEVEL})
 option(SIOXX_BUILD_TESTS "Build unit tests" ${PROJECT_IS_TOP_LEVEL})
+option(SIOXX_BUILD_E2E_TESTS "Build end-to-end tests requiring Node.js" OFF)
 option(SIOXX_INSTALL "Generate sioxx installation rules" ${PROJECT_IS_TOP_LEVEL})
 option(SIOXX_BUILD_DOCS "Build documentation" OFF)
 option(SIOXX_USE_SYSTEM_BOOST "Use system-installed boost instead of fetching it" OFF)
@@ -134,6 +135,13 @@ if(SIOXX_BUILD_TESTS)
   endif()
 
   add_subdirectory(tests)
+endif()
+
+if(SIOXX_BUILD_E2E_TESTS)
+  if(NOT SIOXX_BUILD_TESTS)
+    message(FATAL_ERROR "SIOXX_BUILD_E2E_TESTS requires SIOXX_BUILD_TESTS=ON")
+  endif()
+  add_subdirectory(tests/e2e)
 endif()
 
 # ---------------------------------------------------------------------------

@@ -2,7 +2,8 @@
   "cmake.configureSettings": {
     "CMAKE_BUILD_TYPE": "Release",
     "SIOXX_BUILD_EXAMPLES": "ON",
-    "SIOXX_BUILD_TESTS": "ON"
+    "SIOXX_BUILD_TESTS": "ON",
+    "SIOXX_BUILD_E2E_TESTS": "ON"
   },
   "editor.defaultFormatter": "xaver.clang-format",
   "editor.formatOnSave": true,

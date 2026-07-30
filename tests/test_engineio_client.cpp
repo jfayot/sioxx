@@ -2,6 +2,8 @@
 
 #include <sioxx/message.hpp>
 
+#include <chrono>
+
 #include "engineio_client.hpp"
 #include "polling_protocol.hpp"
 
@@ -38,6 +40,12 @@ class fake_transport : public transport_base
   void simulate_message(const std::string& payload, bool is_binary = false)
   {
     if (on_message_) on_message_(payload, is_binary);
+  }
+
+  void simulate_close(const std::string& reason)
+  {
+    state_ = transport_state::closed;
+    if (on_close_) on_close_(reason);
   }
 
   std::string last_connect_url;
@@ -84,6 +92,27 @@ TEST(HttpPollingProtocol, RejectsNonBinaryAndMalformedPackets)
   std::string decoded;
   EXPECT_FALSE(detail::polling_decode_binary("4hello", decoded));
   EXPECT_FALSE(detail::polling_decode_binary("b???", decoded));
+}
+
+TEST(HttpPollingProtocol, SplitsBatchedEngineioPackets)
+{
+  const auto packets = detail::polling_split_payload(
+    "40/e2e,{\"sid\":\"abc\"}\x1e"
+    "42/e2e,[\"server_arguments\",1]");
+
+  ASSERT_EQ(packets.size(), 2);
+  EXPECT_EQ(packets[0], "40/e2e,{\"sid\":\"abc\"}");
+  EXPECT_EQ(packets[1], "42/e2e,[\"server_arguments\",1]");
+}
+
+TEST(HttpPollingProtocol, IgnoresEmptyPacketsWhenSplitting)
+{
+  const auto packets = detail::polling_split_payload(
+    "\x1e"
+    "2\x1e");
+
+  ASSERT_EQ(packets.size(), 1);
+  EXPECT_EQ(packets[0], "2");
 }
 
 TEST_F(EngineioClientFixture, NotOpenBeforeHandshake)
@@ -215,5 +244,30 @@ TEST_F(EngineioClientFixture,
 
   EXPECT_TRUE(closed);
   EXPECT_EQ(reason, "closed");
+  EXPECT_FALSE(client->is_open());
+}
+
+TEST_F(EngineioClientFixture,
+       UnexpectedTransportCloseStopsHeartbeatAndNotifiesImmediately)
+{
+  client->open("ws://localhost/socket.io/");
+  transport->simulate_message(make_open_payload(500, 20000));
+
+  auto closed = std::make_shared<bool>(false);
+  auto reason = std::make_shared<std::string>();
+  client->on_close(
+    [closed, reason](const std::string& r)
+    {
+      *closed = true;
+      *reason = r;
+    });
+
+  const auto start = std::chrono::steady_clock::now();
+  transport->simulate_close("connection reset");
+  const auto elapsed = std::chrono::steady_clock::now() - start;
+
+  EXPECT_LT(elapsed, std::chrono::milliseconds(250));
+  EXPECT_TRUE(*closed);
+  EXPECT_EQ(*reason, "connection reset");
   EXPECT_FALSE(client->is_open());
 }

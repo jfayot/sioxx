@@ -65,6 +65,7 @@ class engineio_client : public std::enable_shared_from_this<engineio_client>
 
   std::atomic<bool> open_{false};
   std::atomic<bool> closing_{false};
+  std::atomic<bool> heartbeat_stop_requested_{true};
 
   int ping_interval_ms_{25000};
   int ping_timeout_ms_{20000};

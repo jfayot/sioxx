@@ -270,9 +270,32 @@ ctest --test-dir build --output-on-failure
 # or: ./build/tests/sioxx_tests
 ```
 
-There's deliberately no test that opens a real socket: `websocket_transport`
-itself (the Boost.Beast plumbing) is exercised end-to-end by the
-`sioxx_basic_client` example against a real server instead.
+The default unit suite does not open real sockets. Real protocol and transport
+behavior is covered by the opt-in end-to-end suite below and can also be
+exercised manually with `sioxx_basic_client`.
+
+### End-to-end tests
+
+The opt-in end-to-end suite starts a dedicated Node.js Socket.IO server on an
+automatically selected local port and runs GoogleTest assertions against it.
+Install the server dependency and run the tests with:
+
+```bash
+pnpm --dir tests/e2e/server install --frozen-lockfile
+cmake -S . -B build-e2e \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DSIOXX_BUILD_TESTS=ON \
+  -DSIOXX_BUILD_E2E_TESTS=ON
+cmake --build build-e2e -j
+ctest --test-dir build-e2e -L e2e --output-on-failure
+```
+
+The regular unit-test build does not require Node.js.
+
+The E2E suite covers WebSocket and polling connections, automatic polling
+fallback, JSON and MessagePack interoperability, acknowledgements, binary
+MessagePack payloads, routing across multiple namespaces, and WebSocket
+reconnection after an unexpected server shutdown.
 
 ### Static analysis
 
