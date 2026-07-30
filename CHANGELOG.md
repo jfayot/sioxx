@@ -5,6 +5,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Additions :tada:
+
+- Added consistent sioxx logo branding to the README and generated Sphinx
+  documentation.
+- Added a contributing guide and GitHub issue and pull request templates.
+
+### Changes :construction:
+
+- Reorganized the README around quick-start, usage, configuration, and
+  development workflows, with a linked table of contents.
+
+### Fixes :wrench:
+
+- Defined the minimum Windows target version when compiling sioxx.
+
 ## [0.1.1] - 2026-07-29
 
 ### Changes :construction:

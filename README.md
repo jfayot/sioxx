@@ -1,4 +1,4 @@
-# sioxx — modern Socket.IO client for C++
+<h1><img src="docs/_static/sioxx-logo.svg" alt="sioxx logo" height="80" align="center"> sioxx — modern Socket.IO client for C++</h1>
 
 ![GitHub Release](https://img.shields.io/github/v/release/jfayot/sioxx)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/jfayot/sioxx/blob/main/LICENSE)
@@ -18,13 +18,28 @@ A C++ implementation of `socket.io`'s client functionality with the following st
 | Wire protocol | **JSON or MessagePack**, selectable per-client                                                                                     |
 | Build         | **modern CMake**, `FetchContent` for nlohmann-json and Boost, full `install(EXPORT ...)` so `find_package(sioxx)` works downstream |
 
-## Documentation
+## Table of contents
 
-**[Read the sioxx documentation](https://jfayot.github.io/sioxx/)** for an
-overview of the library, architecture, usage examples, and the complete C++
-API reference.
+- [Quick start](#quick-start)
+- [API example](#api-example)
+- [Installation and configuration](#installation-and-configuration)
+  - [Conan](#conan)
+  - [Shared libraries](#shared-libraries)
+  - [CMake options](#cmake-options)
+- [Usage guide](#usage-guide)
+  - [Parser selection](#parser-selection)
+  - [Threading model](#threading-model)
+  - [Example test server](#example-test-server)
+- [Known limitations](#known-limitations)
+- [Documentation](#documentation)
+- [Development](#development)
+  - [Testing](#testing)
+  - [Static analysis](#static-analysis)
+  - [Building the documentation](#building-the-documentation)
+- [Preparing a release](#preparing-a-release)
+- [License](#license)
 
-## Building
+## Quick start
 
 **Requires:** CMake ≥ 3.28, a C++17 compiler, Boost 1.90 (asio + beast), nlohmann-json 3.12.0 and OpenSSL.
 
@@ -44,9 +59,42 @@ This produces `libsioxx.a` and the
 downstream project can just:
 
 ```cmake
-find_package(sioxx REQUIRED)
+find_package(sioxx CONFIG REQUIRED)
 target_link_libraries(my_app PRIVATE sioxx::sioxx)
 ```
+
+## API example
+
+```cpp
+#include <sioxx/sioxx.hpp>
+
+sioxx::client_options opts;
+opts.parser = sioxx::parser_kind::msgpack;   // or parser_kind::json (default)
+opts.reconnect_attempts = 5;
+opts.reconnect_delay = std::chrono::milliseconds(1000);
+opts.reconnect_delay_max = std::chrono::milliseconds(30000);
+opts.reconnect_randomization_factor = 0.5;
+
+sioxx::client client(opts);
+client.set_open_listener([] { /* engine.io + "/" namespace connected */ });
+client.set_close_listener([](const std::string& reason) { /* ... */ });
+
+auto sock = client.socket("/chat");  // any namespace path
+sock->on("message", [](const std::string& event, sioxx::message data) {
+    // data is an nlohmann::json array of the event's arguments
+});
+
+client.connect("wss://chat.example");
+
+sock->emit("hello", sioxx::json{"world"});
+sock->emit("ping_ack", sioxx::json::array({1, 2, 3}), [](sioxx::message reply) {
+    // ack callback
+});
+
+client.close();
+```
+
+## Installation and configuration
 
 ### Conan
 
@@ -70,7 +118,7 @@ conan create . \
 Consumers can require `sioxx/0.1.1` and use Conan's `CMakeDeps` and
 `CMakeToolchain` generators. The generated CMake target is `sioxx::sioxx`.
 
-### Building a shared library
+### Shared libraries
 
 By default, sioxx is built as a static library. To build it as a shared
 library, enable CMake's standard `BUILD_SHARED_LIBS` option when configuring:
@@ -89,7 +137,7 @@ earlier CMake configuration. Downstream projects link to the same
 `sioxx::sioxx` target regardless of whether sioxx was built as a static or
 shared library.
 
-CMake options:
+### CMake options
 
 | Option                    | Default | Meaning                                                                  |
 | ------------------------- | ------- | ------------------------------------------------------------------------ |
@@ -104,34 +152,54 @@ CMake options:
 
 **Note:** `SIOXX_BUILD_EXAMPLES`, `SIOXX_BUILD_TESTS` and `SIOXX_INSTALL` default to `OFF` when sioxx is included as a subproject.
 
-### Static analysis
+## Usage guide
 
-Install `clang-tidy`, then enable it when configuring:
+### Parser selection
 
-```bash
-cmake -S . -B build-tidy -DSIOXX_ENABLE_CLANG_TIDY=ON
-cmake --build build-tidy -j
+Both parsers implement the same `sioxx::parser_base` interface
+(`json_parser` / `msgpack_parser`) and are picked with
+`client_options::parser`. This must match whatever parser the server side is
+configured with (e.g. Node's `socket.io` default vs.
+`socket.io-msgpack-parser`) — sioxx does not negotiate it automatically,
+exactly like the JS clients don't either.
+
+Applications can supply their own strategy with `parser_factory`. It takes
+precedence over `parser`, and is called once for each client so the returned
+parser may keep per-connection state:
+
+```cpp
+class my_parser : public sioxx::parser_base {
+public:
+    void encode(const sioxx::packet& packet,
+                const sioxx::frame_writer& write) const override;
+    bool decode(const std::string& payload, bool is_binary,
+                sioxx::packet& out) override;
+    std::string name() const override { return "my-parser"; }
+};
+
+sioxx::client_options opts;
+opts.parser_factory = [] { return std::make_unique<my_parser>(); };
+sioxx::client client(opts);
 ```
 
-The checks are configured in `.clang-tidy`. Only sioxx library is analyzed; fetched dependencies are excluded.
+The factory must return a non-null `std::unique_ptr<parser_base>`; otherwise
+client construction throws `std::invalid_argument`.
 
-## Testing
+`msgpack_parser` is implemented on top of `nlohmann::json::to_msgpack` /
+`from_msgpack`, so it needs no extra MessagePack library and — unlike the
+JSON parser — carries binary attachments natively via `nlohmann::json::binary_t`
+without the placeholder/reconstruction dance the text protocol needs for
+`BINARY_EVENT`/`BINARY_ACK` packets.
 
-Unit tests use GoogleTest (fetched automatically via `FetchContent`). Build with `-DSIOXX_BUILD_TESTS=ON` and run via `ctest` or
-the test binary directly:
+### Threading model
 
-```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSIOXX_BUILD_TESTS=ON
-cmake --build build -j
-ctest --test-dir build --output-on-failure
-# or: ./build/tests/sioxx_tests
-```
+`websocket_transport` runs its own `boost::asio::io_context` on a background
+thread per connection. All `on_*` callbacks (`socket->on(...)`, open/close
+listeners, ack callbacks) fire on that thread — if you're updating UI state
+or anything not thread-safe, hop back to your own thread/queue from inside
+the callback.
 
-There's deliberately no test that opens a real socket: `websocket_transport`
-itself (the Boost.Beast plumbing) is exercised end-to-end by the
-`sioxx_basic_client` example against a real server instead.
-
-## Example test server
+### Example test server
 
 The repository includes a small Socket.IO server in
 [`examples/test_server`](examples/test_server) for exercising
@@ -168,7 +236,57 @@ The server and client parser modes must match. The test server defaults to
 port `3000`; override it with `PORT=3001 pnpm start` if needed. See the
 [test-server README](examples/test_server/README.md) for details.
 
-## Build documentation
+## Known limitations
+
+- The JSON parser recognizes and emits the `BINARY_EVENT`/`BINARY_ACK`
+  headers but does not implement the placeholder deconstruction/
+  reconstruction scheme for multi-attachment binary payloads. Use the
+  MessagePack parser if you need binary data — it carries it natively.
+- Reconnection uses capped exponential backoff with symmetric jitter. Configure
+  it with `reconnect_attempts`, `reconnect_delay`, `reconnect_delay_max`, and
+  `reconnect_randomization_factor`.
+- HTTP long-polling is used automatically only when the initial WebSocket
+  connection fails. It is intentionally not upgraded back to WebSocket, and
+  it opens a fresh HTTP connection for each poll/write.
+
+## Documentation
+
+**[Read the sioxx documentation](https://jfayot.github.io/sioxx/)** for an
+overview of the library, architecture, usage examples, and the complete C++
+API reference.
+
+## Development
+
+### Testing
+
+Unit tests use GoogleTest (fetched automatically via `FetchContent`). Build with `-DSIOXX_BUILD_TESTS=ON` and run via `ctest` or
+the test binary directly:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DSIOXX_BUILD_TESTS=ON
+cmake --build build -j
+ctest --test-dir build --output-on-failure
+# or: ./build/tests/sioxx_tests
+```
+
+There's deliberately no test that opens a real socket: `websocket_transport`
+itself (the Boost.Beast plumbing) is exercised end-to-end by the
+`sioxx_basic_client` example against a real server instead.
+
+### Static analysis
+
+Install `clang-tidy`, then enable it when configuring:
+
+```bash
+cmake -S . -B build-tidy -DSIOXX_ENABLE_CLANG_TIDY=ON
+cmake --build build-tidy -j
+```
+
+The checks are configured in `.clang-tidy`. For now, only the
+`portability-*` checks are enabled. Analysis is limited to the sioxx library;
+fetched dependencies, tests, and examples are excluded.
+
+### Building the documentation
 
 The API documentation is generated with Doxygen and Sphinx using the Breathe
 extension and the PyData Sphinx theme. Graphviz's `dot` executable is required
@@ -208,82 +326,6 @@ HTML alongside the library, run:
 cmake --install build-docs --prefix /usr/local
 ```
 
-## API sketch
-
-```cpp
-#include <sioxx/sioxx.hpp>
-
-sioxx::client_options opts;
-opts.parser = sioxx::parser_kind::msgpack;   // or parser_kind::json (default)
-opts.reconnect_attempts = 5;
-opts.reconnect_delay = std::chrono::milliseconds(1000);
-opts.reconnect_delay_max = std::chrono::milliseconds(30000);
-opts.reconnect_randomization_factor = 0.5;
-
-sioxx::client client(opts);
-client.set_open_listener([] { /* engine.io + "/" namespace connected */ });
-client.set_close_listener([](const std::string& reason) { /* ... */ });
-
-auto sock = client.socket("/your_namespace");  // any namespace path
-sock->on("your_message", [](const std::string& event, sioxx::message data) {
-    // data is an nlohmann::json array of the event's arguments
-});
-
-client.connect("wss://your.socketio.server");
-
-sock->emit("hello", sioxx::json{"world"});
-sock->emit("ping_ack", sioxx::json::array({1, 2, 3}), [](sioxx::message reply) {
-    // ack callback
-});
-
-client.close();
-```
-
-## Parser selection
-
-Both parsers implement the same `sioxx::parser_base` interface
-(`json_parser` / `msgpack_parser`) and are picked with
-`client_options::parser`. This must match whatever parser the server side is
-configured with (e.g. Node's `socket.io` default vs.
-`socket.io-msgpack-parser`) — sioxx does not negotiate it automatically,
-exactly like the JS clients don't either.
-
-Applications can supply their own strategy with `parser_factory`. It takes
-precedence over `parser`, and is called once for each client so the returned
-parser may keep per-connection state:
-
-```cpp
-class my_parser : public sioxx::parser_base {
-public:
-    void encode(const sioxx::packet& packet,
-                const sioxx::frame_writer& write) const override;
-    bool decode(const std::string& payload, bool is_binary,
-                sioxx::packet& out) override;
-    std::string name() const override { return "my-parser"; }
-};
-
-sioxx::client_options opts;
-opts.parser_factory = [] { return std::make_unique<my_parser>(); };
-sioxx::client client(opts);
-```
-
-The factory must return a non-null `std::unique_ptr<parser_base>`; otherwise
-client construction throws `std::invalid_argument`.
-
-`msgpack_parser` is implemented on top of `nlohmann::json::to_msgpack` /
-`from_msgpack`, so it needs no extra MessagePack library and — unlike the
-JSON parser — carries binary attachments natively via `nlohmann::json::binary_t`
-without the placeholder/reconstruction dance the text protocol needs for
-`BINARY_EVENT`/`BINARY_ACK` packets.
-
-## Threading model
-
-`websocket_transport` runs its own `boost::asio::io_context` on a background
-thread per connection. All `on_*` callbacks (`socket->on(...)`, open/close
-listeners, ack callbacks) fire on that thread — if you're updating UI state
-or anything not thread-safe, hop back to your own thread/queue from inside
-the callback.
-
 ## Preparing a release
 
 Keep the pending user-visible changes under `[Unreleased]` in
@@ -313,19 +355,6 @@ The tag-triggered GitHub Actions job verifies that the tag matches the CMake
 version and that `CHANGELOG.md` contains non-empty notes for it. After the
 multi-platform build and tests pass, those notes become the GitHub Release
 description.
-
-## Known limitations
-
-- The JSON parser recognizes and emits the `BINARY_EVENT`/`BINARY_ACK`
-  headers but does not implement the placeholder deconstruction/
-  reconstruction scheme for multi-attachment binary payloads. Use the
-  MessagePack parser if you need binary data — it carries it natively.
-- Reconnection uses capped exponential backoff with symmetric jitter. Configure
-  it with `reconnect_attempts`, `reconnect_delay`, `reconnect_delay_max`, and
-  `reconnect_randomization_factor`.
-- HTTP long-polling is used automatically only when the initial WebSocket
-  connection fails. It is intentionally not upgraded back to WebSocket, and
-  it opens a fresh HTTP connection for each poll/write.
 
 ## License
 

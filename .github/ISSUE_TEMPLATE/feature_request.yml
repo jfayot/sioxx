@@ -1,0 +1,46 @@
+name: Feature request
+description: Suggest an improvement or new capability for sioxx
+title: "[Feature] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For substantial changes, please describe the use case before proposing an implementation.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What problem would this change solve, and who encounters it?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior or API you would like sioxx to provide.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe existing workarounds or other designs you considered.
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility considerations
+      description: Note any public API, protocol, parser, transport, threading, or platform implications.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched the existing issues for related requests.
+          required: true
+        - label: This request is focused on one problem or capability.
+          required: true

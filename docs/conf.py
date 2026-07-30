@@ -49,6 +49,8 @@ html_theme_options = {
     "back_to_top_button": True,
     "logo": {
         "text": "sioxx",
+        "image_light": "_static/sioxx-logo.svg",
+        "image_dark": "_static/sioxx-logo.svg",
     },
     "icon_links": [
         {

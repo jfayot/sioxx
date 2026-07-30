@@ -1,0 +1,106 @@
+name: Bug report
+description: Report reproducible incorrect behavior in sioxx
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Please search existing issues before submitting.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Problem
+      description: Describe what happened and what you expected instead.
+      placeholder: A clear, concise description of the incorrect behavior.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide the smallest code sample and steps that reproduce the problem.
+      placeholder: |
+        1. Configure sioxx with ...
+        2. Connect using ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: sioxx version
+      description: Provide a release, commit hash, or branch name.
+      placeholder: 0.1.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installation method
+      options:
+        - CMake FetchContent or subproject
+        - Installed CMake package
+        - Conan
+        - Direct source build
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the OS, compiler, CMake, Boost, and OpenSSL versions.
+      placeholder: |
+        - OS:
+        - Compiler:
+        - CMake:
+        - Boost:
+        - OpenSSL:
+    validations:
+      required: true
+
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transport
+      options:
+        - WebSocket
+        - HTTP long-polling
+        - Both
+        - Not applicable
+    validations:
+      required: true
+
+  - type: dropdown
+    id: parser
+    attributes:
+      label: Parser
+      options:
+        - JSON
+        - MessagePack
+        - Custom parser
+        - Not applicable
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and additional context
+      description: Add relevant logs, stack traces, server details, or configuration.
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched the existing issues for duplicates.
+          required: true
+        - label: I removed secrets and private data from the report.
+          required: true

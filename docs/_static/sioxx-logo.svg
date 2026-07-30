@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <title>sioxx logo</title>
+  <desc>Compact code braces surrounding an outline-free purple realtime bolt and two separated rounded teal x marks.</desc>
+
+  <path fill="#00B8AE" transform="translate(24 0)" d="
+    M170,96
+    C115,96 72,139 72,194
+    L72,216
+    C72,232 58,246 42,256
+    C58,266 72,280 72,296
+    L72,318
+    C72,373 115,416 170,416
+    L190,416
+    L190,376
+    L170,376
+    C139,376 112,349 112,318
+    L112,300
+    C112,276 100,256 82,256
+    C100,256 112,236 112,212
+    L112,194
+    C112,163 139,136 170,136
+    L190,136
+    L190,96
+    Z"/>
+
+  <path fill="#7B5CE0" transform="translate(-24 0)" d="
+    M342,96
+    C397,96 440,139 440,194
+    L440,216
+    C440,232 454,246 470,256
+    C454,266 440,280 440,296
+    L440,318
+    C440,373 397,416 342,416
+    L322,416
+    L322,376
+    L342,376
+    C373,376 400,349 400,318
+    L400,300
+    C400,276 412,256 430,256
+    C412,256 400,236 400,212
+    L400,194
+    C400,163 373,136 342,136
+    L322,136
+    L322,96
+    Z"/>
+
+  <g transform="translate(-26 0)">
+    <polygon fill="#7B5CE0"
+             points="234,172 186,259 219,259 201,340 255,247 222,247"/>
+
+    <g fill="none"
+       stroke="#00B8AE"
+       stroke-width="12"
+       stroke-linecap="round">
+      <path d="M279 236l40 40M319 236l-40 40"/>
+      <path d="M335 236l40 40M375 236l-40 40"/>
+    </g>
+  </g>
+</svg>

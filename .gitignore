@@ -9,3 +9,4 @@ install
 logs
 Testing
 CMakeUserPresets.json
+__pycache__
