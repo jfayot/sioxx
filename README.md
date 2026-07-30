@@ -1,4 +1,4 @@
-<h1><img src="docs/_static/sioxx-logo.svg" alt="sioxx logo" height="80" align="center"> sioxx — modern Socket.IO client for C++</h1>
+<h1><img src="docs/_static/sioxx-logo.svg" alt="sioxx logo" height="80" align="center"> sioxx: modern Socket.IO client for C++</h1>
 
 ![GitHub Release](https://img.shields.io/github/v/release/jfayot/sioxx)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/jfayot/sioxx/blob/main/LICENSE)
@@ -36,7 +36,7 @@ A C++ implementation of `socket.io`'s client functionality with the following st
   - [Testing](#testing)
   - [Static analysis](#static-analysis)
   - [Building the documentation](#building-the-documentation)
-- [Preparing a release](#preparing-a-release)
+- [Contributing](#contributing)
 - [License](#license)
 
 ## Quick start
@@ -326,35 +326,10 @@ HTML alongside the library, run:
 cmake --install build-docs --prefix /usr/local
 ```
 
-## Preparing a release
+## Contributing
 
-Keep the pending user-visible changes under `[Unreleased]` in
-[`CHANGELOG.md`](CHANGELOG.md). When they are ready to publish, run the
-release-preparation helper with the new version (with or without a leading
-`v`):
-
-```bash
-version=0.1.1
-./scripts/prepare-release.sh "$version"
-```
-
-The script updates the CMake project, Conan package, README, and documentation
-versions. It also turns the current `[Unreleased]` entries into a dated release
-section, creates a fresh `[Unreleased]` section, and updates the changelog
-comparison links. Review the result before committing it:
-
-```bash
-git diff
-git add CMakeLists.txt CHANGELOG.md conanfile.py README.md docs/_static/versions.json
-git commit -m "chore: prepare release v$version"
-git tag -a "v$version" -m "sioxx v$version"
-git push origin main "v$version"
-```
-
-The tag-triggered GitHub Actions job verifies that the tag matches the CMake
-version and that `CHANGELOG.md` contains non-empty notes for it. After the
-multi-platform build and tests pass, those notes become the GitHub Release
-description.
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for
+development setup, testing expectations, and pull request guidelines.
 
 ## License
 

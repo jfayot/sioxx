@@ -9,7 +9,17 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    name: Build (${{ matrix.architecture }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            architecture: x64
+          - runner: windows-11-arm
+            architecture: ARM64
+
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - uses: actions/checkout@v4
@@ -18,11 +28,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/.cache/fetchcontent
-          key: fetchcontent-build-${{ runner.os }}-msvc-${{ hashFiles('cmake/SioxxBuildHelpers.cmake', 'tests/CMakeLists.txt') }}
+          key: fetchcontent-build-${{ runner.os }}-${{ runner.arch }}-msvc-${{ hashFiles('cmake/SioxxBuildHelpers.cmake', 'tests/CMakeLists.txt') }}
 
       - name: Configure CMake
         run: >
           cmake -B build
+          -A ${{ matrix.architecture }}
           "-DFETCHCONTENT_BASE_DIR=${{ github.workspace }}/.cache/fetchcontent"
           -S .
 

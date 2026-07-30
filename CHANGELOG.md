@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added consistent sioxx logo branding to the README and generated Sphinx
   documentation.
 - Added a contributing guide and GitHub issue and pull request templates.
+- Added matrix strategy to build-windows workflow to test on Windows ARM64
+  architecture
 
 ### Changes :construction:
 
