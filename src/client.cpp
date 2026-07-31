@@ -1,11 +1,10 @@
 #include "sioxx/client.hpp"
 
-#include "client_impl.hpp"
-
 #include <random>
 #include <stdexcept>
 #include <thread>
 
+#include "client_impl.hpp"
 #include "http_polling_transport.hpp"
 #include "json_parser.hpp"
 #include "msgpack_parser.hpp"
@@ -14,8 +13,7 @@
 namespace sioxx
 {
 
-client_impl::client_impl(client_options options)
-    : options_(std::move(options))
+client_impl::client_impl(client_options options) : options_(std::move(options))
 {
   if (options_.parser_factory)
   {
@@ -34,8 +32,8 @@ client_impl::client_impl(client_options options)
   }
 }
 
-std::string client_impl::build_engineio_url(
-  const std::string& uri, const std::string& transport) const
+std::string client_impl::build_engineio_url(const std::string& uri,
+                                            const std::string& transport) const
 {
   std::string url = uri;
   size_t scheme_end = url.find("://");
@@ -171,8 +169,7 @@ void client_impl::schedule_reconnect()
     .detach();
 }
 
-void client_impl::on_engineio_frame(const std::string& payload,
-                                             bool is_binary)
+void client_impl::on_engineio_frame(const std::string& payload, bool is_binary)
 {
   packet packet;
   if (!parser_->decode(payload, is_binary, packet)) return;
@@ -222,8 +219,7 @@ void client_impl::on_engineio_frame(const std::string& payload,
   }
 }
 
-std::shared_ptr<sioxx::socket> client_impl::socket(
-  const std::string& nsp)
+std::shared_ptr<sioxx::socket> client_impl::socket(const std::string& nsp)
 {
   std::string norm_nsp = nsp.empty() ? "/" : nsp;
   std::lock_guard<std::mutex> lock(sockets_mutex_);

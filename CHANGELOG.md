@@ -10,11 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added consistent sioxx logo branding to the README and generated Sphinx
   documentation.
 - Added a contributing guide and GitHub issue and pull request templates.
+- Added a `clang-format` script, VS Code formatter defaults, and contributor
+  documentation for formatting C and C++ code.
 - Added matrix strategy to build-windows workflow to test on Windows ARM64
   architecture
 
 ### Changes :construction:
 
+- Added a repository agent guide covering project structure, validation, and
+  generated documentation maintenance.
+- Expanded the agent guide with Karpathy-inspired principles for simple,
+  focused, and verifiable code changes.
 - Documented the use of Codex and opencode, including the AI models used to
   assist with project design and development.
 - Reorganized the README around quick-start, usage, configuration, and

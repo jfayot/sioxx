@@ -5,8 +5,7 @@
 namespace sioxx
 {
 
-void json_parser::encode(const packet& packet,
-                         const frame_writer& write) const
+void json_parser::encode(const packet& packet, const frame_writer& write) const
 {
   std::string out;
   out += std::to_string(static_cast<int>(packet.type));

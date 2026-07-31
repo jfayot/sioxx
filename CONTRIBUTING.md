@@ -43,6 +43,19 @@ using the README's [Example test server](README.md#example-test-server).
 
 Do not introduce a newer C++ language requirement without prior discussion.
 
+## Format code
+
+The project uses `clang-format` with the configuration in `.clang-format`.
+Install `clang-format`, make sure it is available in your `PATH`, and format
+all tracked C and C++ files from the repository root with:
+
+```bash
+./scripts/format.sh
+```
+
+The VS Code workspace settings select the `xaver.clang-format` extension as
+the default formatter and enable formatting on save.
+
 ## Static analysis
 
 Run clang-tidy as described in

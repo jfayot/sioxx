@@ -13,10 +13,7 @@ class custom_parser final : public parser_base
  public:
   void encode(const packet&, const frame_writer&) const override {}
 
-  bool decode(const std::string&, bool, packet&) override
-  {
-    return false;
-  }
+  bool decode(const std::string&, bool, packet&) override { return false; }
 
   std::string name() const override { return "custom"; }
 };

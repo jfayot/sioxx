@@ -4,6 +4,7 @@
     "SIOXX_BUILD_EXAMPLES": "ON",
     "SIOXX_BUILD_TESTS": "ON"
   },
+  "editor.defaultFormatter": "xaver.clang-format",
   "editor.formatOnSave": true,
   "cmake.buildBeforeRun": true,
   "cmake.saveBeforeBuild": true,
