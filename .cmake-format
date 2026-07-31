@@ -1,0 +1,26 @@
+# Formatting rules derived from the existing CMake files in this repository.
+with section("format"):
+  line_width = 100
+  tab_size = 2
+  use_tabchars = False
+
+  # Commands remain compact while they fit; commands with larger positional or
+  # keyword groups expand vertically. Multiline commands place the closing
+  # parenthesis at the command's indentation level.
+  max_subgroups_hwrap = 2
+  max_pargs_hwrap = 6
+  dangle_parens = True
+  dangle_align = "prefix"
+
+  # Keep command names and control-flow keywords attached to their parentheses.
+  separate_ctrl_name_with_space = False
+  separate_fn_name_with_space = False
+
+  # Preserve deliberately grouped lists and dependency/link ordering.
+  autosort = False
+  enable_sort = False
+
+with section("markup"):
+  # Section banners and explanatory comments are maintained by hand.
+  first_comment_is_literal = True
+  enable_markup = False
