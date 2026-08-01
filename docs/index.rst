@@ -60,6 +60,64 @@ events and acknowledgements back to the application.
    :alt: Layered architecture of the sioxx library
    :align: center
 
+Roadmap
+-------
+
+``sioxx`` currently focuses on the core Socket.IO client functionality. The
+following roadmap outlines possible extensions inspired by features available
+in the JavaScript implementation. It is indicative rather than a commitment to
+specific releases or delivery dates.
+
+Client protocol completeness
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Complete support for binary attachments with the default JSON parser,
+  including ``BINARY_EVENT`` and ``BINARY_ACK`` packet reconstruction.
+* Upgrade an established HTTP long-polling connection to WebSocket.
+* Try alternative transports when the preferred transport cannot connect.
+* Investigate WebTransport support once there is sufficient demand and suitable
+  support in the underlying C++ libraries.
+
+Client reliability
+~~~~~~~~~~~~~~~~~~
+
+* Configurable acknowledgement timeouts.
+* Automatic retries for events that are not acknowledged.
+* Connection-state recovery, including restoration of the client session and
+  reception of packets missed during a temporary disconnection.
+* More control over reconnection attempts, delays, backoff and jitter.
+* Offline buffering and optional volatile events that may be discarded while
+  the client is disconnected.
+
+Client API
+~~~~~~~~~~
+
+* Catch-all listeners for incoming and outgoing events.
+* Additional connection options for authentication, query parameters, headers,
+  proxies and transport selection.
+* Improved connection and transport diagnostics.
+* Coroutine-friendly asynchronous APIs alongside the existing callback-based
+  interface.
+
+Socket.IO server
+~~~~~~~~~~~~~~~~
+
+A native C++ Socket.IO server is a longer-term objective. Its development could
+progress incrementally:
+
+* Engine.IO v4 server support over WebSocket and HTTP long-polling.
+* Socket.IO packet handling with JSON and MessagePack parsers.
+* Events, acknowledgements and namespaces.
+* Rooms and broadcasting, including exclusion and targeting operators.
+* Connection and packet middleware for authentication, authorization, logging
+  and rate limiting.
+* Connection-state recovery and missed-packet delivery.
+* A pluggable adapter interface for multi-process or distributed deployments.
+
+The first server version would target single-process applications. Compatibility
+with the JavaScript server's distributed adapters and administration tooling
+would be considered separately once the core protocol and API are stable.
+
 Where to go next
 ----------------
 
