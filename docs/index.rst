@@ -25,15 +25,15 @@ emit values, and handle acknowledgements.
 Why sioxx?
 ----------
 
-The established C++ Socket.IO client carries its own JSON and WebSocket
-stacks and predates modern target-based CMake. ``sioxx`` was created for
-applications that already use Boost and nlohmann/json and should not need a
-second set of overlapping dependencies.
+The established C++ Socket.IO client relies on WebSocket++, standalone Asio,
+and RapidJSON. ``sioxx`` is intended for applications that already use
+Boost.Asio, Boost.Beast, and nlohmann/json, avoiding additional dependencies
+with overlapping functionality.
 
-Its public API keeps the small, event-driven shape expected from a Socket.IO
-client while rebuilding the protocol and transport layers around current C++
-libraries. The design and implementation trade-offs are described in
-`sioxx — a modern C++ socket.io client
+Its public API retains the compact, event-driven model expected from a
+Socket.IO client, while its protocol and transport layers are built around
+these libraries and modern C++20. The design choices and implementation
+trade-offs are discussed in `sioxx — a modern C++ Socket.IO client
 <https://dev.to/jfayot/sioxx-a-modern-c-socketio-client-nlohmannjson-boostbeast-json-or-messagepack-1hj1>`_.
 
 Features
