@@ -23,7 +23,7 @@ The main project areas are:
 - Keep public declarations in `include/sioxx/` and implementation details in
   `src/`.
 - Follow the style and naming of the surrounding code.
-- Format C and C++ changes with the repository's `.clang-format` configuration
+- Format C/C++ and cmake changes with the repository's `.clang-format` and `.cmake-format` configurations
   by running `./scripts/format.sh`, then review the diff for unrelated changes.
 - Preserve unrelated user changes and do not modify generated build
   directories or fetched dependencies.
