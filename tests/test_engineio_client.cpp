@@ -1,8 +1,7 @@
 #include <gtest/gtest.h>
 
-#include <sioxx/message.hpp>
-
 #include <chrono>
+#include <sioxx/message.hpp>
 
 #include "engineio_client.hpp"
 #include "polling_protocol.hpp"
