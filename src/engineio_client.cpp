@@ -134,20 +134,26 @@ void engineio_client::handle_transport_message(const std::string& payload,
 void engineio_client::start_heartbeat_timer()
 {
   stop_heartbeat_timer();
+  heartbeat_stop_requested_ = false;
   auto self = shared_from_this();
   heartbeat_thread_ = std::thread(
     [self]
     {
-      while (self->open_.load() && !self->closing_.load())
+      while (self->open_.load() && !self->closing_.load() &&
+             !self->heartbeat_stop_requested_.load())
       {
         std::unique_lock<std::mutex> lock(self->heartbeat_mutex_);
         auto timeout = std::chrono::milliseconds(self->ping_interval_ms_ +
                                                  self->ping_timeout_ms_);
         if (self->heartbeat_cv_.wait_for(
               lock, std::chrono::milliseconds(self->ping_interval_ms_),
-              [self] { return self->closing_.load(); }))
+              [self]
+              {
+                return self->closing_.load() ||
+                       self->heartbeat_stop_requested_.load();
+              }))
         {
-          return;  // closing requested
+          return;
         }
         auto elapsed = std::chrono::steady_clock::now() - self->last_pong_;
         if (elapsed > timeout)
@@ -163,6 +169,7 @@ void engineio_client::start_heartbeat_timer()
 
 void engineio_client::stop_heartbeat_timer()
 {
+  heartbeat_stop_requested_ = true;
   {
     std::lock_guard<std::mutex> lock(heartbeat_mutex_);
     heartbeat_cv_.notify_all();

@@ -1,0 +1,14 @@
+{
+  "name": "sioxx-e2e-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Deterministic Socket.IO server for sioxx end-to-end tests",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node run-tests.js"
+  },
+  "dependencies": {
+    "socket.io": "4.8.1",
+    "socket.io-msgpack-parser": "3.0.2"
+  }
+}

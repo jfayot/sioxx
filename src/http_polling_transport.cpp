@@ -82,6 +82,23 @@ bool detail::polling_decode_binary(const std::string& packet,
          base64_decode(packet.substr(1), payload);
 }
 
+std::vector<std::string> detail::polling_split_payload(
+  const std::string& payload)
+{
+  std::vector<std::string> packets;
+  size_t begin = 0;
+  while (begin <= payload.size())
+  {
+    const size_t separator = payload.find('\x1e', begin);
+    const size_t end =
+      separator == std::string::npos ? payload.size() : separator;
+    if (end > begin) packets.push_back(payload.substr(begin, end - begin));
+    if (separator == std::string::npos) break;
+    begin = separator + 1;
+  }
+  return packets;
+}
+
 http_polling_transport::http_polling_transport() = default;
 
 http_polling_transport::~http_polling_transport()
@@ -221,21 +238,24 @@ std::string http_polling_transport::poll_target() const
 
 void http_polling_transport::deliver(const std::string& body)
 {
-  if (body.empty()) return;
-  if (body[0] == '0')
+  for (const auto& packet : detail::polling_split_payload(body))
   {
-    json handshake = json::parse(body.substr(1), nullptr, false);
-    if (!handshake.is_discarded()) sid_ = handshake.value("sid", std::string());
-  }
-  if (body[0] == 'b')
-  {
-    std::string decoded;
-    if (detail::polling_decode_binary(body, decoded) && on_message_)
-      on_message_(decoded, true);
-  }
-  else if (on_message_)
-  {
-    on_message_(body, false);
+    if (packet[0] == '0')
+    {
+      json handshake = json::parse(packet.substr(1), nullptr, false);
+      if (!handshake.is_discarded())
+        sid_ = handshake.value("sid", std::string());
+    }
+    if (packet[0] == 'b')
+    {
+      std::string decoded;
+      if (detail::polling_decode_binary(packet, decoded) && on_message_)
+        on_message_(decoded, true);
+    }
+    else if (on_message_)
+    {
+      on_message_(packet, false);
+    }
   }
 }
 

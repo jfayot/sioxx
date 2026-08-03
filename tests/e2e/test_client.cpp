@@ -1,0 +1,367 @@
+#include <gtest/gtest.h>
+
+#include <chrono>
+#include <condition_variable>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
+#include <sioxx/sioxx.hpp>
+#include <string>
+#include <vector>
+
+using namespace std::chrono_literals;
+
+namespace
+{
+
+class completion_signal
+{
+ public:
+  void set()
+  {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      ready_ = true;
+    }
+    condition_.notify_all();
+  }
+
+  bool wait_for(std::chrono::milliseconds timeout)
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+    return condition_.wait_for(lock, timeout, [this] { return ready_; });
+  }
+
+ private:
+  std::mutex mutex_;
+  std::condition_variable condition_;
+  bool ready_{false};
+};
+
+class event_counter
+{
+ public:
+  void increment()
+  {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      ++count_;
+    }
+    condition_.notify_all();
+  }
+
+  bool wait_for(int expected, std::chrono::milliseconds timeout)
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+    return condition_.wait_for(lock, timeout,
+                               [this, expected] { return count_ >= expected; });
+  }
+
+ private:
+  std::mutex mutex_;
+  std::condition_variable condition_;
+  int count_{0};
+};
+
+template <typename T> class async_value
+{
+ public:
+  void set(T value)
+  {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      value_ = std::move(value);
+      ready_ = true;
+    }
+    condition_.notify_all();
+  }
+
+  bool wait_for(std::chrono::milliseconds timeout)
+  {
+    std::unique_lock<std::mutex> lock(mutex_);
+    return condition_.wait_for(lock, timeout, [this] { return ready_; });
+  }
+
+  T value() const
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return value_;
+  }
+
+ private:
+  mutable std::mutex mutex_;
+  std::condition_variable condition_;
+  bool ready_{false};
+  T value_{};
+};
+
+std::string server_url(const char* variable = "SIOXX_E2E_URL")
+{
+  const char* value = std::getenv(variable);
+  if (!value || std::string(value).empty())
+    throw std::runtime_error(std::string(variable) + " is not set");
+  return value;
+}
+
+void configure_failure_reporting(
+  sioxx::client& client, std::shared_ptr<async_value<std::string>> error)
+{
+  client.set_error_listener([error](const std::string& message)
+                            { error->set(message); });
+  client.set_fail_listener([error] { error->set("connection failed"); });
+}
+
+}  // namespace
+
+TEST(E2E, ConnectsAndReceivesMultipleArguments)
+{
+  auto connected = std::make_shared<completion_signal>();
+  auto received = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client;
+  auto socket = client.socket("/e2e");
+
+  configure_failure_reporting(client, error);
+  socket->on_connect([connected] { connected->set(); });
+  socket->on("server_arguments",
+             [received](const std::string&, sioxx::message data)
+             { received->set(std::move(data)); });
+
+  client.connect(server_url());
+
+  ASSERT_TRUE(connected->wait_for(5s))
+    << "connection error: " << error->value();
+  ASSERT_TRUE(received->wait_for(5s));
+
+  const auto arguments = received->value();
+  ASSERT_EQ(arguments.size(), 3);
+  EXPECT_EQ(arguments[0], 1);
+  EXPECT_EQ(arguments[1], "two");
+  EXPECT_EQ(arguments[2], sioxx::json({{"three", 3}}));
+
+  client.close();
+}
+
+TEST(E2E, ReceivesAcknowledgementFromServer)
+{
+  auto connected = std::make_shared<completion_signal>();
+  auto acknowledgement = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client;
+  auto socket = client.socket("/e2e");
+
+  configure_failure_reporting(client, error);
+  socket->on_connect([connected] { connected->set(); });
+  client.connect(server_url());
+
+  ASSERT_TRUE(connected->wait_for(5s))
+    << "connection error: " << error->value();
+
+  socket->emit("echo_with_ack", sioxx::json::array({42, "hello"}),
+               [acknowledgement](sioxx::message data)
+               { acknowledgement->set(std::move(data)); });
+
+  ASSERT_TRUE(acknowledgement->wait_for(5s));
+  EXPECT_EQ(
+    acknowledgement->value(),
+    sioxx::json::array({{{"received", sioxx::json::array({42, "hello"})}}}));
+
+  client.close();
+}
+
+TEST(E2E, ConnectsWithHttpPollingOnly)
+{
+  sioxx::client_options options;
+  options.force_http_polling = true;
+
+  auto connected = std::make_shared<completion_signal>();
+  auto acknowledgement = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client(options);
+  auto socket = client.socket("/e2e");
+
+  configure_failure_reporting(client, error);
+  socket->on_connect([connected] { connected->set(); });
+  client.connect(server_url());
+
+  ASSERT_TRUE(connected->wait_for(5s))
+    << "connection error: " << error->value();
+
+  socket->emit("transport_with_ack", sioxx::json::array(),
+               [acknowledgement](sioxx::message data)
+               { acknowledgement->set(std::move(data)); });
+
+  ASSERT_TRUE(acknowledgement->wait_for(5s));
+  ASSERT_EQ(acknowledgement->value().size(), 1);
+  EXPECT_EQ(acknowledgement->value()[0], "polling");
+
+  client.close();
+}
+
+TEST(E2E, FallsBackToPollingWhenWebsocketIsUnavailable)
+{
+  auto connected = std::make_shared<completion_signal>();
+  auto acknowledgement = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client;
+  auto socket = client.socket("/e2e");
+
+  configure_failure_reporting(client, error);
+  socket->on_connect([connected] { connected->set(); });
+  client.connect(server_url("SIOXX_E2E_POLLING_ONLY_URL"));
+
+  ASSERT_TRUE(connected->wait_for(5s))
+    << "connection error: " << error->value();
+
+  socket->emit("transport_with_ack", sioxx::json::array(),
+               [acknowledgement](sioxx::message data)
+               { acknowledgement->set(std::move(data)); });
+
+  ASSERT_TRUE(acknowledgement->wait_for(5s));
+  ASSERT_EQ(acknowledgement->value().size(), 1);
+  EXPECT_EQ(acknowledgement->value()[0], "polling");
+
+  client.close();
+}
+
+TEST(E2E, ReconnectsAfterUnexpectedWebsocketClose)
+{
+  sioxx::client_options options;
+  options.reconnect_attempts = 10;
+  options.reconnect_delay = 100ms;
+  options.reconnect_delay_max = 100ms;
+  options.reconnect_randomization_factor = 0.0;
+
+  auto connections = std::make_shared<event_counter>();
+  auto closed = std::make_shared<completion_signal>();
+  auto drop_requested = std::make_shared<async_value<sioxx::message>>();
+  auto initial_transport = std::make_shared<async_value<sioxx::message>>();
+  auto reconnected_transport = std::make_shared<async_value<sioxx::message>>();
+  auto acknowledgement = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client(options);
+  auto socket = client.socket("/e2e");
+
+  configure_failure_reporting(client, error);
+  client.set_close_listener([closed](const std::string&) { closed->set(); });
+  socket->on_connect([connections] { connections->increment(); });
+  client.connect(server_url());
+
+  ASSERT_TRUE(connections->wait_for(1, 5s))
+    << "connection error: " << error->value();
+
+  socket->emit("transport_with_ack", sioxx::json::array(),
+               [initial_transport](sioxx::message data)
+               { initial_transport->set(std::move(data)); });
+  ASSERT_TRUE(initial_transport->wait_for(5s));
+  ASSERT_EQ(initial_transport->value().size(), 1);
+  ASSERT_EQ(initial_transport->value()[0], "websocket");
+
+  socket->emit("drop_transport", sioxx::json::array(),
+               [drop_requested](sioxx::message data)
+               { drop_requested->set(std::move(data)); });
+
+  ASSERT_TRUE(drop_requested->wait_for(5s));
+  ASSERT_TRUE(closed->wait_for(5s))
+    << "client did not observe the WebSocket transport close";
+  ASSERT_TRUE(connections->wait_for(2, 5s))
+    << "client did not reconnect after the server restarted";
+
+  socket->emit("transport_with_ack", sioxx::json::array(),
+               [reconnected_transport](sioxx::message data)
+               { reconnected_transport->set(std::move(data)); });
+  ASSERT_TRUE(reconnected_transport->wait_for(5s));
+  ASSERT_EQ(reconnected_transport->value().size(), 1);
+  EXPECT_EQ(reconnected_transport->value()[0], "websocket");
+
+  socket->emit("echo_with_ack", sioxx::json::array({"after-reconnect"}),
+               [acknowledgement](sioxx::message data)
+               { acknowledgement->set(std::move(data)); });
+
+  ASSERT_TRUE(acknowledgement->wait_for(5s));
+  EXPECT_EQ(acknowledgement->value(),
+            sioxx::json::array(
+              {{{"received", sioxx::json::array({"after-reconnect"})}}}));
+
+  client.close();
+}
+
+TEST(E2E, ExchangesMessagePackEventsAcknowledgementsAndBinary)
+{
+  sioxx::client_options options;
+  options.parser = sioxx::parser_kind::msgpack;
+
+  auto connected = std::make_shared<completion_signal>();
+  auto acknowledgement = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client(options);
+  auto socket = client.socket("/e2e");
+
+  configure_failure_reporting(client, error);
+  socket->on_connect([connected] { connected->set(); });
+  client.connect(server_url("SIOXX_E2E_MSGPACK_URL"));
+
+  ASSERT_TRUE(connected->wait_for(5s))
+    << "connection error: " << error->value();
+
+  const auto binary =
+    sioxx::binary_message(std::vector<uint8_t>{0x00, 0x7f, 0xff});
+  socket->emit(
+    "msgpack_echo_with_ack",
+    sioxx::json::array({sioxx::json{{"nested", {{"value", 42}}}}, binary}),
+    [acknowledgement](sioxx::message data)
+    { acknowledgement->set(std::move(data)); });
+
+  ASSERT_TRUE(acknowledgement->wait_for(5s));
+  const auto reply = acknowledgement->value();
+  ASSERT_EQ(reply.size(), 2);
+  EXPECT_EQ(reply[0], sioxx::json({{"nested", {{"value", 42}}}}));
+  EXPECT_EQ(reply[1], binary);
+
+  client.close();
+}
+
+TEST(E2E, RoutesEventsAndAcknowledgementsAcrossNamespaces)
+{
+  auto a_connected = std::make_shared<completion_signal>();
+  auto b_connected = std::make_shared<completion_signal>();
+  auto a_event = std::make_shared<async_value<sioxx::message>>();
+  auto b_event = std::make_shared<async_value<sioxx::message>>();
+  auto b_ack = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client;
+  auto socket_a = client.socket("/e2e-a");
+  auto socket_b = client.socket("/e2e-b");
+
+  configure_failure_reporting(client, error);
+  socket_a->on_connect([a_connected] { a_connected->set(); });
+  socket_b->on_connect([b_connected] { b_connected->set(); });
+  socket_a->on("scoped_event",
+               [a_event](const std::string&, sioxx::message data)
+               { a_event->set(std::move(data)); });
+  socket_b->on("scoped_event",
+               [b_event](const std::string&, sioxx::message data)
+               { b_event->set(std::move(data)); });
+
+  client.connect(server_url());
+
+  ASSERT_TRUE(a_connected->wait_for(5s));
+  ASSERT_TRUE(b_connected->wait_for(5s))
+    << "connection error: " << error->value();
+
+  socket_a->emit("request_scoped_event");
+  ASSERT_TRUE(a_event->wait_for(5s));
+  ASSERT_EQ(a_event->value().size(), 1);
+  EXPECT_EQ(a_event->value()[0], "/e2e-a");
+  EXPECT_FALSE(b_event->wait_for(100ms));
+
+  socket_a->disconnect();
+  socket_b->emit("namespace_with_ack", sioxx::json::array(),
+                 [b_ack](sioxx::message data) { b_ack->set(std::move(data)); });
+
+  ASSERT_TRUE(b_ack->wait_for(5s));
+  ASSERT_EQ(b_ack->value().size(), 1);
+  EXPECT_EQ(b_ack->value()[0], "/e2e-b");
+
+  client.close();
+}

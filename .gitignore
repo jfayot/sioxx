@@ -5,6 +5,8 @@ build-tidy
 build-shared
 build-docs
 build-release
+build-e2e
+build-tests
 install
 logs
 Testing
