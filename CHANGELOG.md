@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes :wrench:
 
+- Fixed the CMake clang-tidy integration passing literal quotes in the
+  configuration file path.
 - Defined the minimum Windows target version when compiling sioxx.
 
 ## [0.1.1] - 2026-07-29

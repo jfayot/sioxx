@@ -6,7 +6,7 @@ function(sioxx_find_clang_tidy out_command)
   find_program(SIOXX_CLANG_TIDY_EXECUTABLE NAMES clang-tidy REQUIRED)
   set(${out_command}
     "${SIOXX_CLANG_TIDY_EXECUTABLE}"
-    --config-file="${PROJECT_SOURCE_DIR}/.clang-tidy"
+    "--config-file=${PROJECT_SOURCE_DIR}/.clang-tidy"
     PARENT_SCOPE
   )
 endfunction()
