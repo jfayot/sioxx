@@ -8,6 +8,10 @@
   "editor.formatOnSave": true,
   "cmake.buildBeforeRun": true,
   "cmake.saveBeforeBuild": true,
+  "[cmake]": {
+    "editor.defaultFormatter": "cheshirekow.cmake-format",
+    "editor.formatOnSave": true
+  },
   "cSpell.words": [
     "Asio",
     "BINDIR",
@@ -26,5 +30,9 @@
     "socketio",
     "SOVERSION",
     "tlsext"
+  ],
+  "cmakeFormat.args": [
+    "--config-file",
+    "${workspaceFolder}/.cmake-format"
   ]
 }

@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(sioxx
+project(
+  sioxx
   VERSION 0.1.1
   DESCRIPTION "A modern C++17 Socket.IO client built on Boost.Beast and nlohmann-json"
   LANGUAGES CXX
@@ -36,10 +37,7 @@ endif()
 if(SIOXX_USE_SYSTEM_JSON)
   find_package(nlohmann_json 3.12.0 REQUIRED)
 else()
-  sioxx_fetch_nlohmann_json(
-    SIOXX_VENDORED_JSON_TARGET
-    SIOXX_VENDORED_JSON_SOURCE_DIR
-  )
+  sioxx_fetch_nlohmann_json(SIOXX_VENDORED_JSON_TARGET SIOXX_VENDORED_JSON_SOURCE_DIR)
 endif()
 
 # TLS support for wss://
@@ -50,7 +48,8 @@ find_package(Threads REQUIRED)
 # ---------------------------------------------------------------------------
 # Library target
 # ---------------------------------------------------------------------------
-add_library(sioxx
+add_library(
+  sioxx
   src/url_parse.cpp
   src/json_parser.cpp
   src/msgpack_parser.cpp
@@ -68,29 +67,20 @@ if(SIOXX_ENABLE_CLANG_TIDY)
   set_target_properties(sioxx PROPERTIES CXX_CLANG_TIDY "${SIOXX_CLANG_TIDY_COMMAND}")
 endif()
 
-target_include_directories(sioxx
-  PUBLIC
-  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-  "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
-  PRIVATE
-  "${CMAKE_CURRENT_SOURCE_DIR}/src"
+target_include_directories(
+  sioxx
+  PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 
-target_link_libraries(sioxx
-  PUBLIC
-  nlohmann_json::nlohmann_json
-  "$<BUILD_INTERFACE:${SIOXX_BOOST_BUILD_TARGETS}>"
-  PRIVATE
-  OpenSSL::SSL
-  OpenSSL::Crypto
-  Threads::Threads
+target_link_libraries(
+  sioxx
+  PUBLIC nlohmann_json::nlohmann_json "$<BUILD_INTERFACE:${SIOXX_BOOST_BUILD_TARGETS}>"
+  PRIVATE OpenSSL::SSL OpenSSL::Crypto Threads::Threads
 )
 
-target_compile_definitions(sioxx
-  PRIVATE
-  BOOST_ASIO_NO_DEPRECATED
-  BOOST_ALL_NO_LIB
-)
+target_compile_definitions(sioxx PRIVATE BOOST_ASIO_NO_DEPRECATED BOOST_ALL_NO_LIB)
 
 if(WIN32)
   target_compile_definitions(sioxx PRIVATE _WIN32_WINNT=0x0601)
@@ -104,19 +94,24 @@ endif()
 
 target_compile_features(sioxx PUBLIC cxx_std_17)
 
-set_target_properties(sioxx PROPERTIES
-  VERSION ${PROJECT_VERSION}
-  #TODO change to "${PROJECT_VERSION_MAJOR}" when releasing 1.0.0
-  SOVERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}"
-  EXPORT_NAME sioxx
-  CXX_EXTENSIONS OFF
-  POSITION_INDEPENDENT_CODE ON
+set_target_properties(
+  sioxx
+  PROPERTIES VERSION ${PROJECT_VERSION}
+             #TODO change to "${PROJECT_VERSION_MAJOR}" when releasing 1.0.0
+             SOVERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}"
+             EXPORT_NAME sioxx
+             CXX_EXTENSIONS OFF
+             POSITION_INDEPENDENT_CODE ON
 )
 
 if(PROJECT_IS_TOP_LEVEL
-  AND NOT CMAKE_BUILD_TYPE
-  AND NOT CMAKE_CONFIGURATION_TYPES)
-  set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "Build type")
+   AND NOT CMAKE_BUILD_TYPE
+   AND NOT CMAKE_CONFIGURATION_TYPES
+)
+  set(CMAKE_BUILD_TYPE
+      RelWithDebInfo
+      CACHE STRING "Build type"
+  )
 endif()
 
 # ---------------------------------------------------------------------------
@@ -135,9 +130,7 @@ if(SIOXX_BUILD_TESTS)
     set(BUILD_TESTING ON)
     include(CTest)
   elseif(NOT BUILD_TESTING)
-    message(FATAL_ERROR
-      "The parent project must enable CTest before enabling SIOXX_BUILD_TESTS"
-    )
+    message(FATAL_ERROR "The parent project must enable CTest before enabling SIOXX_BUILD_TESTS")
   endif()
 
   add_subdirectory(tests)
@@ -163,7 +156,8 @@ if(SIOXX_INSTALL)
     set(SIOXX_FIND_PRIVATE_LINK_DEPENDENCIES OFF)
   endif()
 
-  install(TARGETS sioxx ${SIOXX_VENDORED_JSON_TARGET}
+  install(
+    TARGETS sioxx ${SIOXX_VENDORED_JSON_TARGET}
     EXPORT sioxxTargets
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -172,21 +166,20 @@ if(SIOXX_INSTALL)
 
   if(SIOXX_VENDORED_JSON_TARGET)
     install(DIRECTORY "${SIOXX_VENDORED_JSON_SOURCE_DIR}/single_include/nlohmann"
-      DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+            DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
     )
 
     if(MSVC)
-      install(FILES "${SIOXX_VENDORED_JSON_SOURCE_DIR}/nlohmann_json.natvis"
-        DESTINATION "."
-      )
+      install(FILES "${SIOXX_VENDORED_JSON_SOURCE_DIR}/nlohmann_json.natvis" DESTINATION ".")
     endif()
   endif()
 
   install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/sioxx"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+          DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
   )
 
-  install(EXPORT sioxxTargets
+  install(
+    EXPORT sioxxTargets
     FILE sioxxTargets.cmake
     NAMESPACE sioxx::
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/sioxx"
@@ -205,9 +198,8 @@ if(SIOXX_INSTALL)
     COMPATIBILITY SameMinorVersion
   )
 
-  install(FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/sioxxConfig.cmake"
-    "${CMAKE_CURRENT_BINARY_DIR}/sioxxConfigVersion.cmake"
-    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/sioxx"
+  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/sioxxConfig.cmake"
+                "${CMAKE_CURRENT_BINARY_DIR}/sioxxConfigVersion.cmake"
+          DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/sioxx"
   )
 endif()
