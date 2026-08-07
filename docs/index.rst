@@ -45,6 +45,8 @@ Features
 * JSON and MessagePack wire protocols selectable for each client.
 * Custom parser strategies for other wire formats.
 * Event listeners, event emission, acknowledgements, and lifecycle callbacks.
+* Namespace authentication, custom Engine.IO paths, and handshake query
+  parameters.
 * Configurable reconnection with capped exponential back-off and jitter.
 * Modern CMake targets, installation, and downstream ``find_package(sioxx)``.
 

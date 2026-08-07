@@ -99,6 +99,37 @@ Add authentication or application headers to the handshake with
    // Development with a self-signed certificate only:
    // options.verify_tls = false;
 
+Authenticate a namespace and customize the endpoint
+---------------------------------------------------
+
+Pass authentication data when creating a namespace socket. The payload is
+sent with each namespace ``CONNECT``, including reconnects. Update it before
+calling ``connect()`` again when a token is refreshed:
+
+.. code-block:: cpp
+
+   sioxx::client_options options;
+   options.engineio_path = "/realtime/";
+   options.query = {
+       {"client", "desktop"},
+       {"version", "2"},
+   };
+
+   sioxx::client client(options);
+   auto private_socket = client.socket(
+       "/private", sioxx::json{{"token", "example-token"}});
+   client.connect("wss://example.com");
+
+   // Later, after authentication expires:
+   private_socket->set_auth(
+       sioxx::json{{"token", "refreshed-token"}});
+   private_socket->disconnect();
+   private_socket->connect();
+
+``engineio_path`` defaults to ``/socket.io/``. Query keys and values are
+percent-encoded; the reserved Engine.IO keys ``EIO``, ``transport``, and
+``sid`` cannot be supplied by the application.
+
 Configure reconnection
 ----------------------
 

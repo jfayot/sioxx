@@ -13,6 +13,7 @@ FetchContent_MakeAvailable(googletest)
 add_executable(
   sioxx_tests
   test_message.cpp
+  test_engineio_url.cpp
   test_url_parse.cpp
   test_json_parser.cpp
   test_msgpack_parser.cpp

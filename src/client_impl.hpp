@@ -27,7 +27,8 @@ class client_impl : public std::enable_shared_from_this<client_impl>
   explicit client_impl(client_options options);
   void connect(const std::string& uri);
   void close();
-  std::shared_ptr<sioxx::socket> socket(const std::string& nsp = "/");
+  std::shared_ptr<sioxx::socket> socket(const std::string& nsp = "/",
+                                        message auth = json());
   void set_open_handler(connect_handler h) { on_open_ = std::move(h); }
   void set_close_handler(close_handler h) { on_close_ = std::move(h); }
   void set_fail_handler(fail_handler h) { on_fail_ = std::move(h); }
@@ -40,8 +41,6 @@ class client_impl : public std::enable_shared_from_this<client_impl>
   void on_engineio_close(const std::string& reason);
   void on_engineio_frame(const std::string& payload, bool is_binary);
   void schedule_reconnect();
-  std::string build_engineio_url(const std::string& uri,
-                                 const std::string& transport) const;
   void activate_polling_fallback();
 
   client_options options_;

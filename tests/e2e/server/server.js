@@ -11,6 +11,8 @@ if (mode === 'polling-only') {
   options.transports = ['polling'];
 } else if (mode === 'msgpack') {
   options.parser = require('socket.io-msgpack-parser');
+} else if (mode === 'custom-options') {
+  options.path = '/realtime/';
 }
 
 const httpServer = http.createServer();
@@ -31,6 +33,22 @@ const e2e = io.of('/e2e');
 installCommonHandlers(e2e);
 installCommonHandlers(io.of('/e2e-a'));
 installCommonHandlers(io.of('/e2e-b'));
+
+if (mode === 'custom-options') {
+  io.of('/private').on('connection', (socket) => {
+    socket.on('connection_details_with_ack', (acknowledgement) => {
+      acknowledgement({
+        auth: socket.handshake.auth,
+        query: socket.handshake.query,
+        transport: socket.conn.transport.name,
+      });
+    });
+    socket.on('disconnect_namespace', (acknowledgement) => {
+      acknowledgement();
+      socket.disconnect();
+    });
+  });
+}
 
 e2e.on('connection', (socket) => {
   socket.emit('server_arguments', 1, 'two', { three: 3 });

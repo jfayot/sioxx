@@ -55,11 +55,22 @@ class socket : public std::enable_shared_from_this<socket>
    *
    * @param client   Weak reference to the owning `client_impl`.
    * @param nsp      Namespace string (e.g. `"/chat"`).
+   * @param auth     Authentication payload for namespace CONNECT packets.
    */
-  socket(std::weak_ptr<client_impl> client, std::string nsp);
+  socket(std::weak_ptr<client_impl> client, std::string nsp,
+         message auth = json());
 
   /** @brief Return the namespace this socket belongs to. */
   const std::string& nsp() const { return nsp_; }
+
+  /** @brief Replace the authentication payload used by the next CONNECT.
+   *
+   * Passing a null message clears the payload.
+   */
+  void set_auth(message auth);
+
+  /** @brief Return a copy of the current namespace authentication payload. */
+  message auth() const;
 
   /** @brief Whether the namespace is currently connected. */
   bool connected() const { return connected_; }
@@ -149,7 +160,8 @@ class socket : public std::enable_shared_from_this<socket>
   std::string nsp_;
   bool connected_{false};
 
-  std::mutex mutex_;
+  mutable std::mutex mutex_;
+  message auth_;
   std::map<std::string, event_listener> listeners_;
   std::map<int, ack_callback> pending_acks_;
   int next_ack_id_{0};

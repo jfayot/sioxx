@@ -52,7 +52,11 @@ class client
 
   /**
    * @brief Open a connection to the given URI.
-   * @param uri  Full URL (e.g. `wss://host:port/path`).
+   * @param uri  Server URL (e.g. `wss://host:port`). Any path or query in the
+   *             URL is replaced by `client_options::engineio_path` and
+   *             `client_options::query`.
+   * @throws std::invalid_argument if the configured query contains a reserved
+   *         Engine.IO parameter.
    */
   void connect(const std::string& uri);
 
@@ -62,13 +66,17 @@ class client
   /**
    * @brief Obtain a socket for a specific namespace.
    *
-   * @param nsp  Namespace string (default is the root namespace `/`).
+   * @param nsp   Namespace string (default is the root namespace `/`).
+   * @param auth  Authentication payload sent in the namespace CONNECT packet.
    * @return A shared pointer to a `sioxx::socket` bound to this client.
    *
    * The returned socket can be used to register event listeners, emit events,
-   * and manually connect/disconnect the namespace.
+   * and manually connect/disconnect the namespace. If the namespace socket
+   * already exists, a non-null `auth` replaces its current authentication
+   * payload; a null `auth` leaves it unchanged.
    */
-  std::shared_ptr<sioxx::socket> socket(const std::string& nsp = "/");
+  std::shared_ptr<sioxx::socket> socket(const std::string& nsp = "/",
+                                        message auth = json());
 
   /** @name Lifecycle listeners */
   /** @{ */

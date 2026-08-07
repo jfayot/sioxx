@@ -65,6 +65,21 @@ struct client_options
   /** @brief Extra HTTP/WebSocket headers to send on the upgrade request. */
   std::vector<std::pair<std::string, std::string>> extra_headers;
 
+  /** @brief Engine.IO endpoint path (default: `/socket.io/`).
+   *
+   * This replaces any path supplied to `client::connect()`. A missing leading
+   * or trailing slash is added automatically; an empty path uses the default.
+   */
+  std::string engineio_path{"/socket.io/"};
+
+  /** @brief Additional URL-encoded query parameters for the handshake.
+   *
+   * Keys and values are percent-encoded. The reserved Engine.IO keys `EIO`,
+   * `transport`, and `sid` are rejected by `client::connect()` with
+   * `std::invalid_argument`.
+   */
+  std::map<std::string, std::string> query;
+
   /** @brief Number of retry attempts; zero disables reconnection. */
   int reconnect_attempts{0};
 
