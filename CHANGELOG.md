@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Additions :tada:
 
+- Added per-namespace authentication payloads, configurable Engine.IO endpoint
+  paths, and URL-encoded handshake query parameters.
 - Added an opt-in GoogleTest end-to-end suite backed by dedicated Node.js
   Socket.IO servers, covering events, acknowledgements, HTTP polling,
   automatic fallback, MessagePack with binary data, and multiple namespaces.

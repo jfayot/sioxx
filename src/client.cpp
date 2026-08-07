@@ -5,6 +5,7 @@
 #include <thread>
 
 #include "client_impl.hpp"
+#include "engineio_url.hpp"
 #include "http_polling_transport.hpp"
 #include "json_parser.hpp"
 #include "msgpack_parser.hpp"
@@ -32,31 +33,6 @@ client_impl::client_impl(client_options options) : options_(std::move(options))
   }
 }
 
-std::string client_impl::build_engineio_url(const std::string& uri,
-                                            const std::string& transport) const
-{
-  std::string url = uri;
-  size_t scheme_end = url.find("://");
-  std::string scheme =
-    scheme_end == std::string::npos ? "" : url.substr(0, scheme_end);
-  if (scheme == "http")
-    url = "ws" + url.substr(4);
-  else if (scheme == "https")
-    url = "wss" + url.substr(5);
-  else if (scheme != "ws" && scheme != "wss")
-    url = "ws://" + url;
-
-  // Strip any existing query string / trailing slash quirks then append
-  // the standard engine.io handshake query.
-  size_t query_pos = url.find('?');
-  std::string base =
-    (query_pos == std::string::npos) ? url : url.substr(0, query_pos);
-  if (!base.empty() && base.back() == '/') base.pop_back();
-
-  base += "/socket.io/?EIO=4&transport=" + transport;
-  return base;
-}
-
 void client_impl::connect(const std::string& uri)
 {
   base_uri_ = uri;
@@ -65,7 +41,8 @@ void client_impl::connect(const std::string& uri)
   reconnect_attempts_used_ = 0;
   ensure_engineio();
   engineio_->open(
-    build_engineio_url(uri, using_polling_ ? "polling" : "websocket"));
+    detail::build_engineio_url(uri, options_.engineio_path, options_.query,
+                               using_polling_ ? "polling" : "websocket"));
 }
 
 void client_impl::ensure_engineio()
@@ -114,7 +91,8 @@ void client_impl::activate_polling_fallback()
   if (on_error_)
     on_error_("WebSocket connection failed; switching to HTTP long-polling");
   ensure_engineio();
-  engineio_->open(build_engineio_url(base_uri_, "polling"));
+  engineio_->open(detail::build_engineio_url(base_uri_, options_.engineio_path,
+                                             options_.query, "polling"));
 }
 
 void client_impl::on_engineio_open()
@@ -163,8 +141,9 @@ void client_impl::schedule_reconnect()
       std::this_thread::sleep_for(delay);
       if (self->intentional_close_) return;
       self->ensure_engineio();
-      self->engineio_->open(self->build_engineio_url(
-        uri, self->using_polling_ ? "polling" : "websocket"));
+      self->engineio_->open(detail::build_engineio_url(
+        uri, self->options_.engineio_path, self->options_.query,
+        self->using_polling_ ? "polling" : "websocket"));
     })
     .detach();
 }
@@ -219,14 +198,20 @@ void client_impl::on_engineio_frame(const std::string& payload, bool is_binary)
   }
 }
 
-std::shared_ptr<sioxx::socket> client_impl::socket(const std::string& nsp)
+std::shared_ptr<sioxx::socket> client_impl::socket(const std::string& nsp,
+                                                   message auth)
 {
   std::string norm_nsp = nsp.empty() ? "/" : nsp;
   std::lock_guard<std::mutex> lock(sockets_mutex_);
   auto it = sockets_.find(norm_nsp);
-  if (it != sockets_.end()) return it->second;
+  if (it != sockets_.end())
+  {
+    if (!auth.is_null()) it->second->set_auth(std::move(auth));
+    return it->second;
+  }
 
-  auto sock = std::make_shared<sioxx::socket>(weak_from_this(), norm_nsp);
+  auto sock = std::make_shared<sioxx::socket>(weak_from_this(), norm_nsp,
+                                              std::move(auth));
   sockets_[norm_nsp] = sock;
   if (engineio_ && engineio_->is_open()) sock->connect();
   return sock;
@@ -263,9 +248,10 @@ void client::connect(const std::string& uri) { impl_->connect(uri); }
 
 void client::close() { impl_->close(); }
 
-std::shared_ptr<sioxx::socket> client::socket(const std::string& nsp)
+std::shared_ptr<sioxx::socket> client::socket(const std::string& nsp,
+                                              message auth)
 {
-  return impl_->socket(nsp);
+  return impl_->socket(nsp, std::move(auth));
 }
 
 void client::set_open_listener(std::function<void()> h)

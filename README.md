@@ -1,10 +1,13 @@
 <h1><img src="docs/_static/sioxx-logo.svg" alt="sioxx logo" height="80" align="center"> sioxx: modern Socket.IO client for C++</h1>
 
 ![GitHub Release](https://img.shields.io/github/v/release/jfayot/sioxx)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/jfayot/sioxx/blob/main/LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/jfayot/sioxx/blob/main/LICENSE)
+[![Docs](https://img.shields.io/badge/Docs-online-blue.svg)](https://jfayot.github.io/sioxx/)
+
 ![Linux](https://github.com/jfayot/sioxx/actions/workflows/build-linux.yml/badge.svg)
 ![macOS](https://github.com/jfayot/sioxx/actions/workflows/build-macos.yml/badge.svg)
 ![Windows](https://github.com/jfayot/sioxx/actions/workflows/build-windows.yml/badge.svg)
+
 ![CMake Integration](https://github.com/jfayot/sioxx/actions/workflows/cmake-integration.yml/badge.svg)
 ![Packaging](https://github.com/jfayot/sioxx/actions/workflows/packaging.yml/badge.svg)
 ![Documentation](https://github.com/jfayot/sioxx/actions/workflows/docs.yml/badge.svg)

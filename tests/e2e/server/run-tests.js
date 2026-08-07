@@ -77,11 +77,13 @@ function finish(exitCode) {
 }
 
 async function run() {
-  const [defaultServer, pollingServer, msgpackServer] = await Promise.all([
-    startServer('default'),
-    startServer('polling-only'),
-    startServer('msgpack'),
-  ]);
+  const [defaultServer, pollingServer, msgpackServer, customOptionsServer] =
+    await Promise.all([
+      startServer('default'),
+      startServer('polling-only'),
+      startServer('msgpack'),
+      startServer('custom-options'),
+    ]);
 
   testProcess = spawn(testExecutable, [], {
     stdio: 'inherit',
@@ -90,6 +92,7 @@ async function run() {
       SIOXX_E2E_URL: defaultServer.url,
       SIOXX_E2E_POLLING_ONLY_URL: pollingServer.url,
       SIOXX_E2E_MSGPACK_URL: msgpackServer.url,
+      SIOXX_E2E_CUSTOM_OPTIONS_URL: customOptionsServer.url,
     },
   });
 

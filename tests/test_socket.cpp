@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <sioxx/client.hpp>
 #include <sioxx/socket.hpp>
 
 using namespace sioxx;
@@ -22,6 +23,32 @@ TEST(Socket, NspAccessorReturnsConstructedNamespace)
 {
   auto sock = make_socket("/your_namespace");
   EXPECT_EQ(sock->nsp(), "/your_namespace");
+}
+
+TEST(Socket, StoresAndUpdatesNamespaceAuth)
+{
+  auto sock = std::make_shared<socket>(std::weak_ptr<client_impl>{}, "/private",
+                                       json{{"token", "initial-token"}});
+
+  EXPECT_EQ(sock->auth(), json({{"token", "initial-token"}}));
+
+  sock->set_auth(json{{"token", "refreshed-token"}, {"tenant", 42}});
+
+  EXPECT_EQ(sock->auth(), json({{"token", "refreshed-token"}, {"tenant", 42}}));
+}
+
+TEST(ClientSocket, ReusesSocketAndUpdatesOnlyNonNullAuth)
+{
+  client client;
+  auto socket = client.socket("/private", json{{"token", "initial-token"}});
+
+  auto updated = client.socket("/private", json{{"token", "refreshed-token"}});
+  EXPECT_EQ(updated, socket);
+  EXPECT_EQ(socket->auth(), json({{"token", "refreshed-token"}}));
+
+  auto unchanged = client.socket("/private");
+  EXPECT_EQ(unchanged, socket);
+  EXPECT_EQ(socket->auth(), json({{"token", "refreshed-token"}}));
 }
 
 TEST(Socket, StartsDisconnected)

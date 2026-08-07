@@ -5,9 +5,21 @@
 namespace sioxx
 {
 
-socket::socket(std::weak_ptr<client_impl> client, std::string nsp)
-    : client_(std::move(client)), nsp_(std::move(nsp))
+socket::socket(std::weak_ptr<client_impl> client, std::string nsp, message auth)
+    : client_(std::move(client)), nsp_(std::move(nsp)), auth_(std::move(auth))
 {
+}
+
+void socket::set_auth(message auth)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  auth_ = std::move(auth);
+}
+
+message socket::auth() const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  return auth_;
 }
 
 void socket::on(const std::string& event, event_listener listener)
@@ -45,7 +57,7 @@ void socket::connect()
   packet packet;
   packet.type = packet_type::connect;
   packet.nsp = nsp_;
-  packet.data = json();
+  packet.data = auth();
   if (auto c = client_.lock()) c->send_packet(packet);
 }
 

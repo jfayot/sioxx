@@ -70,6 +70,18 @@ TEST(JsonParser, EncodesConnectAndDisconnect)
   EXPECT_EQ(encode_to_string(parser, disconnect_pkt), "1/orders,");
 }
 
+TEST(JsonParser, EncodesNamespaceConnectWithAuthPayload)
+{
+  json_parser parser;
+  packet pkt;
+  pkt.type = packet_type::connect;
+  pkt.nsp = "/private";
+  pkt.data = json{{"token", "secret"}, {"tenant", 42}};
+
+  EXPECT_EQ(encode_to_string(parser, pkt),
+            R"(0/private,{"tenant":42,"token":"secret"})");
+}
+
 TEST(JsonParser, EncodesBinaryEventHeader)
 {
   json_parser parser;

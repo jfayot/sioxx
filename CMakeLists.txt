@@ -51,6 +51,7 @@ find_package(Threads REQUIRED)
 # ---------------------------------------------------------------------------
 add_library(
   sioxx
+  src/engineio_url.cpp
   src/url_parse.cpp
   src/json_parser.cpp
   src/msgpack_parser.cpp

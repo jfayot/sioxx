@@ -198,6 +198,71 @@ TEST(E2E, ConnectsWithHttpPollingOnly)
   client.close();
 }
 
+TEST(E2E, UsesCustomPathQueryAndRefreshedNamespaceAuth)
+{
+  sioxx::client_options options;
+  options.force_http_polling = true;
+  options.engineio_path = "/realtime/";
+  options.query = {
+    {"client name", "C++ device"},
+    {"version", "2"},
+  };
+
+  auto connections = std::make_shared<event_counter>();
+  auto disconnect_requested = std::make_shared<completion_signal>();
+  auto disconnected = std::make_shared<completion_signal>();
+  auto initial_details = std::make_shared<async_value<sioxx::message>>();
+  auto refreshed_details = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client(options);
+  auto socket = client.socket(
+    "/private", sioxx::json{{"token", "initial-token"}, {"tenant", 42}});
+
+  configure_failure_reporting(client, error);
+  socket->on_connect([connections] { connections->increment(); });
+  socket->on_disconnect([disconnected](const std::string&)
+                        { disconnected->set(); });
+  client.connect(server_url("SIOXX_E2E_CUSTOM_OPTIONS_URL"));
+
+  ASSERT_TRUE(connections->wait_for(1, 5s))
+    << "connection error: " << error->value();
+
+  socket->emit("connection_details_with_ack", sioxx::json::array(),
+               [initial_details](sioxx::message data)
+               { initial_details->set(std::move(data)); });
+
+  ASSERT_TRUE(initial_details->wait_for(5s));
+  ASSERT_EQ(initial_details->value().size(), 1);
+  EXPECT_EQ(initial_details->value()[0]["auth"],
+            sioxx::json({{"token", "initial-token"}, {"tenant", 42}}));
+  EXPECT_EQ(initial_details->value()[0]["query"]["client name"], "C++ device");
+  EXPECT_EQ(initial_details->value()[0]["query"]["version"], "2");
+  EXPECT_EQ(initial_details->value()[0]["transport"], "polling");
+
+  socket->emit("disconnect_namespace", sioxx::json::array(),
+               [disconnect_requested](sioxx::message)
+               { disconnect_requested->set(); });
+
+  ASSERT_TRUE(disconnect_requested->wait_for(5s));
+  ASSERT_TRUE(disconnected->wait_for(5s));
+
+  socket->set_auth(sioxx::json{{"token", "refreshed-token"}});
+  socket->connect();
+
+  ASSERT_TRUE(connections->wait_for(2, 5s));
+
+  socket->emit("connection_details_with_ack", sioxx::json::array(),
+               [refreshed_details](sioxx::message data)
+               { refreshed_details->set(std::move(data)); });
+
+  ASSERT_TRUE(refreshed_details->wait_for(5s));
+  ASSERT_EQ(refreshed_details->value().size(), 1);
+  EXPECT_EQ(refreshed_details->value()[0]["auth"],
+            sioxx::json({{"token", "refreshed-token"}}));
+
+  client.close();
+}
+
 TEST(E2E, FallsBackToPollingWhenWebsocketIsUnavailable)
 {
   auto connected = std::make_shared<completion_signal>();
