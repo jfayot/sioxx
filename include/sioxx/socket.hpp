@@ -41,8 +41,12 @@ class socket : public std::enable_shared_from_this<socket>
   using event_listener =
     std::function<void(const std::string& event, message data)>;
 
-  /** @brief Callback invoked when a server ACK arrives for an emitted event. */
+  /** @brief Callback used to receive or send acknowledgement data. */
   using ack_callback = std::function<void(message data)>;
+
+  /** @brief Listener for events that may request an acknowledgement. */
+  using ack_event_listener = std::function<void(
+    const std::string& event, message data, ack_callback acknowledge)>;
 
   /** @brief Listener for the *connect* event of this namespace. */
   using connect_listener = std::function<void()>;
@@ -86,6 +90,19 @@ class socket : public std::enable_shared_from_this<socket>
    * @param listener Callable that receives the event name and its payload.
    */
   void on(const std::string& event, event_listener listener);
+
+  /**
+   * @brief Register a listener that can acknowledge an incoming event.
+   *
+   * When the server includes an acknowledgement ID, `acknowledge` sends the
+   * supplied arguments back to the server and can be called at most once. If
+   * the event does not request an acknowledgement, `acknowledge` is empty.
+   *
+   * @param event     Name of the event.
+   * @param listener  Callable that receives the event, payload, and reply
+   *                  function.
+   */
+  void on(const std::string& event, ack_event_listener listener);
 
   /** @brief Remove the listener for a given event name. */
   void off(const std::string& event);
@@ -137,7 +154,7 @@ class socket : public std::enable_shared_from_this<socket>
   /** @name Internal callbacks – called by client_impl */
   /** @{ */
   /** @brief Deliver an incoming event from the server. */
-  void dispatch_event(const std::string& event, message data);
+  void dispatch_event(const std::string& event, message data, int ack_id = -1);
 
   /** @brief Deliver an incoming ACK from the server. */
   void dispatch_ack(int id, message data);
@@ -156,6 +173,8 @@ class socket : public std::enable_shared_from_this<socket>
   /** @} */
 
  private:
+  void send_ack(int id, message data);
+
   std::weak_ptr<client_impl> client_;
   std::string nsp_;
   bool connected_{false};
@@ -163,6 +182,7 @@ class socket : public std::enable_shared_from_this<socket>
   mutable std::mutex mutex_;
   message auth_;
   std::map<std::string, event_listener> listeners_;
+  std::map<std::string, ack_event_listener> ack_listeners_;
   std::map<int, ack_callback> pending_acks_;
   int next_ack_id_{0};
   connect_listener on_connect_;

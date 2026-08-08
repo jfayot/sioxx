@@ -169,6 +169,40 @@ TEST(E2E, ReceivesAcknowledgementFromServer)
   client.close();
 }
 
+TEST(E2E, RepliesToServerEventThatRequestsAcknowledgement)
+{
+  auto connected = std::make_shared<completion_signal>();
+  auto request = std::make_shared<async_value<sioxx::message>>();
+  auto reply_received = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client;
+  auto socket = client.socket("/e2e");
+
+  configure_failure_reporting(client, error);
+  socket->on_connect([connected] { connected->set(); });
+  socket->on("server_ack_request",
+             [request](const std::string&, sioxx::message data,
+                       sioxx::socket::ack_callback acknowledge)
+             {
+               request->set(std::move(data));
+               acknowledge(sioxx::json::array({8, "answer"}));
+             });
+  socket->on("server_ack_reply_received",
+             [reply_received](const std::string&, sioxx::message data)
+             { reply_received->set(std::move(data)); });
+
+  client.connect(server_url());
+
+  ASSERT_TRUE(connected->wait_for(5s))
+    << "connection error: " << error->value();
+  ASSERT_TRUE(request->wait_for(5s));
+  EXPECT_EQ(request->value(), sioxx::json::array({7, "question"}));
+  ASSERT_TRUE(reply_received->wait_for(5s));
+  EXPECT_EQ(reply_received->value(), sioxx::json::array({8, "answer"}));
+
+  client.close();
+}
+
 TEST(E2E, ConnectsWithHttpPollingOnly)
 {
   sioxx::client_options options;

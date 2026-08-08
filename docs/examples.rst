@@ -53,6 +53,24 @@ when the server should acknowledge the event:
            std::cout << "server replied: " << reply.dump() << '\n';
        });
 
+Reply to a server acknowledgement request
+-----------------------------------------
+
+Use the acknowledgement-aware listener overload when the server expects the
+client to reply. The reply function is available only when the incoming event
+contains an acknowledgement ID, and sends at most one response:
+
+.. code-block:: cpp
+
+   chat->on(
+       "question",
+       [](const std::string&, sioxx::message data,
+          sioxx::socket::ack_callback acknowledge) {
+           if (acknowledge) {
+               acknowledge(sioxx::json::array({"answer", 42}));
+           }
+       });
+
 Choose MessagePack
 ------------------
 

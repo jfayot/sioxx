@@ -90,6 +90,67 @@ TEST(Socket, OnDispatchesMatchingEventWithData)
   EXPECT_EQ(seen_data[1].get<int>(), 42);
 }
 
+TEST(Socket, AckEventListenerReceivesReplyFunction)
+{
+  auto sock = make_socket();
+  bool called = false;
+  bool can_acknowledge = false;
+
+  sock->on("question",
+           [&](const std::string& event, message data,
+               socket::ack_callback acknowledge)
+           {
+             called = true;
+             can_acknowledge = static_cast<bool>(acknowledge);
+             EXPECT_EQ(event, "question");
+             EXPECT_EQ(data, json::array({"answer?"}));
+             acknowledge(json::array({42}));
+           });
+
+  sock->dispatch_event("question", json::array({"answer?"}), 7);
+
+  EXPECT_TRUE(called);
+  EXPECT_TRUE(can_acknowledge);
+}
+
+TEST(Socket, AckEventListenerCannotReplyWhenEventHasNoAckId)
+{
+  auto sock = make_socket();
+  bool called = false;
+
+  sock->on("notification",
+           [&](const std::string&, message, socket::ack_callback acknowledge)
+           {
+             called = true;
+             EXPECT_FALSE(acknowledge);
+           });
+
+  sock->dispatch_event("notification", json::array());
+
+  EXPECT_TRUE(called);
+}
+
+TEST(Socket, RegisteringListenerReplacesOtherListenerKind)
+{
+  auto sock = make_socket();
+  int regular_calls = 0;
+  int ack_calls = 0;
+
+  sock->on("event", [&](const std::string&, message) { ++regular_calls; });
+  sock->on("event", [&](const std::string&, message, socket::ack_callback)
+           { ++ack_calls; });
+  sock->dispatch_event("event", json::array(), 1);
+
+  EXPECT_EQ(regular_calls, 0);
+  EXPECT_EQ(ack_calls, 1);
+
+  sock->on("event", [&](const std::string&, message) { ++regular_calls; });
+  sock->dispatch_event("event", json::array(), 2);
+
+  EXPECT_EQ(regular_calls, 1);
+  EXPECT_EQ(ack_calls, 1);
+}
+
 TEST(Socket, DispatchIgnoresUnregisteredEvent)
 {
   auto sock = make_socket();
