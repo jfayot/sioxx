@@ -187,7 +187,7 @@ void client_impl::on_engineio_frame(const std::string& payload, bool is_binary)
     json args = json::array();
     for (size_t i = 1; i < packet.data.size(); ++i)
       args.push_back(packet.data[i]);
-    sock->dispatch_event(event_name, std::move(args));
+    sock->dispatch_event(event_name, std::move(args), packet.id);
     break;
   }
 

@@ -53,6 +53,10 @@ if (mode === 'custom-options') {
 e2e.on('connection', (socket) => {
   socket.emit('server_arguments', 1, 'two', { three: 3 });
 
+  socket.emit('server_ack_request', 7, 'question', (...reply) => {
+    socket.emit('server_ack_reply_received', ...reply);
+  });
+
   socket.on('echo_with_ack', (...args) => {
     const acknowledgement = args.pop();
     acknowledgement({ received: args });

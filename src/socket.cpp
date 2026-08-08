@@ -1,5 +1,7 @@
 #include "sioxx/socket.hpp"
 
+#include <atomic>
+
 #include "client_impl.hpp"
 
 namespace sioxx
@@ -26,18 +28,28 @@ void socket::on(const std::string& event, event_listener listener)
 {
   std::lock_guard<std::mutex> lock(mutex_);
   listeners_[event] = std::move(listener);
+  ack_listeners_.erase(event);
+}
+
+void socket::on(const std::string& event, ack_event_listener listener)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  ack_listeners_[event] = std::move(listener);
+  listeners_.erase(event);
 }
 
 void socket::off(const std::string& event)
 {
   std::lock_guard<std::mutex> lock(mutex_);
   listeners_.erase(event);
+  ack_listeners_.erase(event);
 }
 
 void socket::off_all()
 {
   std::lock_guard<std::mutex> lock(mutex_);
   listeners_.clear();
+  ack_listeners_.clear();
 }
 
 void socket::on_connect(connect_listener listener)
@@ -117,16 +129,56 @@ void socket::emit(const std::string& event, const message& data,
   if (auto c = client_.lock()) c->send_packet(packet);
 }
 
-void socket::dispatch_event(const std::string& event, message data)
+void socket::dispatch_event(const std::string& event, message data, int ack_id)
 {
   event_listener listener;
+  ack_event_listener ack_listener;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = listeners_.find(event);
-    if (it == listeners_.end()) return;
-    listener = it->second;
+    if (it != listeners_.end()) listener = it->second;
+    auto ack_it = ack_listeners_.find(event);
+    if (ack_it != ack_listeners_.end()) ack_listener = ack_it->second;
   }
-  listener(event, std::move(data));
+
+  if (listener)
+  {
+    listener(event, std::move(data));
+    return;
+  }
+  if (!ack_listener) return;
+
+  ack_callback acknowledge;
+  if (ack_id >= 0)
+  {
+    auto weak_self = weak_from_this();
+    auto sent = std::make_shared<std::atomic<bool>>(false);
+    acknowledge = [weak_self, sent, ack_id](message reply)
+    {
+      if (sent->exchange(true)) return;
+      if (auto self = weak_self.lock())
+        self->send_ack(ack_id, std::move(reply));
+    };
+  }
+  ack_listener(event, std::move(data), std::move(acknowledge));
+}
+
+void socket::send_ack(int id, message data)
+{
+  packet packet;
+  packet.type = packet_type::ack;
+  packet.nsp = nsp_;
+  packet.id = id;
+  if (data.is_array())
+  {
+    packet.data = std::move(data);
+  }
+  else
+  {
+    packet.data = json::array();
+    if (!data.is_null()) packet.data.push_back(std::move(data));
+  }
+  if (auto c = client_.lock()) c->send_packet(packet);
 }
 
 void socket::dispatch_ack(int id, message data)
