@@ -3,6 +3,7 @@
 ![GitHub Release](https://img.shields.io/github/v/release/jfayot/sioxx)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/jfayot/sioxx/blob/main/LICENSE)
 [![Docs](https://img.shields.io/badge/Docs-online-blue.svg)](https://jfayot.github.io/sioxx/)
+[![codecov](https://codecov.io/gh/jfayot/sioxx/graph/badge.svg)](https://codecov.io/gh/jfayot/sioxx)
 
 ![Linux](https://github.com/jfayot/sioxx/actions/workflows/build-linux.yml/badge.svg)
 ![macOS](https://github.com/jfayot/sioxx/actions/workflows/build-macos.yml/badge.svg)
@@ -299,7 +300,8 @@ The regular unit-test build does not require Node.js.
 The E2E suite covers WebSocket and polling connections, automatic polling
 fallback, JSON and MessagePack interoperability, acknowledgements, binary
 MessagePack payloads, routing across multiple namespaces, and WebSocket
-reconnection after an unexpected server shutdown.
+reconnection after an unexpected server shutdown. CI combines unit and E2E
+coverage in the report published to Codecov.
 
 ### Static analysis
 
