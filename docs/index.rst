@@ -123,8 +123,9 @@ would be considered separately once the core protocol and API are stable.
 Where to go next
 ----------------
 
-Read :doc:`examples` for complete usage patterns or go directly to the
-:doc:`api` reference.
+Read :doc:`examples` for complete usage patterns, follow the
+:doc:`migration` guide when replacing ``socket.io-client-cpp``, or go directly
+to the :doc:`api` reference.
 
 .. toctree::
    :hidden:
@@ -132,4 +133,5 @@ Read :doc:`examples` for complete usage patterns or go directly to the
 
    Home <self>
    Examples <examples>
+   Migration from socket.io-client-cpp <migration>
    API <api>
