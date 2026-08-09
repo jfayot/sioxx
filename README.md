@@ -90,6 +90,7 @@ sock->on("message", [](const std::string& event, sioxx::message data) {
 
 client.connect("wss://chat.example");
 
+// Events emitted before the namespace connects are buffered and sent in order.
 sock->emit("hello", sioxx::json{"world"});
 sock->emit("ping_ack", sioxx::json::array({1, 2, 3}), [](sioxx::message reply) {
     // ack callback

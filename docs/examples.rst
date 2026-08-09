@@ -40,7 +40,8 @@ Emit an event and receive an acknowledgement
 ---------------------------------------------
 
 Payloads are ``nlohmann::json`` values. Pass a callback as the third argument
-when the server should acknowledge the event:
+when the server should acknowledge the event. Events emitted before the
+namespace connects are buffered and sent in order after connection:
 
 .. code-block:: cpp
 

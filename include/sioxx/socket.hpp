@@ -14,9 +14,11 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <queue>
 #include <string>
 
 #include "message.hpp"
+#include "packet.hpp"
 
 namespace sioxx
 {
@@ -77,7 +79,7 @@ class socket : public std::enable_shared_from_this<socket>
   message auth() const;
 
   /** @brief Whether the namespace is currently connected. */
-  bool connected() const { return connected_; }
+  bool connected() const;
 
   /** @name Event registration */
   /** @{ */
@@ -126,6 +128,9 @@ class socket : public std::enable_shared_from_this<socket>
   /**
    * @brief Emit an event without expecting an acknowledgement.
    *
+   * Events emitted before the namespace connects are buffered and sent in
+   * order once its CONNECT packet is acknowledged by the server.
+   *
    * @param event   Event name.
    * @param data    Payload (default empty JSON array).  May be any JSON value.
    */
@@ -133,6 +138,9 @@ class socket : public std::enable_shared_from_this<socket>
 
   /**
    * @brief Emit an event and request an acknowledgement.
+   *
+   * Events emitted before the namespace connects are buffered and sent in
+   * order once its CONNECT packet is acknowledged by the server.
    *
    * @param event    Event name.
    * @param data     Payload.
@@ -173,6 +181,8 @@ class socket : public std::enable_shared_from_this<socket>
   /** @} */
 
  private:
+  void send_or_buffer(packet packet);
+  void flush_send_buffer();
   void send_ack(int id, message data);
 
   std::weak_ptr<client_impl> client_;
@@ -184,7 +194,9 @@ class socket : public std::enable_shared_from_this<socket>
   std::map<std::string, event_listener> listeners_;
   std::map<std::string, ack_event_listener> ack_listeners_;
   std::map<int, ack_callback> pending_acks_;
+  std::queue<packet> send_buffer_;
   int next_ack_id_{0};
+  bool flushing_send_buffer_{false};
   connect_listener on_connect_;
   disconnect_listener on_disconnect_;
 };

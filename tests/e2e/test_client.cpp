@@ -169,6 +169,29 @@ TEST(E2E, ReceivesAcknowledgementFromServer)
   client.close();
 }
 
+TEST(E2E, BuffersOutgoingEventUntilNamespaceConnects)
+{
+  auto acknowledgement = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client;
+  auto socket = client.socket("/e2e");
+
+  configure_failure_reporting(client, error);
+  socket->emit("echo_with_ack", sioxx::json::array({"before-connect"}),
+               [acknowledgement](sioxx::message data)
+               { acknowledgement->set(std::move(data)); });
+
+  client.connect(server_url());
+
+  ASSERT_TRUE(acknowledgement->wait_for(5s))
+    << "connection error: " << error->value();
+  EXPECT_EQ(acknowledgement->value(),
+            sioxx::json::array(
+              {{{"received", sioxx::json::array({"before-connect"})}}}));
+
+  client.close();
+}
+
 TEST(E2E, RepliesToServerEventThatRequestsAcknowledgement)
 {
   auto connected = std::make_shared<completion_signal>();
