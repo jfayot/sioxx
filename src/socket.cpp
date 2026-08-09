@@ -44,6 +44,20 @@ void socket::on(const std::string& event, ack_event_listener listener)
   listeners_.erase(event);
 }
 
+void socket::on_any(event_listener listener)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  any_listener_ = std::move(listener);
+  any_ack_listener_ = nullptr;
+}
+
+void socket::on_any(ack_event_listener listener)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  any_ack_listener_ = std::move(listener);
+  any_listener_ = nullptr;
+}
+
 void socket::off(const std::string& event)
 {
   std::lock_guard<std::mutex> lock(mutex_);
@@ -56,6 +70,8 @@ void socket::off_all()
   std::lock_guard<std::mutex> lock(mutex_);
   listeners_.clear();
   ack_listeners_.clear();
+  any_listener_ = nullptr;
+  any_ack_listener_ = nullptr;
 }
 
 void socket::on_connect(connect_listener listener)
@@ -174,23 +190,20 @@ void socket::dispatch_event(const std::string& event, message data, int ack_id)
 {
   event_listener listener;
   ack_event_listener ack_listener;
+  event_listener any_listener;
+  ack_event_listener any_ack_listener;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = listeners_.find(event);
     if (it != listeners_.end()) listener = it->second;
     auto ack_it = ack_listeners_.find(event);
     if (ack_it != ack_listeners_.end()) ack_listener = ack_it->second;
+    any_listener = any_listener_;
+    any_ack_listener = any_ack_listener_;
   }
-
-  if (listener)
-  {
-    listener(event, std::move(data));
-    return;
-  }
-  if (!ack_listener) return;
 
   ack_callback acknowledge;
-  if (ack_id >= 0)
+  if ((ack_listener || any_ack_listener) && ack_id >= 0)
   {
     auto weak_self = weak_from_this();
     auto sent = std::make_shared<std::atomic<bool>>(false);
@@ -201,7 +214,16 @@ void socket::dispatch_event(const std::string& event, message data, int ack_id)
         self->send_ack(ack_id, std::move(reply));
     };
   }
-  ack_listener(event, std::move(data), std::move(acknowledge));
+
+  if (listener)
+    listener(event, data);
+  else if (ack_listener)
+    ack_listener(event, data, acknowledge);
+
+  if (any_listener)
+    any_listener(event, std::move(data));
+  else if (any_ack_listener)
+    any_ack_listener(event, std::move(data), std::move(acknowledge));
 }
 
 void socket::send_ack(int id, message data)

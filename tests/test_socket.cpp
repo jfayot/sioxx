@@ -161,6 +161,63 @@ TEST(Socket, DispatchIgnoresUnregisteredEvent)
   EXPECT_EQ(call_count, 0);
 }
 
+TEST(Socket, OnAnyDispatchesEveryEventAfterNamedListener)
+{
+  auto sock = make_socket();
+  std::vector<std::string> calls;
+  message seen_data;
+
+  sock->on("known",
+           [&](const std::string&, message) { calls.push_back("named"); });
+  sock->on_any(
+    [&](const std::string& event, message data)
+    {
+      calls.push_back(event);
+      seen_data = std::move(data);
+    });
+
+  sock->dispatch_event("known", json::array({1}));
+  sock->dispatch_event("unknown", json::array({2}));
+
+  EXPECT_EQ(calls, (std::vector<std::string>{"named", "known", "unknown"}));
+  EXPECT_EQ(seen_data, json::array({2}));
+}
+
+TEST(Socket, OnAnyAckListenerReceivesReplyFunction)
+{
+  auto sock = make_socket();
+  bool called = false;
+
+  sock->on_any(
+    [&](const std::string& event, message data,
+        socket::ack_callback acknowledge)
+    {
+      called = true;
+      EXPECT_EQ(event, "question");
+      EXPECT_EQ(data, json::array({"answer?"}));
+      EXPECT_TRUE(acknowledge);
+    });
+
+  sock->dispatch_event("question", json::array({"answer?"}), 7);
+
+  EXPECT_TRUE(called);
+}
+
+TEST(Socket, RegisteringOnAnyReplacesPreviousListenerKind)
+{
+  auto sock = make_socket();
+  int regular_calls = 0;
+  int ack_calls = 0;
+
+  sock->on_any([&](const std::string&, message) { ++regular_calls; });
+  sock->on_any([&](const std::string&, message, socket::ack_callback)
+               { ++ack_calls; });
+  sock->dispatch_event("event", json::array(), 1);
+
+  EXPECT_EQ(regular_calls, 0);
+  EXPECT_EQ(ack_calls, 1);
+}
+
 TEST(Socket, OnOverwritesPreviousListenerForSameEvent)
 {
   auto sock = make_socket();
@@ -195,6 +252,7 @@ TEST(Socket, OffAllRemovesEveryListener)
   int calls = 0;
   sock->on("a", [&](const std::string&, const message&) { ++calls; });
   sock->on("b", [&](const std::string&, const message&) { ++calls; });
+  sock->on_any([&](const std::string&, const message&) { ++calls; });
 
   sock->off_all();
   sock->dispatch_event("a", json::array());

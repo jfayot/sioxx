@@ -94,7 +94,7 @@ Client reliability
 Client API
 ~~~~~~~~~~
 
-* Catch-all listeners for incoming and outgoing events.
+* Catch-all listeners for outgoing events.
 * Additional connection options for authentication, query parameters, headers,
   proxies and transport selection.
 * Improved connection and transport diagnostics.

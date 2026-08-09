@@ -106,6 +106,29 @@ class socket : public std::enable_shared_from_this<socket>
    */
   void on(const std::string& event, ack_event_listener listener);
 
+  /**
+   * @brief Register a listener for every incoming event.
+   *
+   * The listener is invoked after any listener registered for the event name.
+   * Registering another catch-all listener replaces the previous one.
+   *
+   * @param listener Callable that receives each event name and payload.
+   */
+  void on_any(event_listener listener);
+
+  /**
+   * @brief Register an acknowledgement-aware listener for every event.
+   *
+   * The listener is invoked after any listener registered for the event name.
+   * When the event requests an acknowledgement, the reply callback is shared
+   * with the named listener and sends at most one response between them.
+   * Registering another catch-all listener replaces the previous one.
+   *
+   * @param listener Callable that receives each event, payload, and reply
+   *                 function.
+   */
+  void on_any(ack_event_listener listener);
+
   /** @brief Remove the listener for a given event name. */
   void off(const std::string& event);
 
@@ -193,6 +216,8 @@ class socket : public std::enable_shared_from_this<socket>
   message auth_;
   std::map<std::string, event_listener> listeners_;
   std::map<std::string, ack_event_listener> ack_listeners_;
+  event_listener any_listener_;
+  ack_event_listener any_ack_listener_;
   std::map<int, ack_callback> pending_acks_;
   std::queue<packet> send_buffer_;
   int next_ack_id_{0};
