@@ -90,6 +90,9 @@ auto sock = client.socket("/chat");  // any namespace path
 sock->on("message", [](const std::string& event, sioxx::message data) {
     // data is an nlohmann::json array of the event's arguments
 });
+sock->on_any([](const std::string& event, sioxx::message data) {
+    // observes every incoming event after its event-specific listener
+});
 
 client.connect("wss://chat.example");
 
@@ -202,7 +205,8 @@ without the placeholder/reconstruction dance the text protocol needs for
 ### Threading model
 
 `websocket_transport` runs its own `boost::asio::io_context` on a background
-thread per connection. All `on_*` callbacks (`socket->on(...)`, open/close
+thread per connection. All `on_*` callbacks (`socket->on(...)`,
+`socket->on_any(...)`, open/close
 listeners, ack callbacks) fire on that thread — if you're updating UI state
 or anything not thread-safe, hop back to your own thread/queue from inside
 the callback.

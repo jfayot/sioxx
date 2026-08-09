@@ -311,6 +311,8 @@ The remaining namespace method translations are direct:
      - ``socket->connect()``
    * - ``socket->off(name)`` / ``off_all()``
      - unchanged
+   * - ``socket->on_any(listener)``
+     - unchanged
    * - ``client.close()``
      - unchanged
 
@@ -323,7 +325,6 @@ Check unsupported or different features
 Do not treat the migration as a namespace-only rename if the old application
 uses one of these APIs:
 
-* ``on_any`` has no sioxx equivalent. Register each event explicitly.
 * ``opened()``, ``get_sessionid()``, and ``sync_close()`` have no direct
   equivalents. Track application connection state from lifecycle callbacks and
   use ``close()`` for shutdown.

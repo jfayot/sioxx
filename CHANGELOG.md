@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Additions :tada:
 
+- Added catch-all `socket::on_any()` listeners for observing every incoming
+  namespace event, including acknowledgement-aware listeners.
 - Added per-namespace buffering for outgoing events emitted before the
   namespace connects, including events that request acknowledgements.
 - Added a practical, standalone migration guide from `socket.io-client-cpp` to
