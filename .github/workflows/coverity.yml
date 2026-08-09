@@ -1,0 +1,66 @@
+name: Coverity Scan
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  coverity:
+    if: github.repository == 'jfayot/sioxx'
+    runs-on: ubuntu-latest
+    env:
+      COVERITY_PROJECT: jfayot/sioxx
+      COVERITY_SCAN_TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache fetched CMake dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache/fetchcontent
+          key: fetchcontent-coverity-${{ runner.os }}-${{ hashFiles('cmake/SioxxBuildHelpers.cmake') }}
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build-coverity \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DFETCHCONTENT_BASE_DIR="$PWD/.cache/fetchcontent" \
+            -DSIOXX_BUILD_DOCS=OFF \
+            -DSIOXX_BUILD_EXAMPLES=OFF \
+            -DSIOXX_BUILD_TESTS=OFF \
+            -DSIOXX_INSTALL=OFF
+
+      - name: Download Coverity Build Tool
+        run: |
+          curl --fail --silent --show-error --location \
+            --output "$RUNNER_TEMP/coverity.tgz" \
+            --form "project=$COVERITY_PROJECT" \
+            --form "token=$COVERITY_SCAN_TOKEN" \
+            https://scan.coverity.com/download/cxx/linux64
+          mkdir "$RUNNER_TEMP/coverity"
+          tar -xzf "$RUNNER_TEMP/coverity.tgz" \
+            --strip-components=1 \
+            --directory="$RUNNER_TEMP/coverity"
+
+      - name: Capture build
+        run: |
+          "$RUNNER_TEMP/coverity/bin/cov-build" \
+            --dir cov-int \
+            cmake --build build-coverity --parallel
+
+      - name: Upload build for analysis
+        run: |
+          tar -czf cov-int.tgz cov-int
+          curl --fail-with-body --silent --show-error \
+            --form "project=$COVERITY_PROJECT" \
+            --form "token=$COVERITY_SCAN_TOKEN" \
+            --form "email=$(git log -1 --format=%ae)" \
+            --form "file=@cov-int.tgz" \
+            --form "version=$GITHUB_SHA" \
+            --form "description=GitHub Actions build of $GITHUB_REF_NAME" \
+            https://scan.coverity.com/builds

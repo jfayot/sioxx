@@ -4,6 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/jfayot/sioxx/blob/main/LICENSE)
 [![Docs](https://img.shields.io/badge/Docs-online-blue.svg)](https://jfayot.github.io/sioxx/)
 [![codecov](https://codecov.io/gh/jfayot/sioxx/graph/badge.svg)](https://codecov.io/gh/jfayot/sioxx)
+[![Coverity Scan](https://scan.coverity.com/projects/jfayot-sioxx/badge.svg)](https://scan.coverity.com/projects/jfayot-sioxx)
 
 ![Linux](https://github.com/jfayot/sioxx/actions/workflows/build-linux.yml/badge.svg)
 ![macOS](https://github.com/jfayot/sioxx/actions/workflows/build-macos.yml/badge.svg)
