@@ -1,0 +1,7 @@
+parsers:
+  cobertura:
+    partials_as_hits: true
+
+coverage:
+  round: nearest
+  precision: 0
