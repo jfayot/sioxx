@@ -95,7 +95,6 @@ void engineio_client::handle_transport_message(const std::string& payload,
     json handshake = json::parse(rest, nullptr, false);
     if (!handshake.is_discarded())
     {
-      sid_ = handshake.value("sid", std::string());
       ping_interval_ms_ = handshake.value("pingInterval", 25000);
       ping_timeout_ms_ = handshake.value("pingTimeout", 20000);
     }

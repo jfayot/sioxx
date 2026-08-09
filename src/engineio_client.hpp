@@ -69,7 +69,6 @@ class engineio_client : public std::enable_shared_from_this<engineio_client>
 
   int ping_interval_ms_{25000};
   int ping_timeout_ms_{20000};
-  std::string sid_;
 
   std::thread heartbeat_thread_;
   std::mutex heartbeat_thread_mutex_;
