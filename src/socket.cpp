@@ -24,6 +24,12 @@ message socket::auth() const
   return auth_;
 }
 
+bool socket::connected() const
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  return connected_;
+}
+
 void socket::on(const std::string& event, event_listener listener)
 {
   std::lock_guard<std::mutex> lock(mutex_);
@@ -79,6 +85,7 @@ void socket::disconnect()
   packet.type = packet_type::disconnect;
   packet.nsp = nsp_;
   if (auto c = client_.lock()) c->send_packet(packet);
+  std::lock_guard<std::mutex> lock(mutex_);
   connected_ = false;
 }
 
@@ -98,7 +105,7 @@ void socket::emit(const std::string& event, const message& data)
     arr.push_back(data);
   }
   packet.data = std::move(arr);
-  if (auto c = client_.lock()) c->send_packet(packet);
+  send_or_buffer(std::move(packet));
 }
 
 void socket::emit(const std::string& event, const message& data,
@@ -126,7 +133,41 @@ void socket::emit(const std::string& event, const message& data,
     arr.push_back(data);
   }
   packet.data = std::move(arr);
+  send_or_buffer(std::move(packet));
+}
+
+void socket::send_or_buffer(packet packet)
+{
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!connected_ || flushing_send_buffer_)
+    {
+      send_buffer_.push(std::move(packet));
+      return;
+    }
+  }
+
   if (auto c = client_.lock()) c->send_packet(packet);
+}
+
+void socket::flush_send_buffer()
+{
+  while (true)
+  {
+    packet packet;
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (!connected_ || send_buffer_.empty())
+      {
+        flushing_send_buffer_ = false;
+        return;
+      }
+      packet = std::move(send_buffer_.front());
+      send_buffer_.pop();
+    }
+
+    if (auto c = client_.lock()) c->send_packet(packet);
+  }
 }
 
 void socket::dispatch_event(const std::string& event, message data, int ack_id)
@@ -197,26 +238,39 @@ void socket::dispatch_ack(int id, message data)
 void socket::mark_connected(bool connected,
                             const std::string& disconnect_reason)
 {
-  bool was_connected = connected_;
-  connected_ = connected;
+  bool was_connected;
+  bool should_flush = false;
+  connect_listener connect_listener_to_notify;
+  disconnect_listener disconnect_listener_to_notify;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    was_connected = connected_;
+    connected_ = connected;
+
+    if (connected && !was_connected)
+    {
+      connect_listener_to_notify = on_connect_;
+      if (!flushing_send_buffer_)
+      {
+        flushing_send_buffer_ = true;
+        should_flush = true;
+      }
+    }
+    else if (!connected && was_connected)
+    {
+      disconnect_listener_to_notify = on_disconnect_;
+    }
+  }
 
   if (connected && !was_connected)
   {
-    connect_listener listener;
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      listener = on_connect_;
-    }
-    if (listener) listener();
+    if (should_flush) flush_send_buffer();
+    if (connect_listener_to_notify) connect_listener_to_notify();
   }
   else if (!connected && was_connected)
   {
-    disconnect_listener listener;
-    {
-      std::lock_guard<std::mutex> lock(mutex_);
-      listener = on_disconnect_;
-    }
-    if (listener) listener(disconnect_reason);
+    if (disconnect_listener_to_notify)
+      disconnect_listener_to_notify(disconnect_reason);
   }
 }
 

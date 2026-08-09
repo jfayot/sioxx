@@ -88,8 +88,8 @@ Client reliability
 * Connection-state recovery, including restoration of the client session and
   reception of packets missed during a temporary disconnection.
 * More control over reconnection attempts, delays, backoff and jitter.
-* Offline buffering and optional volatile events that may be discarded while
-  the client is disconnected.
+* Optional volatile events that may be discarded while the client is
+  disconnected.
 
 Client API
 ~~~~~~~~~~
