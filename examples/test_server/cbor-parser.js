@@ -1,7 +1,7 @@
-'use strict';
+"use strict";
 
-const { EventEmitter } = require('events');
-const { Encoder: CborEncoder } = require('cbor-x');
+const { EventEmitter } = require("events");
+const { Encoder: CborEncoder } = require("cbor-x");
 
 const protocol = 5;
 const CONNECT = 0;
@@ -24,22 +24,24 @@ class Decoder extends EventEmitter {
   add(data) {
     const packet = codec.decode(data);
     checkPacket(packet);
-    this.emit('decoded', packet);
+    this.emit("decoded", packet);
   }
 
   destroy() {}
 }
 
 function checkPacket(packet) {
-  const validType = Number.isInteger(packet.type)
-    && packet.type >= CONNECT
-    && packet.type <= CONNECT_ERROR;
-  if (!validType) throw new Error('invalid packet type');
-  if (typeof packet.nsp !== 'string') throw new Error('invalid namespace');
+  const validType =
+    Number.isInteger(packet.type) &&
+    packet.type >= CONNECT &&
+    packet.type <= CONNECT_ERROR;
+  if (!validType) throw new Error("invalid packet type");
+  if (typeof packet.nsp !== "string") throw new Error("invalid namespace");
 
-  const isObject = packet.data !== null
-    && typeof packet.data === 'object'
-    && !Array.isArray(packet.data);
+  const isObject =
+    packet.data !== null &&
+    typeof packet.data === "object" &&
+    !Array.isArray(packet.data);
   let validData;
   switch (packet.type) {
     case CONNECT:
@@ -49,7 +51,7 @@ function checkPacket(packet) {
       validData = packet.data === undefined;
       break;
     case CONNECT_ERROR:
-      validData = typeof packet.data === 'string' || isObject;
+      validData = typeof packet.data === "string" || isObject;
       break;
     case EVENT:
     case ACK:
@@ -58,9 +60,9 @@ function checkPacket(packet) {
     default:
       validData = false;
   }
-  if (!validData) throw new Error('invalid payload');
+  if (!validData) throw new Error("invalid payload");
   if (packet.id !== undefined && !Number.isInteger(packet.id)) {
-    throw new Error('invalid packet id');
+    throw new Error("invalid packet id");
   }
 }
 

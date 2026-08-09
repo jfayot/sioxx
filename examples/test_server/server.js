@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 // Minimal socket.io server for exercising sioxx's example client
 // (examples/basic_client.cpp). Matches its namespace and events:
 //
@@ -14,49 +14,49 @@
 //   node server.js --cbor       # custom CBOR parser example
 //   node server.js --polling    # disable WebSocket; exercise HTTP polling
 
-const http = require('http');
-const { Server } = require('socket.io');
+const http = require("http");
+const { Server } = require("socket.io");
 
-const useMsgpack = process.argv.includes('--msgpack');
-const useCbor = process.argv.includes('--cbor');
-const usePollingOnly = process.argv.includes('--polling');
+const useMsgpack = process.argv.includes("--msgpack");
+const useCbor = process.argv.includes("--cbor");
+const usePollingOnly = process.argv.includes("--polling");
 const port = process.env.PORT || 3000;
-const namespacePath = '/your_namespace';
+const namespacePath = "/your_namespace";
 
 if (useMsgpack && useCbor) {
-  throw new Error('--msgpack and --cbor are mutually exclusive');
+  throw new Error("--msgpack and --cbor are mutually exclusive");
 }
 
 let ioOptions = {};
 if (useMsgpack) {
-  ioOptions.parser = require('socket.io-msgpack-parser');
+  ioOptions.parser = require("socket.io-msgpack-parser");
 } else if (useCbor) {
-  ioOptions.parser = require('./cbor-parser');
+  ioOptions.parser = require("./cbor-parser");
 }
 if (usePollingOnly) {
-  ioOptions.transports = ['polling'];
+  ioOptions.transports = ["polling"];
 }
 
 const httpServer = http.createServer();
 const io = new Server(httpServer, ioOptions);
 const missionEvents = io.of(namespacePath);
 
-missionEvents.on('connection', (socket) => {
+missionEvents.on("connection", (socket) => {
   console.log(`[${namespacePath}] connected: ${socket.id} (${socket.conn.transport.name})`);
 
-  socket.on('hello', (arg) => {
+  socket.on("hello", (arg) => {
     console.log(`[${namespacePath}] hello from ${socket.id} ->`, arg);
   });
 
-  socket.on('ping_ack', (...args) => {
+  socket.on("ping_ack", (...args) => {
     // socket.io appends the ack callback as the last argument when the
     // client emitted with one.
-    const ack = typeof args[args.length - 1] === 'function' ? args.pop() : null;
+    const ack = typeof args[args.length - 1] === "function" ? args.pop() : null;
     console.log(`[${namespacePath}] ping_ack from ${socket.id} ->`, args);
-    if (ack) ack({ reply: 'pong', received: args });
+    if (ack) ack({ reply: "pong", received: args });
   });
 
-  socket.on('disconnect', (reason) => {
+  socket.on("disconnect", (reason) => {
     console.log(`[${namespacePath}] disconnected: ${socket.id} (${reason})`);
   });
 
