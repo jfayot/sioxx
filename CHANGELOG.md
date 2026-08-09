@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Additions :tada:
 
+- Added a practical, standalone migration guide from `socket.io-client-cpp` to
+  `sioxx` to the generated HTML documentation.
 - Added acknowledgement-aware event listeners for replying to server events
   that request an acknowledgement.
 - Added per-namespace authentication payloads, configurable Engine.IO endpoint
