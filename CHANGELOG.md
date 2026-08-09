@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changes :construction:
 
+- Added combined unit and end-to-end test coverage reporting through Codecov.
 - Added a repository agent guide covering project structure, validation, and
   generated documentation maintenance.
 - Expanded the agent guide with Karpathy-inspired principles for simple,

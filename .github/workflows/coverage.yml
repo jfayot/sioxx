@@ -1,0 +1,81 @@
+name: Coverage
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: tests/e2e/server/pnpm-lock.yaml
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install coverage and E2E dependencies
+        run: |
+          python -m pip install gcovr==8.6
+          pnpm --dir tests/e2e/server install --frozen-lockfile
+
+      - name: Cache fetched CMake dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache/fetchcontent
+          key: fetchcontent-coverage-${{ runner.os }}-${{ hashFiles('cmake/SioxxBuildHelpers.cmake', 'tests/CMakeLists.txt') }}
+
+      - name: Configure coverage build
+        run: |
+          cmake -S . -B build-coverage \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_COMPILER=g++ \
+            -DCMAKE_CXX_FLAGS="--coverage -fprofile-abs-path" \
+            -DCMAKE_EXE_LINKER_FLAGS=--coverage \
+            -DFETCHCONTENT_BASE_DIR="$PWD/.cache/fetchcontent" \
+            -DSIOXX_BUILD_EXAMPLES=OFF \
+            -DSIOXX_BUILD_TESTS=ON \
+            -DSIOXX_BUILD_E2E_TESTS=ON
+
+      - name: Build
+        run: cmake --build build-coverage --parallel
+
+      - name: Run unit tests
+        run: ctest --test-dir build-coverage -LE e2e --output-on-failure
+
+      - name: Run E2E tests
+        run: ctest --test-dir build-coverage -L e2e --output-on-failure
+
+      - name: Generate coverage report
+        run: |
+          gcovr \
+            --root . \
+            --filter src/ \
+            --filter include/sioxx/ \
+            --cobertura-pretty \
+            --output coverage.xml \
+            build-coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          disable_search: true
+          fail_ci_if_error: true
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
