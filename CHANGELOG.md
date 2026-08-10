@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changes :construction:
 
+- Isolated the Ninja-based CMake integration FetchContent cache from workflows
+  using other generators.
 - Consolidated Linux, macOS, and Windows builds into one matrix workflow,
   cancelled superseded pull request runs, and removed the duplicate standalone
   end-to-end build while retaining end-to-end coverage testing.
@@ -49,8 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes :wrench:
 
-- Made the 8 MiB HTTP polling response-body limit explicit to prevent
-  excessive memory consumption from oversized server responses.
+- Made the 8 MiB HTTP polling response-body limit and 64 KiB network read
+  buffer explicit to prevent excessive memory consumption from oversized
+  server responses.
 - Fixed heartbeat reconfiguration races, polling close-thread lifetime, and
   ignored transport shutdown errors reported by Coverity Scan.
 - Fixed the CMake clang-tidy integration passing literal quotes in the

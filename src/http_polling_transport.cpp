@@ -1,5 +1,6 @@
 #include "http_polling_transport.hpp"
 
+#include <algorithm>
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ssl/error.hpp>
 #include <boost/beast/core.hpp>
@@ -22,9 +23,17 @@ using tcp = net::ip::tcp;
 namespace
 {
 constexpr std::uint64_t max_http_response_body_size = 8 * 1024 * 1024;
+constexpr std::size_t max_http_read_buffer_size = 64 * 1024;
 
 constexpr char base64[] =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+template <typename Stream>
+void read_http_response(Stream& stream, beast::flat_buffer& buffer,
+                        http::response_parser<http::string_body>& parser)
+{
+  while (!parser.is_done()) http::read_some(stream, buffer, parser);
+}
 
 std::string base64_encode(const std::string& input)
 {
@@ -63,7 +72,7 @@ bool base64_decode(const std::string& input, std::string& out)
     int a = base64_value(input[i]), b = base64_value(input[i + 1]);
     int c = input[i + 2] == '=' ? 0 : base64_value(input[i + 2]);
     int d = input[i + 3] == '=' ? 0 : base64_value(input[i + 3]);
-    if (a < 0 || b < 0 || c < 0 || d < 0) return false;
+    if (std::min({a, b, c, d}) < 0) return false;
     unsigned value = (a << 18) | (b << 12) | (c << 6) | d;
     out += static_cast<char>((value >> 16) & 0xff);
     if (input[i + 2] != '=') out += static_cast<char>((value >> 8) & 0xff);
@@ -203,7 +212,7 @@ http_polling_transport::response http_polling_transport::request(
   for (const auto& [key, value] : extra_headers_) req.set(key, value);
   req.body() = body;
   req.prepare_payload();
-  beast::flat_buffer buffer;
+  beast::flat_buffer buffer{max_http_read_buffer_size};
   http::response_parser<http::string_body> parser;
   parser.body_limit(max_http_response_body_size);
 
@@ -212,7 +221,7 @@ http_polling_transport::response http_polling_transport::request(
     beast::tcp_stream stream(ioc);
     stream.connect(endpoints);
     http::write(stream, req);
-    http::read(stream, buffer, parser);
+    read_http_response(stream, buffer, parser);
     beast::error_code ec;
     stream.socket().shutdown(tcp::socket::shutdown_both, ec);
     if (ec && ec != net::error::not_connected) throw beast::system_error(ec);
@@ -228,7 +237,7 @@ http_polling_transport::response http_polling_transport::request(
     beast::get_lowest_layer(stream).connect(endpoints);
     stream.handshake(ssl::stream_base::client);
     http::write(stream, req);
-    http::read(stream, buffer, parser);
+    read_http_response(stream, buffer, parser);
     beast::error_code ec;
     stream.shutdown(ec);
     if (ec == net::error::eof || ec == ssl::error::stream_truncated) ec = {};
