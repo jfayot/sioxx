@@ -65,7 +65,7 @@ void client_impl::ensure_engineio()
       websocket->set_extra_headers(options_.extra_headers);
     transport = std::move(websocket);
   }
-  engineio_->set_transport(transport);
+  engineio_->set_transport(std::move(transport));
 
   engineio_->on_open([self = shared_from_this()] { self->on_engineio_open(); });
   engineio_->on_close([self = shared_from_this()](const std::string& reason)
@@ -136,7 +136,7 @@ void client_impl::schedule_reconnect()
     jitter_distribution(jitter_engine));
   auto uri = base_uri_;
   std::thread(
-    [self, delay, uri]
+    [self = std::move(self), delay, uri = std::move(uri)]
     {
       std::this_thread::sleep_for(delay);
       if (self->intentional_close_) return;

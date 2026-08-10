@@ -114,6 +114,7 @@ http_polling_transport::~http_polling_transport()
     else
       poll_thread_.join();
   }
+  if (close_thread_.joinable()) close_thread_.join();
 }
 
 void http_polling_transport::set_extra_headers(
@@ -210,6 +211,7 @@ http_polling_transport::response http_polling_transport::request(
     http::read(stream, buffer, res);
     beast::error_code ec;
     stream.socket().shutdown(tcp::socket::shutdown_both, ec);
+    if (ec && ec != net::error::not_connected) throw beast::system_error(ec);
   }
   else
   {
@@ -225,6 +227,8 @@ http_polling_transport::response http_polling_transport::request(
     http::read(stream, buffer, res);
     beast::error_code ec;
     stream.shutdown(ec);
+    if (ec == net::error::eof || ec == ssl::error::stream_truncated) ec = {};
+    if (ec) throw beast::system_error(ec);
   }
   return {res.result_int(), std::move(res.body())};
 }
@@ -264,12 +268,9 @@ void http_polling_transport::close()
   if (closing_.exchange(true)) return;
   state_ = transport_state::closed;
   // Ending the Engine.IO session causes a pending poll to return promptly.
-  // weak_from_this() is empty when called from the final destructor, where a
-  // best-effort network close is no longer safe to schedule.
   if (!sid_.empty())
   {
-    if (auto self = weak_from_this().lock())
-      std::thread([self] { self->post("1", false); }).detach();
+    close_thread_ = std::thread([this] { post("1", false); });
   }
   if (on_close_) on_close_("closed");
 }

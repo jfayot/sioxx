@@ -43,6 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes :wrench:
 
+- Fixed heartbeat reconfiguration races, polling close-thread lifetime, and
+  ignored transport shutdown errors reported by Coverity Scan.
 - Fixed the CMake clang-tidy integration passing literal quotes in the
   configuration file path.
 - Split Engine.IO polling payloads containing multiple record-separated

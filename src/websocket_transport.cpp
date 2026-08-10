@@ -77,8 +77,8 @@ void websocket_transport::run_plain()
   auto self = shared_from_this();
   resolver_.async_resolve(
     url_.host, url_.port,
-    [this, self](beast::error_code ec,
-                 const tcp::resolver::results_type& results)
+    [this, self = std::move(self)](beast::error_code ec,
+                                   const tcp::resolver::results_type& results)
     {
       if (ec) return fail("resolve", ec);
 
@@ -89,8 +89,9 @@ void websocket_transport::run_plain()
       beast::get_lowest_layer(*ws_plain_)
         .async_connect(
           results,
-          [this, self](beast::error_code ec2,
-                       const tcp::resolver::results_type::endpoint_type&)
+          [this, self = std::move(self)](
+            beast::error_code ec2,
+            const tcp::resolver::results_type::endpoint_type&)
           {
             if (ec2) return fail("connect", ec2);
             beast::get_lowest_layer(*ws_plain_).expires_never();
@@ -104,15 +105,16 @@ void websocket_transport::run_plain()
                   std::string(BOOST_BEAST_VERSION_STRING) + " sioxx-client");
                 for (auto& [k, v] : extra_headers_) req.set(k, v);
               }));
-            ws_plain_->async_handshake(url_.host, url_.target,
-                                       [this, self](beast::error_code ec3)
-                                       {
-                                         if (ec3) return fail("handshake", ec3);
-                                         ws_plain_->binary(true);
-                                         state_ = transport_state::open;
-                                         if (on_open_) on_open_();
-                                         do_read_plain();
-                                       });
+            ws_plain_->async_handshake(
+              url_.host, url_.target,
+              [this, self = std::move(self)](beast::error_code ec3)
+              {
+                if (ec3) return fail("handshake", ec3);
+                ws_plain_->binary(true);
+                state_ = transport_state::open;
+                if (on_open_) on_open_();
+                do_read_plain();
+              });
           });
     });
   ioc_.run();
@@ -125,8 +127,8 @@ void websocket_transport::run_tls()
 
   resolver_.async_resolve(
     url_.host, url_.port,
-    [this, self](beast::error_code ec,
-                 const tcp::resolver::results_type& results)
+    [this, self = std::move(self)](beast::error_code ec,
+                                   const tcp::resolver::results_type& results)
     {
       if (ec) return fail("resolve", ec);
 
@@ -145,13 +147,14 @@ void websocket_transport::run_tls()
       beast::get_lowest_layer(*ws_tls_).expires_after(std::chrono::seconds(15));
       beast::get_lowest_layer(*ws_tls_).async_connect(
         results,
-        [this, self](beast::error_code ec2,
-                     const tcp::resolver::results_type::endpoint_type&)
+        [this, self = std::move(self)](
+          beast::error_code ec2,
+          const tcp::resolver::results_type::endpoint_type&)
         {
           if (ec2) return fail("connect", ec2);
           ws_tls_->next_layer().async_handshake(
             ssl::stream_base::client,
-            [this, self](beast::error_code ec3)
+            [this, self = std::move(self)](beast::error_code ec3)
             {
               if (ec3) return fail("ssl_handshake", ec3);
               beast::get_lowest_layer(*ws_tls_).expires_never();
@@ -165,15 +168,16 @@ void websocket_transport::run_tls()
                     std::string(BOOST_BEAST_VERSION_STRING) + " sioxx-client");
                   for (auto& [k, v] : extra_headers_) req.set(k, v);
                 }));
-              ws_tls_->async_handshake(url_.host, url_.target,
-                                       [this, self](beast::error_code ec4)
-                                       {
-                                         if (ec4) return fail("handshake", ec4);
-                                         ws_tls_->binary(true);
-                                         state_ = transport_state::open;
-                                         if (on_open_) on_open_();
-                                         do_read_tls();
-                                       });
+              ws_tls_->async_handshake(
+                url_.host, url_.target,
+                [this, self = std::move(self)](beast::error_code ec4)
+                {
+                  if (ec4) return fail("handshake", ec4);
+                  ws_tls_->binary(true);
+                  state_ = transport_state::open;
+                  if (on_open_) on_open_();
+                  do_read_tls();
+                });
             });
         });
     });
@@ -183,49 +187,49 @@ void websocket_transport::run_tls()
 void websocket_transport::do_read_plain()
 {
   auto self = shared_from_this();
-  ws_plain_->async_read(buffer_,
-                        [this, self](beast::error_code ec, std::size_t)
-                        {
-                          if (ec)
-                          {
-                            state_ = transport_state::closed;
-                            if (!closing_.load())
-                            {
-                              if (on_close_) on_close_(ec.message());
-                            }
-                            return;
-                          }
-                          bool is_binary = ws_plain_->got_binary();
-                          std::string payload =
-                            beast::buffers_to_string(buffer_.data());
-                          buffer_.consume(buffer_.size());
-                          if (on_message_) on_message_(payload, is_binary);
-                          do_read_plain();
-                        });
+  ws_plain_->async_read(
+    buffer_,
+    [this, self = std::move(self)](beast::error_code ec, std::size_t)
+    {
+      if (ec)
+      {
+        state_ = transport_state::closed;
+        if (!closing_.load())
+        {
+          if (on_close_) on_close_(ec.message());
+        }
+        return;
+      }
+      bool is_binary = ws_plain_->got_binary();
+      std::string payload = beast::buffers_to_string(buffer_.data());
+      buffer_.consume(buffer_.size());
+      if (on_message_) on_message_(payload, is_binary);
+      do_read_plain();
+    });
 }
 
 void websocket_transport::do_read_tls()
 {
   auto self = shared_from_this();
-  ws_tls_->async_read(buffer_,
-                      [this, self](beast::error_code ec, std::size_t)
-                      {
-                        if (ec)
-                        {
-                          state_ = transport_state::closed;
-                          if (!closing_.load())
-                          {
-                            if (on_close_) on_close_(ec.message());
-                          }
-                          return;
-                        }
-                        bool is_binary = ws_tls_->got_binary();
-                        std::string payload =
-                          beast::buffers_to_string(buffer_.data());
-                        buffer_.consume(buffer_.size());
-                        if (on_message_) on_message_(payload, is_binary);
-                        do_read_tls();
-                      });
+  ws_tls_->async_read(
+    buffer_,
+    [this, self = std::move(self)](beast::error_code ec, std::size_t)
+    {
+      if (ec)
+      {
+        state_ = transport_state::closed;
+        if (!closing_.load())
+        {
+          if (on_close_) on_close_(ec.message());
+        }
+        return;
+      }
+      bool is_binary = ws_tls_->got_binary();
+      std::string payload = beast::buffers_to_string(buffer_.data());
+      buffer_.consume(buffer_.size());
+      if (on_message_) on_message_(payload, is_binary);
+      do_read_tls();
+    });
 }
 
 void websocket_transport::send(const std::string& payload, bool is_binary)
@@ -237,7 +241,8 @@ void websocket_transport::queue_write(std::string payload, bool is_binary)
 {
   auto self = shared_from_this();
   net::post(ioc_,
-            [this, self, payload = std::move(payload), is_binary]() mutable
+            [this, self = std::move(self), payload = std::move(payload),
+             is_binary]() mutable
             {
               bool should_start = false;
               {
@@ -280,15 +285,17 @@ void websocket_transport::pump_write_queue_plain()
       write_in_progress_ = false;
       return;
     }
-    payload = write_queue_.front().first;
+    payload = std::move(write_queue_.front().first);
     is_binary = write_queue_.front().second;
   }
   ws_plain_->binary(is_binary);
   auto self = shared_from_this();
   auto buf = std::make_shared<std::string>(std::move(payload));
+  auto write_buffer = net::buffer(*buf);
   ws_plain_->async_write(
-    net::buffer(*buf),
-    [this, self, buf](beast::error_code ec, std::size_t)
+    write_buffer,
+    [this, self = std::move(self), buf = std::move(buf)](beast::error_code ec,
+                                                         std::size_t)
     {
       {
         std::lock_guard<std::recursive_mutex> lock(write_mutex_);
@@ -320,15 +327,17 @@ void websocket_transport::pump_write_queue_tls()
       write_in_progress_ = false;
       return;
     }
-    payload = write_queue_.front().first;
+    payload = std::move(write_queue_.front().first);
     is_binary = write_queue_.front().second;
   }
   ws_tls_->binary(is_binary);
   auto self = shared_from_this();
   auto buf = std::make_shared<std::string>(std::move(payload));
+  auto write_buffer = net::buffer(*buf);
   ws_tls_->async_write(
-    net::buffer(*buf),
-    [this, self, buf](beast::error_code ec, std::size_t)
+    write_buffer,
+    [this, self = std::move(self), buf = std::move(buf)](beast::error_code ec,
+                                                         std::size_t)
     {
       {
         std::lock_guard<std::recursive_mutex> lock(write_mutex_);
@@ -350,7 +359,7 @@ void websocket_transport::close()
   state_ = transport_state::closing;
   auto self = shared_from_this();
   net::post(ioc_,
-            [this, self]()
+            [this, self = std::move(self)]()
             {
               beast::error_code ec;
               if (ws_tls_ && ws_tls_->is_open())

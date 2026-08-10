@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <future>
 #include <sioxx/message.hpp>
 
 #include "engineio_client.hpp"
@@ -269,4 +270,19 @@ TEST_F(EngineioClientFixture,
   EXPECT_TRUE(*closed);
   EXPECT_EQ(*reason, "connection reset");
   EXPECT_FALSE(client->is_open());
+}
+
+TEST_F(EngineioClientFixture, RepeatedOpenHandshakeRestartsHeartbeatSafely)
+{
+  auto error_promise = std::make_shared<std::promise<std::string>>();
+  auto error = error_promise->get_future();
+  client->on_error([error_promise](const std::string& message)
+                   { error_promise->set_value(message); });
+
+  client->open("ws://localhost/socket.io/");
+  transport->simulate_message(make_open_payload(5000, 5000));
+  transport->simulate_message(make_open_payload(10, 0));
+
+  ASSERT_EQ(error.wait_for(std::chrono::seconds(2)), std::future_status::ready);
+  EXPECT_EQ(error.get(), "engine.io ping timeout");
 }

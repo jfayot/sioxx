@@ -54,6 +54,7 @@ class http_polling_transport final
   bool verify_tls_{true};
   std::atomic<bool> closing_{false};
   std::thread poll_thread_;
+  std::thread close_thread_;
   std::mutex mutex_;
 };
 

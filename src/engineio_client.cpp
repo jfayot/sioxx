@@ -93,13 +93,17 @@ void engineio_client::handle_transport_message(const std::string& payload,
   case '0':
   {  // open
     json handshake = json::parse(rest, nullptr, false);
-    if (!handshake.is_discarded())
+    stop_heartbeat_timer();
     {
-      ping_interval_ms_ = handshake.value("pingInterval", 25000);
-      ping_timeout_ms_ = handshake.value("pingTimeout", 20000);
+      std::lock_guard<std::mutex> lock(heartbeat_mutex_);
+      if (!handshake.is_discarded())
+      {
+        ping_interval_ms_ = handshake.value("pingInterval", 25000);
+        ping_timeout_ms_ = handshake.value("pingTimeout", 20000);
+      }
+      last_pong_ = std::chrono::steady_clock::now();
     }
     open_ = true;
-    last_pong_ = std::chrono::steady_clock::now();
     start_heartbeat_timer();
     if (on_open_) on_open_();
     break;
@@ -132,58 +136,64 @@ void engineio_client::handle_transport_message(const std::string& payload,
 
 void engineio_client::start_heartbeat_timer()
 {
-  stop_heartbeat_timer();
+  std::lock_guard<std::mutex> thread_lock(heartbeat_thread_mutex_);
+  if (!open_ || closing_) return;
   heartbeat_stop_requested_ = false;
   auto self = shared_from_this();
   heartbeat_thread_ = std::thread(
-    [self]
+    [self = std::move(self)]
     {
       while (self->open_.load() && !self->closing_.load() &&
              !self->heartbeat_stop_requested_.load())
       {
-        std::unique_lock<std::mutex> lock(self->heartbeat_mutex_);
-        auto timeout = std::chrono::milliseconds(self->ping_interval_ms_ +
-                                                 self->ping_timeout_ms_);
-        if (self->heartbeat_cv_.wait_for(
-              lock, std::chrono::milliseconds(self->ping_interval_ms_),
-              [self]
-              {
-                return self->closing_.load() ||
-                       self->heartbeat_stop_requested_.load();
-              }))
         {
-          return;
+          std::unique_lock<std::mutex> lock(self->heartbeat_mutex_);
+          auto ping_interval =
+            std::chrono::milliseconds(self->ping_interval_ms_);
+          auto timeout =
+            ping_interval + std::chrono::milliseconds(self->ping_timeout_ms_);
+          if (self->heartbeat_cv_.wait_for(
+                lock, ping_interval,
+                [&self]
+                {
+                  return self->closing_.load() ||
+                         self->heartbeat_stop_requested_.load();
+                }))
+          {
+            return;
+          }
+          auto elapsed = std::chrono::steady_clock::now() - self->last_pong_;
+          if (elapsed <= timeout) continue;
         }
-        auto elapsed = std::chrono::steady_clock::now() - self->last_pong_;
-        if (elapsed > timeout)
-        {
-          lock.unlock();
-          if (self->on_error_) self->on_error_("engine.io ping timeout");
-          if (self->transport_) self->transport_->close();
-          return;
-        }
+        if (self->on_error_) self->on_error_("engine.io ping timeout");
+        if (self->transport_) self->transport_->close();
+        return;
       }
     });
 }
 
 void engineio_client::stop_heartbeat_timer()
 {
-  heartbeat_stop_requested_ = true;
+  std::thread thread_to_join;
   {
-    std::lock_guard<std::mutex> lock(heartbeat_mutex_);
-    heartbeat_cv_.notify_all();
-  }
+    std::lock_guard<std::mutex> thread_lock(heartbeat_thread_mutex_);
+    heartbeat_stop_requested_ = true;
+    {
+      std::lock_guard<std::mutex> lock(heartbeat_mutex_);
+      heartbeat_cv_.notify_all();
+    }
 
-  std::lock_guard<std::mutex> thread_lock(heartbeat_thread_mutex_);
-  if (heartbeat_thread_.joinable() &&
-      heartbeat_thread_.get_id() != std::this_thread::get_id())
-  {
-    heartbeat_thread_.join();
+    if (heartbeat_thread_.joinable() &&
+        heartbeat_thread_.get_id() != std::this_thread::get_id())
+    {
+      thread_to_join = std::move(heartbeat_thread_);
+    }
+    else if (heartbeat_thread_.joinable())
+    {
+      heartbeat_thread_.detach();
+    }
   }
-  else if (heartbeat_thread_.joinable())
-  {
-    heartbeat_thread_.detach();
-  }
+  if (thread_to_join.joinable()) thread_to_join.join();
 }
 
 }  // namespace sioxx
