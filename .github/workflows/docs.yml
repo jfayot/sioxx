@@ -36,7 +36,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/.cache/fetchcontent
-          key: fetchcontent-docs-${{ runner.os }}-${{ hashFiles('cmake/SioxxBuildHelpers.cmake') }}
+          key: fetchcontent-v1-${{ runner.os }}-${{ runner.arch }}-gcc-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json', 'cmake/SioxxBuildHelpers.cmake', 'tests/CMakeLists.txt') }}
 
       - name: Set up Python
         uses: actions/setup-python@v6

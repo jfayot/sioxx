@@ -1,0 +1,183 @@
+{
+  "version": 8,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "ci-ninja",
+      "hidden": true,
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "ci-fetched-static",
+      "inherits": "ci-ninja",
+      "binaryDir": "${sourceDir}/../../../build-consumer",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/../../../relocated-stage"
+      }
+    },
+    {
+      "name": "ci-fetched-shared",
+      "inherits": "ci-ninja",
+      "binaryDir": "${sourceDir}/../../../build-fetched-shared-consumer",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/../../../relocated-stage-fetched-shared"
+      }
+    },
+    {
+      "name": "ci-system-static",
+      "inherits": "ci-ninja",
+      "binaryDir": "${sourceDir}/../../../build-system-static-consumer",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/../../../stage-system-static"
+      }
+    },
+    {
+      "name": "ci-system-shared",
+      "inherits": "ci-ninja",
+      "binaryDir": "${sourceDir}/../../../build-shared-consumer",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/../../../stage-shared"
+      }
+    },
+    {
+      "name": "ci-windows-fetched-static",
+      "binaryDir": "${sourceDir}/../../../build-consumer",
+      "architecture": "x64",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/../../../stage"
+      }
+    },
+    {
+      "name": "ci-windows-system-shared",
+      "binaryDir": "${sourceDir}/../../../build-system-shared-consumer",
+      "architecture": "x64",
+      "toolchainFile": "$env{VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "${sourceDir}/../../../stage-system-shared"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "ci-fetched-static",
+      "configurePreset": "ci-fetched-static"
+    },
+    {
+      "name": "ci-fetched-shared",
+      "configurePreset": "ci-fetched-shared"
+    },
+    {
+      "name": "ci-system-static",
+      "configurePreset": "ci-system-static"
+    },
+    {
+      "name": "ci-system-shared",
+      "configurePreset": "ci-system-shared"
+    },
+    {
+      "name": "ci-windows-fetched-static",
+      "configurePreset": "ci-windows-fetched-static",
+      "configuration": "Release"
+    },
+    {
+      "name": "ci-windows-system-shared",
+      "configurePreset": "ci-windows-system-shared",
+      "configuration": "Release"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "ci-fetched-static",
+      "configurePreset": "ci-fetched-static",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "ci-fetched-shared",
+      "configurePreset": "ci-fetched-shared",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "ci-system-static",
+      "configurePreset": "ci-system-static",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "ci-system-shared",
+      "configurePreset": "ci-system-shared",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "ci-windows-fetched-static",
+      "configurePreset": "ci-windows-fetched-static",
+      "configuration": "Release",
+      "output": { "outputOnFailure": true }
+    },
+    {
+      "name": "ci-windows-system-shared",
+      "configurePreset": "ci-windows-system-shared",
+      "configuration": "Release",
+      "environment": {
+        "PATH": "${sourceDir}/../../../stage-system-shared/bin;$penv{VCPKG_INSTALLATION_ROOT}/installed/x64-windows/bin;$penv{PATH}"
+      },
+      "output": { "outputOnFailure": true },
+      "execution": { "timeout": 30 }
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "ci-fetched-static",
+      "steps": [
+        { "type": "configure", "name": "ci-fetched-static" },
+        { "type": "build", "name": "ci-fetched-static" },
+        { "type": "test", "name": "ci-fetched-static" }
+      ]
+    },
+    {
+      "name": "ci-fetched-shared",
+      "steps": [
+        { "type": "configure", "name": "ci-fetched-shared" },
+        { "type": "build", "name": "ci-fetched-shared" },
+        { "type": "test", "name": "ci-fetched-shared" }
+      ]
+    },
+    {
+      "name": "ci-system-static",
+      "steps": [
+        { "type": "configure", "name": "ci-system-static" },
+        { "type": "build", "name": "ci-system-static" },
+        { "type": "test", "name": "ci-system-static" }
+      ]
+    },
+    {
+      "name": "ci-system-shared",
+      "steps": [
+        { "type": "configure", "name": "ci-system-shared" },
+        { "type": "build", "name": "ci-system-shared" },
+        { "type": "test", "name": "ci-system-shared" }
+      ]
+    },
+    {
+      "name": "ci-windows-fetched-static",
+      "steps": [
+        { "type": "configure", "name": "ci-windows-fetched-static" },
+        { "type": "build", "name": "ci-windows-fetched-static" },
+        { "type": "test", "name": "ci-windows-fetched-static" }
+      ]
+    },
+    {
+      "name": "ci-windows-system-shared",
+      "steps": [
+        { "type": "configure", "name": "ci-windows-system-shared" },
+        { "type": "build", "name": "ci-windows-system-shared" },
+        { "type": "test", "name": "ci-windows-system-shared" }
+      ]
+    }
+  ]
+}

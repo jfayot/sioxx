@@ -1,0 +1,42 @@
+{
+  "version": 8,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "ci-subproject",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/../../../build-subproject",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "FETCHCONTENT_BASE_DIR": "${sourceDir}/../../../.cache/fetchcontent"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "ci-subproject",
+      "configurePreset": "ci-subproject"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "ci-subproject",
+      "configurePreset": "ci-subproject",
+      "output": { "outputOnFailure": true }
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "ci-subproject",
+      "steps": [
+        { "type": "configure", "name": "ci-subproject" },
+        { "type": "build", "name": "ci-subproject" },
+        { "type": "test", "name": "ci-subproject" }
+      ]
+    }
+  ]
+}

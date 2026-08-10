@@ -1,0 +1,166 @@
+{
+  "version": 8,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 28,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "ci-common",
+      "hidden": true,
+      "cacheVariables": {
+        "SIOXX_BUILD_EXAMPLES": false,
+        "SIOXX_BUILD_TESTS": false
+      }
+    },
+    {
+      "name": "ci-ninja",
+      "hidden": true,
+      "inherits": "ci-common",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "ci-fetched-static",
+      "inherits": "ci-ninja",
+      "binaryDir": "${sourceDir}/build-install",
+      "installDir": "${sourceDir}/stage",
+      "cacheVariables": {
+        "FETCHCONTENT_BASE_DIR": "${sourceDir}/.cache/fetchcontent"
+      }
+    },
+    {
+      "name": "ci-fetched-shared",
+      "inherits": "ci-ninja",
+      "binaryDir": "${sourceDir}/build-fetched-shared",
+      "installDir": "${sourceDir}/stage-fetched-shared",
+      "cacheVariables": {
+        "BUILD_SHARED_LIBS": true,
+        "FETCHCONTENT_BASE_DIR": "${sourceDir}/.cache/fetchcontent"
+      }
+    },
+    {
+      "name": "ci-system-static",
+      "inherits": "ci-ninja",
+      "binaryDir": "${sourceDir}/build-system-static",
+      "installDir": "${sourceDir}/stage-system-static",
+      "cacheVariables": {
+        "SIOXX_USE_SYSTEM_BOOST": true,
+        "SIOXX_USE_SYSTEM_JSON": true
+      }
+    },
+    {
+      "name": "ci-system-shared",
+      "inherits": "ci-system-static",
+      "binaryDir": "${sourceDir}/build-system-shared",
+      "installDir": "${sourceDir}/stage-shared",
+      "cacheVariables": {
+        "BUILD_SHARED_LIBS": true
+      }
+    },
+    {
+      "name": "ci-windows-fetched-static",
+      "inherits": "ci-common",
+      "binaryDir": "${sourceDir}/build-install",
+      "installDir": "${sourceDir}/stage",
+      "architecture": "x64",
+      "cacheVariables": {
+        "FETCHCONTENT_BASE_DIR": "${sourceDir}/.cache/fetchcontent"
+      }
+    },
+    {
+      "name": "ci-windows-system-shared",
+      "inherits": "ci-common",
+      "binaryDir": "${sourceDir}/build-system-shared",
+      "installDir": "${sourceDir}/stage-system-shared",
+      "architecture": "x64",
+      "toolchainFile": "$env{VCPKG_INSTALLATION_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "BUILD_SHARED_LIBS": true,
+        "SIOXX_USE_SYSTEM_BOOST": true,
+        "SIOXX_USE_SYSTEM_JSON": true
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "ci-fetched-static",
+      "configurePreset": "ci-fetched-static",
+      "targets": ["install"]
+    },
+    {
+      "name": "ci-fetched-shared",
+      "configurePreset": "ci-fetched-shared",
+      "targets": ["install"]
+    },
+    {
+      "name": "ci-system-static",
+      "configurePreset": "ci-system-static",
+      "targets": ["install"]
+    },
+    {
+      "name": "ci-system-shared",
+      "configurePreset": "ci-system-shared",
+      "targets": ["install"]
+    },
+    {
+      "name": "ci-windows-fetched-static",
+      "configurePreset": "ci-windows-fetched-static",
+      "configuration": "Release",
+      "targets": ["install"]
+    },
+    {
+      "name": "ci-windows-system-shared",
+      "configurePreset": "ci-windows-system-shared",
+      "configuration": "Release",
+      "targets": ["install"]
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "ci-fetched-static",
+      "steps": [
+        { "type": "configure", "name": "ci-fetched-static" },
+        { "type": "build", "name": "ci-fetched-static" }
+      ]
+    },
+    {
+      "name": "ci-fetched-shared",
+      "steps": [
+        { "type": "configure", "name": "ci-fetched-shared" },
+        { "type": "build", "name": "ci-fetched-shared" }
+      ]
+    },
+    {
+      "name": "ci-system-static",
+      "steps": [
+        { "type": "configure", "name": "ci-system-static" },
+        { "type": "build", "name": "ci-system-static" }
+      ]
+    },
+    {
+      "name": "ci-system-shared",
+      "steps": [
+        { "type": "configure", "name": "ci-system-shared" },
+        { "type": "build", "name": "ci-system-shared" }
+      ]
+    },
+    {
+      "name": "ci-windows-fetched-static",
+      "steps": [
+        { "type": "configure", "name": "ci-windows-fetched-static" },
+        { "type": "build", "name": "ci-windows-fetched-static" }
+      ]
+    },
+    {
+      "name": "ci-windows-system-shared",
+      "steps": [
+        { "type": "configure", "name": "ci-windows-system-shared" },
+        { "type": "build", "name": "ci-windows-system-shared" }
+      ]
+    }
+  ]
+}

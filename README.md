@@ -7,9 +7,7 @@
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/707d283e21d84d34bfdc1f59725dfa94)](https://app.codacy.com/gh/jfayot/sioxx/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 [![Coverity Scan](https://scan.coverity.com/projects/jfayot-sioxx/badge.svg)](https://scan.coverity.com/projects/jfayot-sioxx)
 
-![Linux](https://github.com/jfayot/sioxx/actions/workflows/build-linux.yml/badge.svg)
-![macOS](https://github.com/jfayot/sioxx/actions/workflows/build-macos.yml/badge.svg)
-![Windows](https://github.com/jfayot/sioxx/actions/workflows/build-windows.yml/badge.svg)
+[![Build](https://github.com/jfayot/sioxx/actions/workflows/build.yml/badge.svg)](https://github.com/jfayot/sioxx/actions/workflows/build.yml)
 
 ![CMake Integration](https://github.com/jfayot/sioxx/actions/workflows/cmake-integration.yml/badge.svg)
 ![Packaging](https://github.com/jfayot/sioxx/actions/workflows/packaging.yml/badge.svg)
@@ -308,6 +306,18 @@ fallback, JSON and MessagePack interoperability, acknowledgements, binary
 MessagePack payloads, routing across multiple namespaces, and WebSocket
 reconnection after an unexpected server shutdown. CI combines unit and E2E
 coverage in the report published to Codecov.
+
+The package compatibility configurations used by CI are captured in
+`CMakePresets.json` files at the repository root and under
+`tests/integration/`. List the available root workflows with:
+
+```bash
+cmake --workflow --list-presets
+```
+
+The root presets build and install static or shared sioxx variants, while the
+consumer and subproject presets configure, build, and test the corresponding
+downstream integration projects.
 
 ### Static analysis
 

@@ -9,12 +9,16 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: coverage-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   coverage:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: pnpm/action-setup@v4
         with:
@@ -39,7 +43,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/.cache/fetchcontent
-          key: fetchcontent-coverage-${{ runner.os }}-${{ hashFiles('cmake/SioxxBuildHelpers.cmake', 'tests/CMakeLists.txt') }}
+          key: fetchcontent-v1-${{ runner.os }}-${{ runner.arch }}-gcc-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json', 'cmake/SioxxBuildHelpers.cmake', 'tests/CMakeLists.txt') }}
 
       - name: Configure coverage build
         run: |

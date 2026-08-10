@@ -4,8 +4,33 @@ on:
   workflow_call:
   push:
     branches: ["main"]
+    paths:
+      - ".github/workflows/packaging.yml"
+      - "CMakeLists.txt"
+      - "LICENSE"
+      - "cmake/**"
+      - "conanfile.py"
+      - "include/**"
+      - "src/**"
+      - "tests/packaging/**"
   pull_request:
     branches: ["main"]
+    paths:
+      - ".github/workflows/packaging.yml"
+      - "CMakeLists.txt"
+      - "LICENSE"
+      - "cmake/**"
+      - "conanfile.py"
+      - "include/**"
+      - "src/**"
+      - "tests/packaging/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: packaging-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   conan:
@@ -13,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up Python
         uses: actions/setup-python@v6

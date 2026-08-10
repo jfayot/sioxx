@@ -8,14 +8,8 @@ permissions:
   contents: read
 
 jobs:
-  build-linux:
-    uses: ./.github/workflows/build-linux.yml
-
-  build-macos:
-    uses: ./.github/workflows/build-macos.yml
-
-  build-windows:
-    uses: ./.github/workflows/build-windows.yml
+  build:
+    uses: ./.github/workflows/build.yml
 
   cmake-integration:
     uses: ./.github/workflows/cmake-integration.yml
@@ -25,13 +19,13 @@ jobs:
 
   release:
     name: Create GitHub release
-    needs: [build-linux, build-macos, build-windows, cmake-integration, packaging]
+    needs: [build, cmake-integration, packaging]
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Verify tag matches CMake project version
         shell: bash

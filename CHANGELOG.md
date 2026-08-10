@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changes :construction:
 
+- Consolidated Linux, macOS, and Windows builds into one matrix workflow,
+  cancelled superseded pull request runs, and removed the duplicate standalone
+  end-to-end build while retaining end-to-end coverage testing.
+- Moved package compatibility configurations into reusable CMake workflow
+  presets, limited compatibility and Conan jobs to relevant changes, and
+  standardized action permissions, versions, and FetchContent cache keys.
 - Added scheduled Coverity Scan analysis and its README status badge.
 - Added combined unit and end-to-end test coverage reporting through Codecov.
 - Added a repository agent guide covering project structure, validation, and
