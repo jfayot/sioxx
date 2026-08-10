@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes :wrench:
 
+- Made the 8 MiB HTTP polling response-body limit explicit to prevent
+  excessive memory consumption from oversized server responses.
 - Fixed heartbeat reconfiguration races, polling close-thread lifetime, and
   ignored transport shutdown errors reported by Coverity Scan.
 - Fixed the CMake clang-tidy integration passing literal quotes in the

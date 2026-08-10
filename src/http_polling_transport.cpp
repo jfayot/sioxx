@@ -6,6 +6,7 @@
 #include <boost/beast/core/tcp_stream.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/ssl.hpp>
+#include <cstdint>
 #include <stdexcept>
 
 #include "polling_protocol.hpp"
@@ -20,6 +21,8 @@ using tcp = net::ip::tcp;
 
 namespace
 {
+constexpr std::uint64_t max_http_response_body_size = 8 * 1024 * 1024;
+
 constexpr char base64[] =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -201,14 +204,15 @@ http_polling_transport::response http_polling_transport::request(
   req.body() = body;
   req.prepare_payload();
   beast::flat_buffer buffer;
-  http::response<http::string_body> res;
+  http::response_parser<http::string_body> parser;
+  parser.body_limit(max_http_response_body_size);
 
   if (!url_.tls)
   {
     beast::tcp_stream stream(ioc);
     stream.connect(endpoints);
     http::write(stream, req);
-    http::read(stream, buffer, res);
+    http::read(stream, buffer, parser);
     beast::error_code ec;
     stream.socket().shutdown(tcp::socket::shutdown_both, ec);
     if (ec && ec != net::error::not_connected) throw beast::system_error(ec);
@@ -224,12 +228,13 @@ http_polling_transport::response http_polling_transport::request(
     beast::get_lowest_layer(stream).connect(endpoints);
     stream.handshake(ssl::stream_base::client);
     http::write(stream, req);
-    http::read(stream, buffer, res);
+    http::read(stream, buffer, parser);
     beast::error_code ec;
     stream.shutdown(ec);
     if (ec == net::error::eof || ec == ssl::error::stream_truncated) ec = {};
     if (ec) throw beast::system_error(ec);
   }
+  auto res = parser.release();
   return {res.result_int(), std::move(res.body())};
 }
 
