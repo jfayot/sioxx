@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changes :construction:
 
+- Reported each end-to-end GoogleTest case separately through CTest instead of
+  presenting the suite as a single test result.
 - Isolated the Ninja-based CMake integration FetchContent cache from workflows
   using other generators.
 - Consolidated Linux, macOS, and Windows builds into one matrix workflow,

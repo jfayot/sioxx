@@ -5,9 +5,10 @@ const { fork, spawn } = require("child_process");
 
 const testExecutable = process.argv[2];
 if (!testExecutable) {
-  console.error("usage: node run-tests.js <gtest-executable>");
+  console.error("usage: node run-tests.js <gtest-executable> [gtest-arguments...]");
   process.exit(2);
 }
+const testArguments = process.argv.slice(3);
 
 const servers = [];
 let testProcess;
@@ -77,6 +78,11 @@ function finish(exitCode) {
 }
 
 async function run() {
+  if (testArguments.includes("--gtest_list_tests")) {
+    runGoogleTest(process.env);
+    return;
+  }
+
   const [defaultServer, pollingServer, msgpackServer, customOptionsServer] =
     await Promise.all([
       startServer("default"),
@@ -85,15 +91,19 @@ async function run() {
       startServer("custom-options"),
     ]);
 
-  testProcess = spawn(testExecutable, [], {
+  runGoogleTest({
+    ...process.env,
+    SIOXX_E2E_URL: defaultServer.url,
+    SIOXX_E2E_POLLING_ONLY_URL: pollingServer.url,
+    SIOXX_E2E_MSGPACK_URL: msgpackServer.url,
+    SIOXX_E2E_CUSTOM_OPTIONS_URL: customOptionsServer.url,
+  });
+}
+
+function runGoogleTest(env) {
+  testProcess = spawn(testExecutable, testArguments, {
     stdio: "inherit",
-    env: {
-      ...process.env,
-      SIOXX_E2E_URL: defaultServer.url,
-      SIOXX_E2E_POLLING_ONLY_URL: pollingServer.url,
-      SIOXX_E2E_MSGPACK_URL: msgpackServer.url,
-      SIOXX_E2E_CUSTOM_OPTIONS_URL: customOptionsServer.url,
-    },
+    env,
   });
 
   testProcess.once("error", (error) => {
