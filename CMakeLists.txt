@@ -120,8 +120,18 @@ endif()
 # Examples
 # ---------------------------------------------------------------------------
 if(SIOXX_BUILD_EXAMPLES)
-  add_executable(sioxx_basic_client examples/basic_client.cpp)
-  target_link_libraries(sioxx_basic_client PRIVATE sioxx::sioxx)
+  add_subdirectory(examples/basic_client)
+
+  find_package(Qt6 QUIET COMPONENTS Widgets)
+  if(NOT TARGET Qt6::Widgets)
+    find_package(Qt5 QUIET COMPONENTS Widgets)
+  endif()
+
+  if(TARGET Qt6::Widgets OR TARGET Qt5::Widgets)
+    add_subdirectory(examples/qt_chat)
+  else()
+    message(STATUS "Qt Widgets not found; skipping sioxx_qt_chat")
+  endif()
 endif()
 
 # ---------------------------------------------------------------------------

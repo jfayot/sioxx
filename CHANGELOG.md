@@ -5,6 +5,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Additions :tada:
+
+- Added an optional Qt Widgets chat example demonstrating safe GUI-thread
+  dispatch, namespace authentication, events, acknowledgements, reconnection,
+  HTTP polling, MessagePack, and binary payloads.
+
+### Changes :construction:
+
+- Grouped the basic client, custom CBOR parser, and matching Socket.IO server
+  under `examples/basic_client`.
+
 ## [0.2.0] - 2026-08-12
 
 ### Additions :tada:

@@ -150,7 +150,7 @@ shared library.
 
 | Option                    | Default | Meaning                                                                  |
 | ------------------------- | ------- | ------------------------------------------------------------------------ |
-| `SIOXX_BUILD_EXAMPLES`    | `ON`    | build `examples/basic_client.cpp`                                        |
+| `SIOXX_BUILD_EXAMPLES`    | `ON`    | build the basic client and, when Qt 5/6 is available, the Qt chat client |
 | `SIOXX_BUILD_TESTS`       | `ON`    | build and register the GoogleTest suite in `tests/`                      |
 | `SIOXX_INSTALL`           | `ON`    | generate installation rules                                              |
 | `SIOXX_BUILD_DOCS`        | `OFF`   | build the documentation                                                  |
@@ -212,7 +212,7 @@ the callback.
 ### Example test server
 
 The repository includes a small Socket.IO server in
-[`examples/test_server`](examples/test_server) for exercising
+[`examples/basic_client/server`](examples/basic_client/server) for exercising
 `sioxx_basic_client` against a live server. It uses the `/your_namespace`
 namespace, logs the example's `hello` and `ping_ack` events, replies to the
 acknowledgement, and periodically emits `your_message`.
@@ -220,7 +220,7 @@ acknowledgement, and periodically emits `your_message`.
 Start it in a separate terminal:
 
 ```bash
-cd examples/test_server
+cd examples/basic_client/server
 pnpm install
 pnpm start              # JSON parser (default)
 # or: pnpm start:msgpack
@@ -238,13 +238,19 @@ Then, from the repository root, run the matching client mode:
 ```
 
 The `cbor` mode demonstrates a user-provided strategy in
-[`examples/cbor_parser.hpp`](examples/cbor_parser.hpp). It uses
+[`examples/basic_client/cbor_parser.hpp`](examples/basic_client/cbor_parser.hpp). It uses
 `nlohmann::json`'s built-in CBOR support. Run the matching bundled Node server
 with `pnpm start:cbor`.
 
 The server and client parser modes must match. The test server defaults to
 port `3000`; override it with `PORT=3001 pnpm start` if needed. See the
-[test-server README](examples/test_server/README.md) for details.
+[test-server README](examples/basic_client/server/README.md) for details.
+
+For a GUI integration, the optional [Qt chat example](examples/qt_chat)
+demonstrates namespace authentication, reconnects, acknowledgements,
+background-thread callback dispatch, transport selection, and MessagePack
+binary payloads. It is built with the other examples when Qt 5 or Qt 6 Widgets
+is available; otherwise CMake skips it without making Qt a required dependency.
 
 ## Known limitations
 

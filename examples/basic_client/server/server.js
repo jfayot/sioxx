@@ -1,6 +1,6 @@
 "use strict";
-// Minimal socket.io server for exercising sioxx's example client
-// (examples/basic_client.cpp). Matches its namespace and events:
+// Minimal socket.io server for exercising sioxx's basic example client
+// (../main.cpp). Matches its namespace and events:
 //
 //   sock->on("your_message", ...)
 //   sock->emit("hello", sioxx::json{"world"})

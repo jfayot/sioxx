@@ -5,8 +5,8 @@ Examples
 
 The snippets below cover the most common client configurations. For a
 complete executable, see
-`examples/basic_client.cpp
-<https://github.com/jfayot/sioxx/blob/main/examples/basic_client.cpp>`_ in the
+`examples/basic_client/main.cpp
+<https://github.com/jfayot/sioxx/blob/main/examples/basic_client/main.cpp>`_ in the
 project repository.
 
 Connect and receive events
@@ -179,7 +179,7 @@ Start the server in another terminal:
 
 .. code-block:: console
 
-   $ cd examples/test_server
+   $ cd examples/basic_client/server
    $ pnpm install
    $ pnpm start
 
@@ -191,5 +191,30 @@ Then run the C++ client:
 
 The example also supports ``msgpack``, ``cbor``, and ``polling`` modes. See
 the `test-server guide
-<https://github.com/jfayot/sioxx/tree/main/examples/test_server>`_ for all
+<https://github.com/jfayot/sioxx/tree/main/examples/basic_client/server>`_ for all
 matching commands.
+
+Build the Qt chat example
+-------------------------
+
+An optional Qt Widgets chat client demonstrates a typical GUI integration,
+including namespace authentication, reconnects, event acknowledgements,
+catch-all listeners, transport and parser selection, and MessagePack binary
+attachments. Most importantly, it queues sioxx's background-thread callbacks
+onto Qt's GUI thread before touching widgets.
+
+With Qt 6 or Qt 5 installed, enable the examples and build the target. CMake
+skips this target without error when Qt Widgets is unavailable:
+
+.. code-block:: console
+
+   $ cmake -S . -B build-qt -DSIOXX_BUILD_EXAMPLES=ON \
+       -DSIOXX_BUILD_TESTS=OFF
+   $ cmake --build build-qt --target sioxx_qt_chat --parallel
+   $ pnpm --dir examples/qt_chat install --frozen-lockfile
+   $ pnpm --dir examples/qt_chat start
+   $ ./build-qt/sioxx_qt_chat
+
+See the `Qt chat README
+<https://github.com/jfayot/sioxx/tree/main/examples/qt_chat>`_ for MessagePack
+and binary-sharing instructions.

@@ -1,7 +1,8 @@
 # sioxx-test-server
 
 A minimal Node.js socket.io server for exercising the `sioxx` example client
-(`examples/basic_client.cpp` in the [sioxx repo](https://github.com/jfayot/sioxx)).
+(`examples/basic_client/main.cpp` in the
+[sioxx repo](https://github.com/jfayot/sioxx)).
 
 It mirrors exactly what that example does:
 
@@ -24,7 +25,7 @@ pnpm install
 ```bash
 pnpm start              # default JSON parser (matches sioxx::parser_kind::json)
 pnpm start:msgpack      # socket.io-msgpack-parser (matches sioxx::parser_kind::msgpack)
-pnpm start:cbor         # custom CBOR parser (matches examples/cbor_parser.hpp)
+pnpm start:cbor         # custom CBOR parser (matches ../cbor_parser.hpp)
 pnpm start:polling      # JSON parser, HTTP long-polling only
 pnpm start:msgpack-polling  # MessagePack parser, HTTP long-polling only
 pnpm start:cbor-polling     # CBOR parser, HTTP long-polling only

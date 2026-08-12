@@ -1,0 +1,18 @@
+{
+  "name": "sioxx-qt-chat-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Socket.IO server for the sioxx Qt chat example",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "start:msgpack": "node server.js --msgpack",
+    "start:polling": "node server.js --polling",
+    "start:msgpack-polling": "node server.js --msgpack --polling"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.1",
+    "socket.io-msgpack-parser": "^3.0.2"
+  }
+}

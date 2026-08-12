@@ -11,7 +11,7 @@ const ACK = 3;
 const CONNECT_ERROR = 4;
 
 // Disabling records keeps the output as ordinary RFC 8949 CBOR maps, matching
-// nlohmann::json::to_cbor/from_cbor in examples/cbor_parser.hpp.
+// nlohmann::json::to_cbor/from_cbor in ../cbor_parser.hpp.
 const codec = new CborEncoder({ useRecords: false, mapsAsObjects: true });
 
 class Encoder {
