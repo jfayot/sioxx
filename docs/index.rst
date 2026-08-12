@@ -32,7 +32,7 @@ with overlapping functionality.
 
 Its public API retains the compact, event-driven model expected from a
 Socket.IO client, while its protocol and transport layers are built around
-these libraries and modern C++20. The design choices and implementation
+these libraries and modern C++17. The design choices and implementation
 trade-offs are discussed in `sioxx — a modern C++ Socket.IO client
 <https://dev.to/jfayot/sioxx-a-modern-c-socketio-client-nlohmannjson-boostbeast-json-or-messagepack-1hj1>`_.
 
