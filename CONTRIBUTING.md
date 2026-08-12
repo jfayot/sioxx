@@ -90,7 +90,7 @@ release-preparation helper with the new version (with or without a leading
 `v`):
 
 ```bash
-version=0.1.1
+version=0.2.0
 ./scripts/prepare-release.sh "$version"
 ```
 

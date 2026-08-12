@@ -124,7 +124,7 @@ conan create . \
   --build=missing
 ```
 
-Consumers can require `sioxx/0.1.1` and use Conan's `CMakeDeps` and
+Consumers can require `sioxx/0.2.0` and use Conan's `CMakeDeps` and
 `CMakeToolchain` generators. The generated CMake target is `sioxx::sioxx`.
 
 ### Shared libraries

@@ -4,7 +4,7 @@ set -euo pipefail
 
 usage() {
   echo "Usage: $0 <version>" >&2
-  echo "Example: $0 0.1.1" >&2
+  echo "Example: $0 0.2.0" >&2
 }
 
 if [[ $# -ne 1 ]]; then
