@@ -12,18 +12,30 @@ engineio_client::~engineio_client() { close(); }
 void engineio_client::set_transport(std::shared_ptr<transport_base> transport)
 {
   transport_ = std::move(transport);
+  const auto weak_self = weak_from_this();
   transport_->set_message_handler(
-    [self = shared_from_this()](const std::string& payload, bool is_binary)
-    { self->handle_transport_message(payload, is_binary); });
-  transport_->set_open_handler([self = shared_from_this()]
-                               { self->handle_transport_open(); });
-  transport_->set_close_handler(
-    [self = shared_from_this()](const std::string& reason)
-    { self->handle_transport_close(reason); });
-  transport_->set_error_handler(
-    [self = shared_from_this()](const std::string& msg)
+    [weak_self](const std::string& payload, bool is_binary)
     {
-      if (self->on_error_) self->on_error_(msg);
+      if (auto self = weak_self.lock())
+        self->handle_transport_message(payload, is_binary);
+    });
+  transport_->set_open_handler(
+    [weak_self]
+    {
+      if (auto self = weak_self.lock()) self->handle_transport_open();
+    });
+  transport_->set_close_handler(
+    [weak_self](const std::string& reason)
+    {
+      if (auto self = weak_self.lock()) self->handle_transport_close(reason);
+    });
+  transport_->set_error_handler(
+    [weak_self](const std::string& msg)
+    {
+      if (auto self = weak_self.lock())
+      {
+        if (self->on_error_) self->on_error_(msg);
+      }
     });
 }
 

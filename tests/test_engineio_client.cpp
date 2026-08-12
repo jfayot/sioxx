@@ -33,6 +33,7 @@ class fake_transport : public transport_base
 
   void close() override
   {
+    ++close_calls;
     state_ = transport_state::closed;
     if (on_close_) on_close_("closed");
   }
@@ -48,8 +49,14 @@ class fake_transport : public transport_base
     if (on_close_) on_close_(reason);
   }
 
+  void simulate_error(const std::string& message)
+  {
+    if (on_error_) on_error_(message);
+  }
+
   std::string last_connect_url;
   std::vector<std::pair<std::string, bool>> sent;
+  int close_calls{0};
 };
 
 std::string make_open_payload(int ping_interval_ms = 25000,
@@ -92,6 +99,21 @@ TEST(HttpPollingProtocol, RejectsNonBinaryAndMalformedPackets)
   std::string decoded;
   EXPECT_FALSE(detail::polling_decode_binary("4hello", decoded));
   EXPECT_FALSE(detail::polling_decode_binary("b???", decoded));
+  EXPECT_FALSE(detail::polling_decode_binary("b!!!!", decoded));
+  EXPECT_FALSE(detail::polling_decode_binary("bA!AA", decoded));
+}
+
+TEST(HttpPollingProtocol, HandlesBase64PaddingAndEmptyPayloads)
+{
+  for (const std::string payload :
+       {std::string(), std::string("f"), std::string("fo"), std::string("foo"),
+        std::string("\xfb", 1)})
+  {
+    std::string decoded;
+    ASSERT_TRUE(detail::polling_decode_binary(
+      detail::polling_encode_binary(payload), decoded));
+    EXPECT_EQ(decoded, payload);
+  }
 }
 
 TEST(HttpPollingProtocol, SplitsBatchedEngineioPackets)
@@ -118,6 +140,22 @@ TEST(HttpPollingProtocol, IgnoresEmptyPacketsWhenSplitting)
 TEST_F(EngineioClientFixture, NotOpenBeforeHandshake)
 {
   EXPECT_FALSE(client->is_open());
+}
+
+TEST(EngineioClient, OpenWithoutTransportThrows)
+{
+  auto client = std::make_shared<engineio_client>();
+  EXPECT_THROW(client->open("ws://localhost/socket.io/"), std::runtime_error);
+}
+
+TEST_F(EngineioClientFixture, ForwardsTransportErrors)
+{
+  std::string received_error;
+  client->on_error([&](const std::string& error) { received_error = error; });
+
+  transport->simulate_error("transport failed");
+
+  EXPECT_EQ(received_error, "transport failed");
 }
 
 TEST_F(EngineioClientFixture, OpenHandshakeMarksClientOpenAndFiresCallback)
@@ -147,6 +185,36 @@ TEST_F(EngineioClientFixture, PingFrameTriggersImmediatePongReply)
   ASSERT_FALSE(transport->sent.empty());
   EXPECT_EQ(transport->sent.back().first, "3");
   EXPECT_FALSE(transport->sent.back().second);
+}
+
+TEST_F(EngineioClientFixture, IgnoresPongNoopUnknownAndEmptyFrames)
+{
+  client->open("ws://localhost/socket.io/");
+  transport->simulate_message(make_open_payload());
+  transport->sent.clear();
+
+  transport->simulate_message("3");
+  transport->simulate_message("6");
+  transport->simulate_message("5upgrade");
+  transport->simulate_message("");
+
+  EXPECT_TRUE(client->is_open());
+  EXPECT_TRUE(transport->sent.empty());
+}
+
+TEST_F(EngineioClientFixture, ServerCloseFrameNotifiesAndClearsOpenState)
+{
+  std::string close_reason;
+  client->on_close([&](const std::string& reason) { close_reason = reason; });
+  client->open("ws://localhost/socket.io/");
+  transport->simulate_message(make_open_payload());
+
+  transport->simulate_message("1");
+
+  EXPECT_FALSE(client->is_open());
+  EXPECT_EQ(close_reason, "server closed connection");
+
+  client->close();
 }
 
 TEST_F(EngineioClientFixture, MessageFrameForwardedToFrameHandlerWithoutPrefix)
@@ -245,6 +313,14 @@ TEST_F(EngineioClientFixture,
   EXPECT_TRUE(closed);
   EXPECT_EQ(reason, "closed");
   EXPECT_FALSE(client->is_open());
+}
+
+TEST_F(EngineioClientFixture, CloseIsIdempotent)
+{
+  client->close();
+  client->close();
+
+  EXPECT_EQ(transport->close_calls, 1);
 }
 
 TEST_F(EngineioClientFixture,

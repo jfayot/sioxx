@@ -67,15 +67,28 @@ void client_impl::ensure_engineio()
   }
   engineio_->set_transport(std::move(transport));
 
-  engineio_->on_open([self = shared_from_this()] { self->on_engineio_open(); });
-  engineio_->on_close([self = shared_from_this()](const std::string& reason)
-                      { self->on_engineio_close(reason); });
-  engineio_->on_frame(
-    [self = shared_from_this()](const std::string& payload, bool is_binary)
-    { self->on_engineio_frame(payload, is_binary); });
-  engineio_->on_error(
-    [self = shared_from_this()](const std::string& msg)
+  const auto weak_self = weak_from_this();
+  engineio_->on_open(
+    [weak_self]
     {
+      if (auto self = weak_self.lock()) self->on_engineio_open();
+    });
+  engineio_->on_close(
+    [weak_self](const std::string& reason)
+    {
+      if (auto self = weak_self.lock()) self->on_engineio_close(reason);
+    });
+  engineio_->on_frame(
+    [weak_self](const std::string& payload, bool is_binary)
+    {
+      if (auto self = weak_self.lock())
+        self->on_engineio_frame(payload, is_binary);
+    });
+  engineio_->on_error(
+    [weak_self](const std::string& msg)
+    {
+      auto self = weak_self.lock();
+      if (!self) return;
       if (!self->using_polling_ && !self->engineio_->is_open())
       {
         self->activate_polling_fallback();

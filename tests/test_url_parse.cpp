@@ -33,6 +33,14 @@ TEST(UrlParse, ExplicitPort)
   EXPECT_EQ(p.target, "/socket.io/?EIO=4&transport=websocket");
 }
 
+TEST(UrlParse, Ipv6LiteralWithExplicitPort)
+{
+  auto p = parse_ws_url("ws://[::1]:8080/socket.io/");
+  EXPECT_EQ(p.host, "[::1]");
+  EXPECT_EQ(p.port, "8080");
+  EXPECT_EQ(p.target, "/socket.io/");
+}
+
 TEST(UrlParse, NoPathDefaultsToSlash)
 {
   auto p = parse_ws_url("ws://localhost:8080");

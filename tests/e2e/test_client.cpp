@@ -142,6 +142,46 @@ TEST(E2E, ConnectsAndReceivesMultipleArguments)
   client.close();
 }
 
+TEST(E2E, RootNamespaceInvokesClientOpenListener)
+{
+  auto opened = std::make_shared<completion_signal>();
+  auto connected = std::make_shared<completion_signal>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client;
+  auto socket = client.socket();
+
+  configure_failure_reporting(client, error);
+  client.set_open_listener([opened] { opened->set(); });
+  socket->on_connect([connected] { connected->set(); });
+  client.connect(server_url());
+
+  ASSERT_TRUE(connected->wait_for(5s))
+    << "connection error: " << error->value();
+  EXPECT_TRUE(opened->wait_for(5s));
+
+  client.close();
+}
+
+TEST(E2E, DeliversNamespaceConnectionErrors)
+{
+  auto connect_error = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client;
+  auto socket = client.socket("/rejected");
+
+  configure_failure_reporting(client, error);
+  socket->on("connect_error",
+             [connect_error](const std::string&, sioxx::message data)
+             { connect_error->set(std::move(data)); });
+  client.connect(server_url());
+
+  ASSERT_TRUE(connect_error->wait_for(5s))
+    << "connection error: " << error->value();
+  EXPECT_EQ(connect_error->value().value("message", ""), "unauthorized");
+
+  client.close();
+}
+
 TEST(E2E, ReceivesAcknowledgementFromServer)
 {
   auto connected = std::make_shared<completion_signal>();
@@ -244,6 +284,122 @@ TEST(E2E, ConnectsWithHttpPollingOnly)
   ASSERT_TRUE(connected->wait_for(5s))
     << "connection error: " << error->value();
 
+  socket->emit("transport_with_ack", sioxx::json::array(),
+               [acknowledgement](sioxx::message data)
+               { acknowledgement->set(std::move(data)); });
+
+  ASSERT_TRUE(acknowledgement->wait_for(5s));
+  ASSERT_EQ(acknowledgement->value().size(), 1);
+  EXPECT_EQ(acknowledgement->value()[0], "polling");
+
+  client.close();
+}
+
+TEST(E2E, SendsExtraHeadersWithWebsocket)
+{
+  sioxx::client_options options;
+  options.extra_headers = {{"X-Sioxx-Test", "websocket-header"}};
+
+  auto connected = std::make_shared<completion_signal>();
+  auto acknowledgement = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client(options);
+  auto socket = client.socket("/e2e");
+
+  configure_failure_reporting(client, error);
+  socket->on_connect([connected] { connected->set(); });
+  client.connect(server_url());
+
+  ASSERT_TRUE(connected->wait_for(5s))
+    << "connection error: " << error->value();
+  socket->emit("connection_headers_with_ack", sioxx::json::array(),
+               [acknowledgement](sioxx::message data)
+               { acknowledgement->set(std::move(data)); });
+
+  ASSERT_TRUE(acknowledgement->wait_for(5s));
+  ASSERT_EQ(acknowledgement->value().size(), 1);
+  EXPECT_EQ(acknowledgement->value()[0]["testHeader"], "websocket-header");
+  EXPECT_EQ(acknowledgement->value()[0]["transport"], "websocket");
+
+  client.close();
+}
+
+TEST(E2E, SendsExtraHeadersWithHttpPolling)
+{
+  sioxx::client_options options;
+  options.force_http_polling = true;
+  options.extra_headers = {{"X-Sioxx-Test", "polling-header"}};
+
+  auto connected = std::make_shared<completion_signal>();
+  auto acknowledgement = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client(options);
+  auto socket = client.socket("/e2e");
+
+  configure_failure_reporting(client, error);
+  socket->on_connect([connected] { connected->set(); });
+  client.connect(server_url("SIOXX_E2E_POLLING_ONLY_URL"));
+
+  ASSERT_TRUE(connected->wait_for(5s))
+    << "connection error: " << error->value();
+  socket->emit("connection_headers_with_ack", sioxx::json::array(),
+               [acknowledgement](sioxx::message data)
+               { acknowledgement->set(std::move(data)); });
+
+  ASSERT_TRUE(acknowledgement->wait_for(5s));
+  ASSERT_EQ(acknowledgement->value().size(), 1);
+  EXPECT_EQ(acknowledgement->value()[0]["testHeader"], "polling-header");
+  EXPECT_EQ(acknowledgement->value()[0]["transport"], "polling");
+
+  client.close();
+}
+
+TEST(E2E, ConnectsWithWebsocketOverTls)
+{
+  sioxx::client_options options;
+  options.verify_tls = false;
+
+  auto connected = std::make_shared<completion_signal>();
+  auto acknowledgement = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client(options);
+  auto socket = client.socket("/e2e");
+
+  configure_failure_reporting(client, error);
+  socket->on_connect([connected] { connected->set(); });
+  client.connect(server_url("SIOXX_E2E_TLS_URL"));
+
+  ASSERT_TRUE(connected->wait_for(5s))
+    << "connection error: " << error->value();
+  socket->emit("transport_with_ack", sioxx::json::array(),
+               [acknowledgement](sioxx::message data)
+               { acknowledgement->set(std::move(data)); });
+
+  ASSERT_TRUE(acknowledgement->wait_for(5s));
+  ASSERT_EQ(acknowledgement->value().size(), 1);
+  EXPECT_EQ(acknowledgement->value()[0], "websocket");
+
+  client.close();
+}
+
+TEST(E2E, ConnectsWithHttpPollingOverTls)
+{
+  sioxx::client_options options;
+  options.verify_tls = false;
+  options.force_http_polling = true;
+
+  auto connected = std::make_shared<completion_signal>();
+  auto acknowledgement = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client(options);
+  auto socket = client.socket("/e2e");
+
+  configure_failure_reporting(client, error);
+  socket->on_connect([connected] { connected->set(); });
+  client.connect(server_url("SIOXX_E2E_TLS_URL"));
+
+  ASSERT_TRUE(connected->wait_for(5s))
+    << "connection error: " << error->value();
   socket->emit("transport_with_ack", sioxx::json::array(),
                [acknowledgement](sioxx::message data)
                { acknowledgement->set(std::move(data)); });

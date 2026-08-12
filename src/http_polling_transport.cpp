@@ -119,6 +119,7 @@ http_polling_transport::~http_polling_transport()
   // callbacks from this noexcept destructor.
   closing_ = true;
   state_ = transport_state::closed;
+  join_write_threads();
   if (poll_thread_.joinable())
   {
     if (poll_thread_.get_id() == std::this_thread::get_id())
@@ -178,10 +179,10 @@ void http_polling_transport::run()
 
 void http_polling_transport::send(const std::string& payload, bool is_binary)
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   if (closing_ || state_ != transport_state::open) return;
-  std::thread([self = shared_from_this(), payload, is_binary]
-              { self->post(payload, is_binary); })
-    .detach();
+  write_threads_.emplace_back([self = shared_from_this(), payload, is_binary]
+                              { self->post(payload, is_binary); });
 }
 
 void http_polling_transport::post(std::string payload, bool is_binary)
@@ -281,12 +282,34 @@ void http_polling_transport::close()
 {
   if (closing_.exchange(true)) return;
   state_ = transport_state::closed;
+  join_write_threads();
   // Ending the Engine.IO session causes a pending poll to return promptly.
   if (!sid_.empty())
   {
     close_thread_ = std::thread([this] { post("1", false); });
   }
+  if (close_thread_.joinable()) close_thread_.join();
+  if (poll_thread_.joinable() &&
+      poll_thread_.get_id() != std::this_thread::get_id())
+    poll_thread_.join();
   if (on_close_) on_close_("closed");
+}
+
+void http_polling_transport::join_write_threads()
+{
+  std::vector<std::thread> threads;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    threads.swap(write_threads_);
+  }
+  for (auto& thread : threads)
+  {
+    if (!thread.joinable()) continue;
+    if (thread.get_id() == std::this_thread::get_id())
+      thread.detach();
+    else
+      thread.join();
+  }
 }
 
 void http_polling_transport::fail(const std::string& message)

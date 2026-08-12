@@ -1,6 +1,9 @@
 "use strict";
 
+const fs = require("fs");
 const http = require("http");
+const https = require("https");
+const path = require("path");
 const { Server } = require("socket.io");
 
 const mode = process.env.SIOXX_E2E_SERVER_MODE || "default";
@@ -15,7 +18,17 @@ if (mode === "polling-only") {
   options.path = "/realtime/";
 }
 
-const httpServer = http.createServer();
+const httpServer =
+  mode === "tls"
+    ? https.createServer({
+        cert: fs.readFileSync(
+          path.join(__dirname, "fixtures", "localhost-test-cert.pem")
+        ),
+        key: fs.readFileSync(
+          path.join(__dirname, "fixtures", "localhost-test-key.pem")
+        ),
+      })
+    : http.createServer();
 const io = new Server(httpServer, options);
 
 function installCommonHandlers(namespace) {
@@ -26,13 +39,24 @@ function installCommonHandlers(namespace) {
     socket.on("request_scoped_event", () => {
       socket.emit("scoped_event", socket.nsp.name);
     });
+    socket.on("connection_headers_with_ack", (acknowledgement) => {
+      acknowledgement({
+        testHeader: socket.handshake.headers["x-sioxx-test"],
+        transport: socket.conn.transport.name,
+      });
+    });
   });
 }
 
+installCommonHandlers(io.of("/"));
 const e2e = io.of("/e2e");
 installCommonHandlers(e2e);
 installCommonHandlers(io.of("/e2e-a"));
 installCommonHandlers(io.of("/e2e-b"));
+
+io.of("/rejected").use((socket, next) => {
+  next(new Error("unauthorized"));
+});
 
 if (mode === "custom-options") {
   io.of("/private").on("connection", (socket) => {

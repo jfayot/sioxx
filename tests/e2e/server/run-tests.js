@@ -45,7 +45,7 @@ function startServer(mode, port = 0) {
       if (!message) return;
       if (message.type === "ready") {
         resolve({
-          url: `ws://127.0.0.1:${message.port}`,
+          url: `${mode === "tls" ? "wss" : "ws"}://127.0.0.1:${message.port}`,
         });
       } else if (message.type === "restart") {
         if (process.env.SIOXX_E2E_DEBUG) {
@@ -83,13 +83,19 @@ async function run() {
     return;
   }
 
-  const [defaultServer, pollingServer, msgpackServer, customOptionsServer] =
-    await Promise.all([
-      startServer("default"),
-      startServer("polling-only"),
-      startServer("msgpack"),
-      startServer("custom-options"),
-    ]);
+  const [
+    defaultServer,
+    pollingServer,
+    msgpackServer,
+    customOptionsServer,
+    tlsServer,
+  ] = await Promise.all([
+    startServer("default"),
+    startServer("polling-only"),
+    startServer("msgpack"),
+    startServer("custom-options"),
+    startServer("tls"),
+  ]);
 
   runGoogleTest({
     ...process.env,
@@ -97,6 +103,7 @@ async function run() {
     SIOXX_E2E_POLLING_ONLY_URL: pollingServer.url,
     SIOXX_E2E_MSGPACK_URL: msgpackServer.url,
     SIOXX_E2E_CUSTOM_OPTIONS_URL: customOptionsServer.url,
+    SIOXX_E2E_TLS_URL: tlsServer.url,
   });
 }
 

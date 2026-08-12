@@ -47,6 +47,7 @@ class http_polling_transport final
   std::string poll_target() const;
   void deliver(const std::string& body);
   void fail(const std::string& message);
+  void join_write_threads();
 
   url_parts url_;
   std::string sid_;
@@ -56,6 +57,7 @@ class http_polling_transport final
   std::thread poll_thread_;
   std::thread close_thread_;
   std::mutex mutex_;
+  std::vector<std::thread> write_threads_;
 };
 
 }  // namespace sioxx

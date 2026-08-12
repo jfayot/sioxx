@@ -131,6 +131,16 @@ TEST(JsonParser, DecodesConnectWithNoPayload)
   EXPECT_TRUE(decoded.data.is_null());
 }
 
+TEST(JsonParser, DecodesNamespaceWithoutTrailingComma)
+{
+  json_parser parser;
+  packet decoded;
+  ASSERT_TRUE(parser.decode("0/chat", false, decoded));
+  EXPECT_EQ(decoded.type, packet_type::connect);
+  EXPECT_EQ(decoded.nsp, "/chat");
+  EXPECT_TRUE(decoded.data.is_null());
+}
+
 TEST(JsonParser, DecodesBinaryEventHeader)
 {
   json_parser parser;
@@ -160,4 +170,13 @@ TEST(JsonParser, RejectsEmptyPayload)
   json_parser parser;
   packet decoded;
   EXPECT_FALSE(parser.decode("", false, decoded));
+}
+
+TEST(JsonParser, RejectsInvalidPacketHeaders)
+{
+  json_parser parser;
+  packet decoded;
+  EXPECT_FALSE(parser.decode("x", false, decoded));
+  EXPECT_FALSE(parser.decode("7", false, decoded));
+  EXPECT_FALSE(parser.decode(R"(51/chat,["upload"])", false, decoded));
 }

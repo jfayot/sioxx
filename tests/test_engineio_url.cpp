@@ -11,6 +11,13 @@ TEST(EngineioUrl, UsesDefaultPath)
     "wss://example.com/socket.io/?EIO=4&transport=websocket");
 }
 
+TEST(EngineioUrl, ConvertsHttpSchemeToWebsocket)
+{
+  EXPECT_EQ(
+    build_engineio_url("http://example.com", "/socket.io/", {}, "polling"),
+    "ws://example.com/socket.io/?EIO=4&transport=polling");
+}
+
 TEST(EngineioUrl, ReplacesUriPathWithConfiguredEngineioPath)
 {
   EXPECT_EQ(build_engineio_url("wss://example.com/ignored?old=value",

@@ -53,6 +53,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes :wrench:
 
+- Broke internal callback ownership cycles and joined polling write workers on
+  close so TLS requests finish before OpenSSL process cleanup.
 - Made the 8 MiB HTTP polling response-body limit and 64 KiB network read
   buffer explicit to prevent excessive memory consumption from oversized
   server responses.
