@@ -27,6 +27,7 @@ A C++ implementation of `socket.io`'s client functionality with the following st
 - [Quick start](#quick-start)
 - [API example](#api-example)
 - [Installation and configuration](#installation-and-configuration)
+  - [FetchContent](#fetchcontent)
   - [Conan](#conan)
   - [Shared libraries](#shared-libraries)
   - [CMake options](#cmake-options)
@@ -104,6 +105,31 @@ client.close();
 ```
 
 ## Installation and configuration
+
+### FetchContent
+
+CMake projects can consume sioxx directly from its tagged Git repository
+without installing it first:
+
+```cmake
+cmake_minimum_required(VERSION 3.28)
+project(my_app LANGUAGES CXX)
+
+include(FetchContent)
+FetchContent_Declare(
+  sioxx
+  GIT_REPOSITORY https://github.com/jfayot/sioxx.git
+  GIT_TAG v0.2.0
+  GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(sioxx)
+
+add_executable(my_app main.cpp)
+target_link_libraries(my_app PRIVATE sioxx::sioxx)
+```
+
+The release tag keeps builds reproducible. sioxx fetches Boost and
+nlohmann-json by default; OpenSSL must be available on the system.
 
 ### Conan
 

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Additions :tada:
 
+- Added a tagged CMake `FetchContent` example for consuming sioxx directly
+  without installing it first.
 - Added an optional Qt Widgets chat example demonstrating safe GUI-thread
   dispatch, namespace authentication, events, acknowledgements, reconnection,
   HTTP polling, MessagePack, and binary payloads.
