@@ -32,7 +32,14 @@ template <typename Stream>
 void read_http_response(Stream& stream, beast::flat_buffer& buffer,
                         http::response_parser<http::string_body>& parser)
 {
-  while (!parser.is_done()) http::read_some(stream, buffer, parser);
+  while (!parser.is_done())
+  {
+    beast::error_code ec;
+    const auto bytes_consumed = http::read_some(stream, buffer, parser, ec);
+    if (ec) throw beast::system_error(ec);
+    if (bytes_consumed == 0 && !parser.is_done())
+      throw std::runtime_error("HTTP response parser made no progress");
+  }
 }
 
 std::string base64_encode(const std::string& input)
@@ -73,7 +80,9 @@ bool base64_decode(const std::string& input, std::string& out)
     int c = input[i + 2] == '=' ? 0 : base64_value(input[i + 2]);
     int d = input[i + 3] == '=' ? 0 : base64_value(input[i + 3]);
     if (std::min({a, b, c, d}) < 0) return false;
-    unsigned value = (a << 18) | (b << 12) | (c << 6) | d;
+    const auto value =
+      (static_cast<unsigned>(a) << 18) | (static_cast<unsigned>(b) << 12) |
+      (static_cast<unsigned>(c) << 6) | static_cast<unsigned>(d);
     out += static_cast<char>((value >> 16) & 0xff);
     if (input[i + 2] != '=') out += static_cast<char>((value >> 8) & 0xff);
     if (input[i + 3] != '=') out += static_cast<char>(value & 0xff);

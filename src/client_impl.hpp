@@ -24,7 +24,7 @@ class client_impl : public std::enable_shared_from_this<client_impl>
   using error_handler = std::function<void(const std::string&)>;
   using fail_handler = std::function<void()>;
 
-  explicit client_impl(client_options options);
+  explicit client_impl(client_options&& options);
   void connect(const std::string& uri);
   void close();
   std::shared_ptr<sioxx::socket> socket(const std::string& nsp = "/",

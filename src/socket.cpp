@@ -207,7 +207,7 @@ void socket::dispatch_event(const std::string& event, message data, int ack_id)
   {
     auto weak_self = weak_from_this();
     auto sent = std::make_shared<std::atomic<bool>>(false);
-    acknowledge = [weak_self, sent, ack_id](message reply)
+    acknowledge = [weak_self, sent = std::move(sent), ack_id](message reply)
     {
       if (sent->exchange(true)) return;
       if (auto self = weak_self.lock())

@@ -1,6 +1,7 @@
 #include "url_parse.hpp"
 
 #include <stdexcept>
+#include <utility>
 
 namespace sioxx
 {
@@ -34,7 +35,7 @@ url_parts parse_ws_url(const std::string& url)
   }
   else
   {
-    p.host = authority;
+    p.host = std::move(authority);
     p.port = p.tls ? "443" : "80";
   }
   return p;

@@ -14,7 +14,8 @@
 namespace sioxx
 {
 
-client_impl::client_impl(client_options options) : options_(std::move(options))
+client_impl::client_impl(client_options&& options)
+    : options_(std::move(options))
 {
   if (options_.parser_factory)
   {
