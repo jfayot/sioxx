@@ -100,7 +100,10 @@ TEST(HttpPollingProtocol, RejectsNonBinaryAndMalformedPackets)
   EXPECT_FALSE(detail::polling_decode_binary("4hello", decoded));
   EXPECT_FALSE(detail::polling_decode_binary("b???", decoded));
   EXPECT_FALSE(detail::polling_decode_binary("b!!!!", decoded));
+  EXPECT_FALSE(detail::polling_decode_binary("b!AAA", decoded));
   EXPECT_FALSE(detail::polling_decode_binary("bA!AA", decoded));
+  EXPECT_FALSE(detail::polling_decode_binary("bAA!A", decoded));
+  EXPECT_FALSE(detail::polling_decode_binary("bAAA!", decoded));
 }
 
 TEST(HttpPollingProtocol, HandlesBase64PaddingAndEmptyPayloads)

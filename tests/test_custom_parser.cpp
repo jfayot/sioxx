@@ -2,6 +2,7 @@
 
 #include <sioxx/client.hpp>
 #include <stdexcept>
+#include <utility>
 
 using namespace sioxx;
 
@@ -42,4 +43,19 @@ TEST(CustomParser, NullFactoryResultIsRejected)
   options.parser_factory = [] { return std::unique_ptr<parser_base>{}; };
 
   EXPECT_THROW(client instance(options), std::invalid_argument);
+}
+
+TEST(CustomParser, FactoryIsUsedWithMovedOptions)
+{
+  int calls = 0;
+  client_options options;
+  options.parser_factory = [&]
+  {
+    ++calls;
+    return std::make_unique<custom_parser>();
+  };
+
+  client instance(std::move(options));
+
+  EXPECT_EQ(calls, 1);
 }

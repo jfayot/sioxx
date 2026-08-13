@@ -3,6 +3,7 @@
 #include <random>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 
 #include "client_impl.hpp"
 #include "engineio_url.hpp"
@@ -251,7 +252,13 @@ void client_impl::close()
   if (engineio_) engineio_->close();
 }
 
-client::client(client_options options)
+client::client() : client(client_options{}) {}
+
+client::client(const client_options& options) : client(client_options(options))
+{
+}
+
+client::client(client_options&& options)
     : impl_(std::make_shared<client_impl>(std::move(options)))
 {
 }

@@ -41,11 +41,20 @@ class client_impl;
 class client
 {
  public:
+  /** @brief Construct a client with default configuration. */
+  client();
+
   /**
-   * @brief Construct a client with optional configuration.
-   * @param options  Client options; defaults to an empty `client_options`.
+   * @brief Construct a client by copying configuration.
+   * @param options Client options to copy.
    */
-  explicit client(client_options options = {});
+  explicit client(const client_options& options);
+
+  /**
+   * @brief Construct a client by moving configuration.
+   * @param options Client options to move from.
+   */
+  explicit client(client_options&& options);
 
   /** @brief Destructor – cleans up the internal implementation. */
   ~client();

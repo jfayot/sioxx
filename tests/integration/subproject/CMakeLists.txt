@@ -20,11 +20,11 @@ FetchContent_Declare(
 
 FetchContent_Declare(
   nlohmann_json
-  GIT_REPOSITORY https://github.com/nlohmann/json.git
-  GIT_TAG v3.8.0
-  GIT_SHALLOW TRUE
+  URL https://github.com/nlohmann/json/releases/download/v3.8.0/include.zip
+  URL_HASH SHA256=8590fbcc2346a3eefc341935765dd57598022ada1081b425678f0da9a939a3c0
   SOURCE_SUBDIR __sioxx_no_cmake_subdir
   EXCLUDE_FROM_ALL
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 
 FetchContent_Declare(sioxx SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../..")

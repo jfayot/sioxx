@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Grouped the basic client, custom CBOR parser, and matching Socket.IO server
   under `examples/basic_client`.
 
+### Fixes :wrench:
+
+- Avoided passing the comparatively large `client_options` structure by value
+  when constructing a client while retaining efficient temporary handling.
+
 ## [0.2.0] - 2026-08-12
 
 ### Additions :tada:
