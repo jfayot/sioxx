@@ -47,9 +47,11 @@ A C++ implementation of `socket.io`'s client functionality with the following st
 
 ## Quick start
 
-**Requires:** CMake ≥ 3.28, a C++17 compiler, Boost 1.90 (asio + beast), nlohmann-json 3.12.0 and OpenSSL.
+**Requires:** CMake ≥ 3.28, a C++17 compiler, Boost ≥ 1.74.0 (asio + beast),
+nlohmann-json ≥ 3.8.0 and OpenSSL.
 
-Boost and nlohmann-json are fetched automatically with CMake's `FetchContent` unless you pass `-DSIOXX_USE_SYSTEM_BOOST=ON` and
+Boost 1.90.0 and nlohmann-json 3.12.0 are fetched automatically with CMake's
+`FetchContent` unless you pass `-DSIOXX_USE_SYSTEM_BOOST=ON` and
 `-DSIOXX_USE_SYSTEM_JSON=ON`.
 
 ```bash
@@ -130,6 +132,44 @@ target_link_libraries(my_app PRIVATE sioxx::sioxx)
 
 The release tag keeps builds reproducible. sioxx fetches Boost and
 nlohmann-json by default; OpenSSL must be available on the system.
+
+To select other supported dependency versions, declare them before sioxx.
+CMake uses the first `FetchContent_Declare()` call for each dependency:
+
+```cmake
+include(FetchContent)
+
+FetchContent_Declare(
+  Boost
+  URL https://archives.boost.org/release/1.74.0/source/boost_1_74_0.tar.bz2
+  URL_HASH SHA256=83bfc1507731a0906e387fc28b7ef5417d591429e51e788417fe9ff025e116b1
+  SOURCE_SUBDIR __sioxx_no_cmake_subdir
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+)
+
+FetchContent_Declare(
+  nlohmann_json
+  GIT_REPOSITORY https://github.com/nlohmann/json.git
+  GIT_TAG v3.8.0
+  GIT_SHALLOW TRUE
+  SOURCE_SUBDIR __sioxx_no_cmake_subdir
+  EXCLUDE_FROM_ALL
+)
+
+FetchContent_Declare(
+  sioxx
+  GIT_REPOSITORY https://github.com/jfayot/sioxx.git
+  GIT_TAG v0.2.0
+  GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(sioxx)
+
+target_link_libraries(my_app PRIVATE sioxx::sioxx)
+```
+
+The minimum supported versions are Boost 1.74.0 and nlohmann-json 3.8.0.
+Pin the selected tag or archive URL, and provide an expected hash when the
+upstream project publishes one.
 
 ### Conan
 

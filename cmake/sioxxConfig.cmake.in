@@ -8,7 +8,7 @@ if(@SIOXX_FIND_PRIVATE_LINK_DEPENDENCIES@)
 endif()
 
 if(@SIOXX_USE_SYSTEM_JSON@)
-  find_dependency(nlohmann_json 3.12.0)
+  find_dependency(nlohmann_json @SIOXX_MINIMUM_JSON_VERSION@)
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/sioxxTargets.cmake")

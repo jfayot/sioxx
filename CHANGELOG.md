@@ -7,14 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Additions :tada:
 
-- Added a tagged CMake `FetchContent` example for consuming sioxx directly
-  without installing it first.
+- Added tagged CMake `FetchContent` examples for consuming sioxx directly and
+  selecting parent-provided Boost and nlohmann-json versions.
 - Added an optional Qt Widgets chat example demonstrating safe GUI-thread
   dispatch, namespace authentication, events, acknowledgements, reconnection,
   HTTP polling, MessagePack, and binary payloads.
 
 ### Changes :construction:
 
+- Lowered the supported dependency minimums to Boost 1.74.0 and nlohmann-json
+  3.8.0 while retaining the newer default fetched versions.
 - Grouped the basic client, custom CBOR parser, and matching Socket.IO server
   under `examples/basic_client`.
 

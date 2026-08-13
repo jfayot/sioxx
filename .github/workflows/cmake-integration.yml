@@ -69,7 +69,7 @@ jobs:
           mv ../../../stage-fetched-shared ../../../relocated-stage-fetched-shared
           cmake --workflow --preset ci-fetched-shared --fresh
 
-      - name: Consume sioxx as a subproject without installation rules
+      - name: Consume sioxx with minimum FetchContent dependencies
         working-directory: tests/integration/subproject
         run: |
           cmake --workflow --preset ci-subproject --fresh

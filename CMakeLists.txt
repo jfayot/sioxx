@@ -9,6 +9,9 @@ project(
 
 include(GNUInstallDirs)
 
+set(SIOXX_MINIMUM_BOOST_VERSION 1.74.0)
+set(SIOXX_MINIMUM_JSON_VERSION 3.8.0)
+
 # ---------------------------------------------------------------------------
 # Options
 # ---------------------------------------------------------------------------
@@ -29,14 +32,14 @@ include(SioxxBuildHelpers)
 # ---------------------------------------------------------------------------
 
 if(SIOXX_USE_SYSTEM_BOOST)
-  find_package(Boost 1.90.0 REQUIRED CONFIG)
+  find_package(Boost ${SIOXX_MINIMUM_BOOST_VERSION} REQUIRED CONFIG)
   set(SIOXX_BOOST_BUILD_TARGETS Boost::headers)
 else()
   sioxx_fetch_boost(SIOXX_BOOST_BUILD_TARGETS)
 endif()
 
 if(SIOXX_USE_SYSTEM_JSON)
-  find_package(nlohmann_json 3.12.0 REQUIRED)
+  find_package(nlohmann_json ${SIOXX_MINIMUM_JSON_VERSION} REQUIRED)
 else()
   sioxx_fetch_nlohmann_json(SIOXX_VENDORED_JSON_TARGET SIOXX_VENDORED_JSON_SOURCE_DIR)
 endif()
