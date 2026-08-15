@@ -330,8 +330,7 @@ class chat_window final : public QWidget
 
   void send_file()
   {
-    if (!socket_ || !socket_->connected() || parser_->currentIndex() == 0)
-      return;
+    if (!socket_ || !socket_->connected()) return;
 
     const auto path = QFileDialog::getOpenFileName(this, "Share a small file");
     if (path.isEmpty()) return;
@@ -391,11 +390,8 @@ class chat_window final : public QWidget
 
   void update_file_button()
   {
-    file_->setEnabled(socket_ && socket_->connected() &&
-                      parser_->currentIndex() == 1);
-    file_->setToolTip(parser_->currentIndex() == 0
-                        ? "Binary attachments require MessagePack"
-                        : "Share a binary payload (maximum 1 MiB)");
+    file_->setEnabled(socket_ && socket_->connected());
+    file_->setToolTip("Share a binary payload (maximum 1 MiB)");
   }
 
   void append_system(const QString& text)

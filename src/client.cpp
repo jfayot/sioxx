@@ -234,9 +234,11 @@ std::shared_ptr<sioxx::socket> client_impl::socket(const std::string& nsp,
 
 void client_impl::send_packet(const packet& packet)
 {
-  if (!engineio_) return;
-  parser_->encode(packet, [this](const std::string& payload, bool is_binary)
-                  { engineio_->send(payload, is_binary); });
+  std::lock_guard<std::mutex> lock(send_mutex_);
+  auto engineio = engineio_;
+  if (!engineio) return;
+  parser_->encode(packet, [engineio](const std::string& payload, bool is_binary)
+                  { engineio->send(payload, is_binary); });
 }
 
 void client_impl::close()

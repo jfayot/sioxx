@@ -47,6 +47,7 @@ class client_impl : public std::enable_shared_from_this<client_impl>
   std::unique_ptr<parser_base> parser_;
   std::shared_ptr<engineio_client> engineio_;
   std::string base_uri_;
+  std::mutex send_mutex_;
   std::mutex sockets_mutex_;
   std::map<std::string, std::shared_ptr<sioxx::socket>> sockets_;
   connect_handler on_open_;

@@ -260,11 +260,12 @@ sioxx::client client(opts);
 The factory must return a non-null `std::unique_ptr<parser_base>`; otherwise
 client construction throws `std::invalid_argument`.
 
-`msgpack_parser` is implemented on top of `nlohmann::json::to_msgpack` /
-`from_msgpack`, so it needs no extra MessagePack library and — unlike the
-JSON parser — carries binary attachments natively via `nlohmann::json::binary_t`
-without the placeholder/reconstruction dance the text protocol needs for
-`BINARY_EVENT`/`BINARY_ACK` packets.
+Both built-in parsers support `nlohmann::json::binary_t` values created with
+`sioxx::binary_message()`, including values nested in arrays and objects. The
+default JSON parser uses Socket.IO's `BINARY_EVENT`/`BINARY_ACK` placeholder
+and attachment frames. `msgpack_parser` is implemented on top of
+`nlohmann::json::to_msgpack` / `from_msgpack`, so it needs no extra MessagePack
+library and carries the same values natively in one binary frame.
 
 ### Threading model
 
@@ -320,10 +321,6 @@ is available; otherwise CMake skips it without making Qt a required dependency.
 
 ## Known limitations
 
-- The JSON parser recognizes and emits the `BINARY_EVENT`/`BINARY_ACK`
-  headers but does not implement the placeholder deconstruction/
-  reconstruction scheme for multi-attachment binary payloads. Use the
-  MessagePack parser if you need binary data — it carries it natively.
 - Reconnection uses capped exponential backoff with symmetric jitter. Configure
   it with `reconnect_attempts`, `reconnect_delay`, `reconnect_delay_max`, and
   `reconnect_randomization_factor`.
@@ -375,9 +372,9 @@ The regular unit-test build does not require Node.js.
 
 The E2E suite covers WebSocket and polling connections, automatic polling
 fallback, JSON and MessagePack interoperability, acknowledgements, binary
-MessagePack payloads, routing across multiple namespaces, and WebSocket
-reconnection after an unexpected server shutdown. CI combines unit and E2E
-coverage in the report published to Codecov.
+payloads with both built-in parsers, routing across multiple namespaces, and
+WebSocket reconnection after an unexpected server shutdown. CI combines unit
+and E2E coverage in the report published to Codecov.
 
 The package compatibility configurations used by CI are captured in
 `CMakePresets.json` files at the repository root and under

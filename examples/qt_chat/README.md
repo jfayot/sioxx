@@ -8,8 +8,7 @@ applications need:
 - outgoing and incoming Socket.IO acknowledgements;
 - the catch-all event listener;
 - WebSocket or forced HTTP long-polling;
-- JSON or MessagePack parsing, including a small binary attachment in
-  MessagePack mode; and
+- JSON or MessagePack parsing, including small binary attachments; and
 - safe delivery of sioxx background-thread callbacks to Qt's GUI thread.
 
 Qt is optional. When example builds are enabled, CMake adds this target if Qt 6
@@ -33,7 +32,7 @@ pnpm --dir examples/qt_chat start
 Then run `build-qt/sioxx_qt_chat`, keep the default JSON parser, choose a
 display name, and connect. Open a second client to chat between them.
 
-For MessagePack and binary file sharing, start the server with
-`pnpm --dir examples/qt_chat start:msgpack` and select MessagePack in every
-client before connecting. The JSON and MessagePack parsers cannot be mixed on
-one server.
+Binary file sharing works with either parser. To use MessagePack, start the
+server with `pnpm --dir examples/qt_chat start:msgpack` and select MessagePack
+in every client before connecting. The JSON and MessagePack parsers cannot be
+mixed on one server.

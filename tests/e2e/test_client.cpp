@@ -599,6 +599,111 @@ TEST(E2E, ExchangesMessagePackEventsAcknowledgementsAndBinary)
   client.close();
 }
 
+TEST(E2E, ExchangesJsonBinaryEventsAndAcknowledgements)
+{
+  auto connected = std::make_shared<completion_signal>();
+  auto acknowledgement = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client;
+  auto socket = client.socket("/e2e");
+
+  configure_failure_reporting(client, error);
+  socket->on_connect([connected] { connected->set(); });
+  client.connect(server_url());
+
+  ASSERT_TRUE(connected->wait_for(5s))
+    << "connection error: " << error->value();
+
+  const auto first =
+    sioxx::binary_message(std::vector<uint8_t>{0x00, 0x7f, 0xff});
+  const auto second = sioxx::binary_message(std::vector<uint8_t>{0x01, 0x02});
+  socket->emit("json_binary_echo_with_ack",
+               sioxx::json::array({first, sioxx::json{{"nested", {second}}}}),
+               [acknowledgement](sioxx::message data)
+               { acknowledgement->set(std::move(data)); });
+
+  ASSERT_TRUE(acknowledgement->wait_for(5s));
+  const auto reply = acknowledgement->value();
+  ASSERT_EQ(reply.size(), 2);
+  EXPECT_EQ(reply[0], first);
+  EXPECT_EQ(reply[1]["nested"][0], second);
+
+  client.close();
+}
+
+TEST(E2E, ExchangesJsonBinaryEventWithBinaryAcknowledgementReply)
+{
+  auto connected = std::make_shared<completion_signal>();
+  auto request = std::make_shared<async_value<sioxx::message>>();
+  auto reply_received = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client;
+  auto socket = client.socket("/e2e");
+  const auto first =
+    sioxx::binary_message(std::vector<uint8_t>{0x00, 0x7f, 0xff});
+  const auto second = sioxx::binary_message(std::vector<uint8_t>{0x01, 0x02});
+  const auto reply_binary =
+    sioxx::binary_message(std::vector<uint8_t>{0xaa, 0xbb});
+
+  configure_failure_reporting(client, error);
+  socket->on_connect([connected] { connected->set(); });
+  socket->on("json_binary_ack_request",
+             [request, reply_binary](const std::string&, sioxx::message data,
+                                     sioxx::socket::ack_callback acknowledge)
+             {
+               request->set(std::move(data));
+               acknowledge(sioxx::json::array(
+                 {reply_binary, sioxx::json{{"nested", {reply_binary}}}}));
+             });
+  socket->on("json_binary_ack_reply_received",
+             [reply_received](const std::string&, sioxx::message data)
+             { reply_received->set(std::move(data)); });
+
+  client.connect(server_url());
+
+  ASSERT_TRUE(connected->wait_for(5s))
+    << "connection error: " << error->value();
+  ASSERT_TRUE(request->wait_for(5s));
+  EXPECT_EQ(request->value()[0], first);
+  EXPECT_EQ(request->value()[1]["nested"][0], second);
+  ASSERT_TRUE(reply_received->wait_for(5s));
+  EXPECT_EQ(reply_received->value()[0], reply_binary);
+  EXPECT_EQ(reply_received->value()[1]["nested"][0], reply_binary);
+
+  client.close();
+}
+
+TEST(E2E, ExchangesJsonBinaryAttachmentsWithHttpPolling)
+{
+  sioxx::client_options options;
+  options.force_http_polling = true;
+
+  auto connected = std::make_shared<completion_signal>();
+  auto acknowledgement = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client(options);
+  auto socket = client.socket("/e2e");
+
+  configure_failure_reporting(client, error);
+  socket->on_connect([connected] { connected->set(); });
+  client.connect(server_url("SIOXX_E2E_POLLING_ONLY_URL"));
+
+  ASSERT_TRUE(connected->wait_for(5s))
+    << "connection error: " << error->value();
+
+  const auto binary =
+    sioxx::binary_message(std::vector<uint8_t>{0x00, 0x7f, 0xff});
+  socket->emit("json_binary_echo_with_ack", sioxx::json::array({binary}),
+               [acknowledgement](sioxx::message data)
+               { acknowledgement->set(std::move(data)); });
+
+  ASSERT_TRUE(acknowledgement->wait_for(5s));
+  ASSERT_EQ(acknowledgement->value().size(), 1);
+  EXPECT_EQ(acknowledgement->value()[0], binary);
+
+  client.close();
+}
+
 TEST(E2E, RoutesEventsAndAcknowledgementsAcrossNamespaces)
 {
   auto a_connected = std::make_shared<completion_signal>();

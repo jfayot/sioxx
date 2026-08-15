@@ -72,11 +72,69 @@ contains an acknowledgement ID, and sends at most one response:
            }
        });
 
-Choose MessagePack
-------------------
+Send and receive binary attachments
+-----------------------------------
 
-The server and client parser must match. Use MessagePack for binary-heavy
-payloads or when the server uses ``socket.io-msgpack-parser``:
+Create binary values with ``sioxx::binary_message()`` and place them at any
+depth in an event payload. The default JSON parser automatically emits the
+Socket.IO placeholder header followed by the binary attachment frames; the
+application does not need to construct ``BINARY_EVENT`` packets itself:
+
+.. code-block:: cpp
+
+   auto image = sioxx::binary_message(
+       std::vector<std::uint8_t>{0x89, 0x50, 0x4e, 0x47});
+
+   chat->emit(
+       "upload",
+       sioxx::json{{"name", "avatar.png"}, {"bytes", image}},
+       [](sioxx::message reply) {
+           std::cout << "upload reply: " << reply.dump() << '\n';
+       });
+
+Listener payloads remain arrays of Socket.IO arguments. Check
+``is_binary()`` before reading a value with ``get_binary()``:
+
+.. code-block:: cpp
+
+   chat->on("download", [](const std::string&, sioxx::message arguments) {
+       if (!arguments.is_array() || arguments.empty()) return;
+
+       const auto& file = arguments.at(0);
+       if (!file.is_object() || !file.contains("bytes")) return;
+
+       const auto& value = file.at("bytes");
+       if (!value.is_binary()) return;
+
+       const auto& bytes = value.get_binary();
+       std::cout << "received " << bytes.size() << " bytes\n";
+   });
+
+Binary values also work in acknowledgements. For example, an
+acknowledgement-aware listener can return a binary preview:
+
+.. code-block:: cpp
+
+   chat->on(
+       "request_preview",
+       [](const std::string&, sioxx::message,
+          sioxx::socket::ack_callback acknowledge) {
+           if (!acknowledge) return;
+           acknowledge(sioxx::json::array({sioxx::binary_message(
+               std::vector<std::uint8_t>{0x01, 0x02, 0x03})}));
+       });
+
+The same API works over WebSocket and HTTP long-polling, with nested or
+multiple attachments, and with either built-in parser.
+
+Select the wire parser
+----------------------
+
+The default JSON parser interoperates with a standard Socket.IO server and
+supports binary attachments as shown above. The server and client parser must
+always match. Select MessagePack when the server uses
+``socket.io-msgpack-parser`` or when carrying binary-heavy payloads in a single
+MessagePack frame:
 
 .. code-block:: cpp
 
@@ -199,9 +257,9 @@ Build the Qt chat example
 
 An optional Qt Widgets chat client demonstrates a typical GUI integration,
 including namespace authentication, reconnects, event acknowledgements,
-catch-all listeners, transport and parser selection, and MessagePack binary
-attachments. Most importantly, it queues sioxx's background-thread callbacks
-onto Qt's GUI thread before touching widgets.
+catch-all listeners, transport and parser selection, and binary attachments
+with either JSON or MessagePack. Most importantly, it queues sioxx's
+background-thread callbacks onto Qt's GUI thread before touching widgets.
 
 With Qt 6 or Qt 5 installed, enable the examples and build the target. CMake
 skips this target without error when Qt Widgets is unavailable:
@@ -216,5 +274,5 @@ skips this target without error when Qt Widgets is unavailable:
    $ ./build-qt/sioxx_qt_chat
 
 See the `Qt chat README
-<https://github.com/jfayot/sioxx/tree/main/examples/qt_chat>`_ for MessagePack
-and binary-sharing instructions.
+<https://github.com/jfayot/sioxx/tree/main/examples/qt_chat>`_ for parser and
+binary-sharing instructions.

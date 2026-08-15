@@ -3,6 +3,8 @@
 
 #include <atomic>
 #include <boost/beast/http.hpp>
+#include <condition_variable>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -41,13 +43,14 @@ class http_polling_transport final
   };
 
   void run();
+  void run_writes();
   void post(std::string payload, bool is_binary);
   response request(boost::beast::http::verb method, const std::string& target,
                    const std::string& body = {});
   std::string poll_target() const;
   void deliver(const std::string& body);
   void fail(const std::string& message);
-  void join_write_threads();
+  void join_write_thread();
 
   url_parts url_;
   std::string sid_;
@@ -56,8 +59,10 @@ class http_polling_transport final
   std::atomic<bool> closing_{false};
   std::thread poll_thread_;
   std::thread close_thread_;
+  std::thread write_thread_;
   std::mutex mutex_;
-  std::vector<std::thread> write_threads_;
+  std::condition_variable write_condition_;
+  std::deque<std::pair<std::string, bool>> write_queue_;
 };
 
 }  // namespace sioxx
