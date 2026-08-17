@@ -248,6 +248,8 @@ fixed when a ``sioxx::client`` is constructed:
      - ``client.socket("/", auth)`` before ``connect``
    * - namespace authentication passed when obtaining a socket
      - ``client.socket("/private", auth)``
+   * - ``set_proxy_basic_auth(uri, username, password)``
+     - set ``options.proxy`` to a ``sioxx::proxy_options`` value
 
 For example:
 
@@ -336,8 +338,7 @@ uses one of these APIs:
 * Reconnecting/reconnect listeners and built-in log-level setters have no
   direct equivalents. Use the open, close, fail, and error listeners with the
   application's logging.
-* Proxy configuration and an application-supplied ``asio::io_context`` are not
-  currently exposed.
+* An application-supplied ``asio::io_context`` is not currently exposed.
 * ``sioxx`` can use HTTP long-polling and automatically falls back to it when
   the initial WebSocket connection fails. Set
   ``options.force_http_polling = true`` when polling must be used from the

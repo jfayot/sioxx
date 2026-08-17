@@ -24,12 +24,9 @@ namespace
 constexpr std::uint64_t max_http_response_body_size = 8 * 1024 * 1024;
 constexpr std::size_t max_http_read_buffer_size = 64 * 1024;
 
-constexpr char base64[] =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-template <typename Stream>
+template <typename Stream, typename Body>
 void read_http_response(Stream& stream, beast::flat_buffer& buffer,
-                        http::response_parser<http::string_body>& parser)
+                        http::response_parser<Body>& parser)
 {
   while (!parser.is_done())
   {
@@ -41,22 +38,26 @@ void read_http_response(Stream& stream, beast::flat_buffer& buffer,
   }
 }
 
-std::string base64_encode(const std::string& input)
+void establish_proxy_tunnel(beast::tcp_stream& stream,
+                            const url_parts& destination,
+                            const detail::proxy_config& proxy)
 {
-  std::string out;
-  out.reserve((input.size() + 2) / 3 * 4);
-  for (size_t i = 0; i < input.size(); i += 3)
-  {
-    unsigned value = static_cast<unsigned char>(input[i]) << 16;
-    if (i + 1 < input.size())
-      value |= static_cast<unsigned char>(input[i + 1]) << 8;
-    if (i + 2 < input.size()) value |= static_cast<unsigned char>(input[i + 2]);
-    out += base64[(value >> 18) & 63];
-    out += base64[(value >> 12) & 63];
-    out += i + 1 < input.size() ? base64[(value >> 6) & 63] : '=';
-    out += i + 2 < input.size() ? base64[value & 63] : '=';
-  }
-  return out;
+  const auto destination_authority = detail::connect_authority(destination);
+  http::request<http::empty_body> request{http::verb::connect,
+                                          destination_authority, 11};
+  request.set(http::field::host, destination_authority);
+  request.set(http::field::user_agent, "sioxx-client");
+  if (!proxy.authorization.empty())
+    request.set(http::field::proxy_authorization, proxy.authorization);
+  http::write(stream, request);
+
+  beast::flat_buffer buffer{max_http_read_buffer_size};
+  http::response_parser<http::empty_body> parser;
+  parser.skip(true);
+  read_http_response(stream, buffer, parser);
+  if (parser.get().result_int() / 100 != 2)
+    throw std::runtime_error("proxy CONNECT returned HTTP " +
+                             std::to_string(parser.get().result_int()));
 }
 
 int base64_value(char c)
@@ -92,7 +93,7 @@ bool base64_decode(const std::string& input, std::string& out)
 
 std::string detail::polling_encode_binary(const std::string& payload)
 {
-  return "b" + base64_encode(payload);
+  return "b" + detail::base64_encode(payload);
 }
 
 bool detail::polling_decode_binary(const std::string& packet,
@@ -148,6 +149,13 @@ void http_polling_transport::set_extra_headers(
 void http_polling_transport::set_verify_tls(bool verify)
 {
   verify_tls_ = verify;
+}
+
+void http_polling_transport::set_proxy(const std::string& uri,
+                                       const std::string& username,
+                                       const std::string& password)
+{
+  proxy_ = detail::make_proxy_config(uri, username, password);
 }
 
 void http_polling_transport::connect(const std::string& url)
@@ -234,11 +242,16 @@ http_polling_transport::response http_polling_transport::request(
 {
   net::io_context ioc;
   tcp::resolver resolver(ioc);
-  auto endpoints = resolver.resolve(url_.host, url_.port);
-  http::request<http::string_body> req{method, target, 11};
-  req.set(http::field::host, url_.host);
+  const auto& endpoint = proxy_ ? proxy_->endpoint : url_;
+  auto endpoints = resolver.resolve(endpoint.host, endpoint.port);
+  const auto request_target =
+    proxy_ && !url_.tls ? detail::absolute_http_target(url_, target) : target;
+  http::request<http::string_body> req{method, request_target, 11};
+  req.set(http::field::host, detail::authority(url_));
   req.set(http::field::user_agent, "sioxx-client");
   req.set(http::field::content_type, "text/plain; charset=UTF-8");
+  if (proxy_ && !url_.tls && !proxy_->authorization.empty())
+    req.set(http::field::proxy_authorization, proxy_->authorization);
   for (const auto& [key, value] : extra_headers_) req.set(key, value);
   req.body() = body;
   req.prepare_payload();
@@ -265,6 +278,8 @@ http_polling_transport::response http_polling_transport::request(
     if (!SSL_set_tlsext_host_name(stream.native_handle(), url_.host.c_str()))
       throw std::runtime_error("unable to set TLS server name");
     beast::get_lowest_layer(stream).connect(endpoints);
+    if (proxy_)
+      establish_proxy_tunnel(beast::get_lowest_layer(stream), url_, *proxy_);
     stream.handshake(ssl::stream_base::client);
     http::write(stream, req);
     read_http_response(stream, buffer, parser);

@@ -3,6 +3,7 @@
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl/error.hpp>
+#include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
 #include <memory>
 #include <string>
@@ -50,6 +51,19 @@ void websocket_transport::set_verify_tls(bool verify)
   ssl_ctx_.set_verify_mode(verify ? ssl::verify_peer : ssl::verify_none);
 }
 
+void websocket_transport::set_proxy(const std::string& uri,
+                                    const std::string& username,
+                                    const std::string& password)
+{
+  proxy_ = detail::make_proxy_config(uri, username, password);
+}
+
+void websocket_transport::fail(const std::string& what)
+{
+  state_ = transport_state::closed;
+  if (on_error_) on_error_(what);
+}
+
 void websocket_transport::fail(const std::string& what, beast::error_code ec)
 {
   state_ = transport_state::closed;
@@ -75,8 +89,9 @@ void websocket_transport::connect(const std::string& url)
 void websocket_transport::run_plain()
 {
   auto self = shared_from_this();
+  const auto& endpoint = proxy_ ? proxy_->endpoint : url_;
   resolver_.async_resolve(
-    url_.host, url_.port,
+    endpoint.host, endpoint.port,
     [this, self = std::move(self)](beast::error_code ec,
                                    const tcp::resolver::results_type& results)
     {
@@ -87,35 +102,19 @@ void websocket_transport::run_plain()
       beast::get_lowest_layer(*ws_plain_)
         .expires_after(std::chrono::seconds(15));
       beast::get_lowest_layer(*ws_plain_)
-        .async_connect(
-          results,
-          [this, self = std::move(self)](
-            beast::error_code ec2,
-            const tcp::resolver::results_type::endpoint_type&)
-          {
-            if (ec2) return fail("connect", ec2);
-            beast::get_lowest_layer(*ws_plain_).expires_never();
-            ws_plain_->set_option(websocket::stream_base::timeout::suggested(
-              beast::role_type::client));
-            ws_plain_->set_option(websocket::stream_base::decorator(
-              [this](websocket::request_type& req)
-              {
-                req.set(
-                  boost::beast::http::field::user_agent,
-                  std::string(BOOST_BEAST_VERSION_STRING) + " sioxx-client");
-                for (auto& [k, v] : extra_headers_) req.set(k, v);
-              }));
-            ws_plain_->async_handshake(
-              url_.host, url_.target,
-              [this, self = std::move(self)](beast::error_code ec3)
-              {
-                if (ec3) return fail("handshake", ec3);
-                ws_plain_->binary(true);
-                state_ = transport_state::open;
-                if (on_open_) on_open_();
-                do_read_plain();
-              });
-          });
+        .async_connect(results,
+                       [this, self = std::move(self)](
+                         beast::error_code ec2,
+                         const tcp::resolver::results_type::endpoint_type&)
+                       {
+                         if (ec2) return fail("connect", ec2);
+                         beast::get_lowest_layer(*ws_plain_).expires_never();
+                         if (proxy_)
+                           establish_proxy_tunnel([this, self = std::move(self)]
+                                                  { start_plain_handshake(); });
+                         else
+                           start_plain_handshake();
+                       });
     });
   ioc_.run();
 }
@@ -125,8 +124,9 @@ void websocket_transport::run_tls()
   auto self = shared_from_this();
   if (!verify_tls_) ssl_ctx_.set_verify_mode(ssl::verify_none);
 
+  const auto& endpoint = proxy_ ? proxy_->endpoint : url_;
   resolver_.async_resolve(
-    url_.host, url_.port,
+    endpoint.host, endpoint.port,
     [this, self = std::move(self)](beast::error_code ec,
                                    const tcp::resolver::results_type& results)
     {
@@ -152,36 +152,108 @@ void websocket_transport::run_tls()
           const tcp::resolver::results_type::endpoint_type&)
         {
           if (ec2) return fail("connect", ec2);
-          ws_tls_->next_layer().async_handshake(
-            ssl::stream_base::client,
-            [this, self = std::move(self)](beast::error_code ec3)
-            {
-              if (ec3) return fail("ssl_handshake", ec3);
-              beast::get_lowest_layer(*ws_tls_).expires_never();
-              ws_tls_->set_option(websocket::stream_base::timeout::suggested(
-                beast::role_type::client));
-              ws_tls_->set_option(websocket::stream_base::decorator(
-                [this](websocket::request_type& req)
-                {
-                  req.set(
-                    boost::beast::http::field::user_agent,
-                    std::string(BOOST_BEAST_VERSION_STRING) + " sioxx-client");
-                  for (auto& [k, v] : extra_headers_) req.set(k, v);
-                }));
-              ws_tls_->async_handshake(
-                url_.host, url_.target,
-                [this, self = std::move(self)](beast::error_code ec4)
-                {
-                  if (ec4) return fail("handshake", ec4);
-                  ws_tls_->binary(true);
-                  state_ = transport_state::open;
-                  if (on_open_) on_open_();
-                  do_read_tls();
-                });
-            });
+          if (proxy_)
+            establish_proxy_tunnel([this, self = std::move(self)]
+                                   { start_tls_handshake(); });
+          else
+            start_tls_handshake();
         });
     });
   ioc_.run();
+}
+
+void websocket_transport::establish_proxy_tunnel(
+  std::function<void()> continuation)
+{
+  namespace http = boost::beast::http;
+  const auto destination = detail::connect_authority(url_);
+  proxy_request_ = {http::verb::connect, destination, 11};
+  proxy_request_.set(http::field::host, destination);
+  proxy_request_.set(http::field::user_agent, "sioxx-client");
+  if (!proxy_->authorization.empty())
+    proxy_request_.set(http::field::proxy_authorization, proxy_->authorization);
+  proxy_response_.skip(true);
+
+  auto& stream = url_.tls ? beast::get_lowest_layer(*ws_tls_)
+                          : beast::get_lowest_layer(*ws_plain_);
+  auto self = shared_from_this();
+  http::async_write(
+    stream, proxy_request_,
+    [this, self = std::move(self), continuation = std::move(continuation)](
+      beast::error_code ec, std::size_t) mutable
+    {
+      if (ec) return fail("proxy write", ec);
+      auto& read_stream = url_.tls ? beast::get_lowest_layer(*ws_tls_)
+                                   : beast::get_lowest_layer(*ws_plain_);
+      http::async_read(
+        read_stream, proxy_buffer_, proxy_response_,
+        [this, self = std::move(self), continuation = std::move(continuation)](
+          beast::error_code read_ec, std::size_t) mutable
+        {
+          if (read_ec) return fail("proxy read", read_ec);
+          const auto status = proxy_response_.get().result_int();
+          if (status / 100 != 2)
+            return fail("proxy CONNECT returned HTTP " +
+                        std::to_string(status));
+          continuation();
+        });
+    });
+}
+
+void websocket_transport::start_plain_handshake()
+{
+  ws_plain_->set_option(
+    websocket::stream_base::timeout::suggested(beast::role_type::client));
+  ws_plain_->set_option(websocket::stream_base::decorator(
+    [this](websocket::request_type& req)
+    {
+      req.set(boost::beast::http::field::user_agent,
+              std::string(BOOST_BEAST_VERSION_STRING) + " sioxx-client");
+      for (auto& [k, v] : extra_headers_) req.set(k, v);
+    }));
+  auto self = shared_from_this();
+  ws_plain_->async_handshake(
+    url_.host, url_.target,
+    [this, self = std::move(self)](beast::error_code ec)
+    {
+      if (ec) return fail("handshake", ec);
+      ws_plain_->binary(true);
+      state_ = transport_state::open;
+      if (on_open_) on_open_();
+      do_read_plain();
+    });
+}
+
+void websocket_transport::start_tls_handshake()
+{
+  auto self = shared_from_this();
+  ws_tls_->next_layer().async_handshake(
+    ssl::stream_base::client,
+    [this, self = std::move(self)](beast::error_code ec)
+    {
+      if (ec) return fail("ssl_handshake", ec);
+      beast::get_lowest_layer(*ws_tls_).expires_never();
+      ws_tls_->set_option(
+        websocket::stream_base::timeout::suggested(beast::role_type::client));
+      ws_tls_->set_option(websocket::stream_base::decorator(
+        [this](websocket::request_type& req)
+        {
+          req.set(boost::beast::http::field::user_agent,
+                  std::string(BOOST_BEAST_VERSION_STRING) + " sioxx-client");
+          for (auto& [k, v] : extra_headers_) req.set(k, v);
+        }));
+      auto handshake_self = shared_from_this();
+      ws_tls_->async_handshake(
+        url_.host, url_.target,
+        [this, self = std::move(handshake_self)](beast::error_code ws_ec)
+        {
+          if (ws_ec) return fail("handshake", ws_ec);
+          ws_tls_->binary(true);
+          state_ = transport_state::open;
+          if (on_open_) on_open_();
+          do_read_tls();
+        });
+    });
 }
 
 void websocket_transport::do_read_plain()

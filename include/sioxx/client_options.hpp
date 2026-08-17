@@ -10,6 +10,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -34,10 +35,30 @@ enum class parser_kind
 };
 
 /**
+ * @struct proxy_options
+ * @brief Configuration for an HTTP proxy used by a sioxx client.
+ *
+ * The username and password are optional. When either is non-empty, sioxx
+ * sends HTTP Basic credentials to the proxy. Proxy credentials are not
+ * included in requests sent through an established tunnel.
+ */
+struct proxy_options
+{
+  /** @brief HTTP proxy URI, for example `http://proxy.example.com:8080`. */
+  std::string uri;
+
+  /** @brief Optional username for HTTP proxy Basic authentication. */
+  std::string username;
+
+  /** @brief Optional password for HTTP proxy Basic authentication. */
+  std::string password;
+};
+
+/**
  * @struct client_options
  * @brief All tunable settings for a `sioxx::client`.
  *
- * The struct is deliberately POD‑friendly; all members have sensible defaults.
+ * The struct uses public data members with sensible defaults.
  *
  * @note When `parser_factory` is provided it takes precedence over the
  *       `parser` enum, allowing custom parser implementations.
@@ -64,6 +85,9 @@ struct client_options
 
   /** @brief Extra HTTP/WebSocket headers to send on the upgrade request. */
   std::vector<std::pair<std::string, std::string>> extra_headers;
+
+  /** @brief Optional HTTP proxy and its Basic authentication credentials. */
+  std::optional<proxy_options> proxy;
 
   /** @brief Engine.IO endpoint path (default: `/socket.io/`).
    *

@@ -15,16 +15,20 @@ add_executable(
   test_message.cpp
   test_engineio_url.cpp
   test_url_parse.cpp
+  test_proxy.cpp
   test_json_parser.cpp
   test_msgpack_parser.cpp
   test_custom_parser.cpp
   test_socket.cpp
   test_engineio_client.cpp
   test_http_polling_transport.cpp
+  test_websocket_transport.cpp
   test_reconnection.cpp
 )
 
-target_link_libraries(sioxx_tests PRIVATE sioxx::sioxx GTest::gtest_main)
+target_link_libraries(
+  sioxx_tests PRIVATE sioxx::sioxx GTest::gtest_main OpenSSL::SSL
+)
 
 target_include_directories(
   sioxx_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}" "${PROJECT_SOURCE_DIR}/src"

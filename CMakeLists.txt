@@ -56,6 +56,7 @@ add_library(
   sioxx
   src/engineio_url.cpp
   src/url_parse.cpp
+  src/proxy.cpp
   src/json_parser.cpp
   src/msgpack_parser.cpp
   src/websocket_transport.cpp

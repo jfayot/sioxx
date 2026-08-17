@@ -176,6 +176,25 @@ Add authentication or application headers to the handshake with
    // Development with a self-signed certificate only:
    // options.verify_tls = false;
 
+Connect through an HTTP proxy
+-----------------------------
+
+Set an HTTP proxy for WebSocket and polling connections. Optional Basic
+credentials authenticate with the proxy and are not forwarded to the
+Socket.IO server:
+
+.. code-block:: cpp
+
+   sioxx::client_options options;
+   options.proxy = sioxx::proxy_options{
+       "http://proxy.example.com:8080", "user", "password"};
+
+   sioxx::client client(options);
+   client.connect("wss://example.com");
+
+Only HTTP proxy endpoints are supported. Secure origin connections are
+tunnelled through the proxy before TLS is established with the origin.
+
 Authenticate a namespace and customize the endpoint
 ---------------------------------------------------
 
