@@ -48,27 +48,38 @@ bool parse_nonnegative_int(const std::string& value, size_t begin, size_t end,
   return true;
 }
 
+bool is_binary_placeholder(const json& value)
+{
+  return value.is_object() && value.contains("_placeholder") &&
+         value["_placeholder"].is_boolean() &&
+         value["_placeholder"].get<bool>();
+}
+
+bool read_placeholder_index(const json& value, std::uint64_t& index)
+{
+  if (!value.contains("num")) return false;
+
+  const auto& number = value["num"];
+  if (number.is_number_unsigned())
+  {
+    index = number.get<std::uint64_t>();
+    return true;
+  }
+  if (!number.is_number_integer()) return false;
+
+  const auto signed_index = number.get<std::int64_t>();
+  if (signed_index < 0) return false;
+  index = static_cast<std::uint64_t>(signed_index);
+  return true;
+}
+
 bool collect_placeholder_indices(const json& value, int attachment_count,
                                  std::set<std::uint64_t>& indices)
 {
-  if (value.is_object() && value.contains("_placeholder") &&
-      value["_placeholder"].is_boolean() && value["_placeholder"].get<bool>())
+  if (is_binary_placeholder(value))
   {
-    if (!value.contains("num") || (!value["num"].is_number_integer() &&
-                                   !value["num"].is_number_unsigned()))
-      return false;
-
-    std::uint64_t index;
-    if (value["num"].is_number_unsigned())
-    {
-      index = value["num"].get<std::uint64_t>();
-    }
-    else
-    {
-      const auto signed_index = value["num"].get<std::int64_t>();
-      if (signed_index < 0) return false;
-      index = static_cast<std::uint64_t>(signed_index);
-    }
+    std::uint64_t index = 0;
+    if (!read_placeholder_index(value, index)) return false;
     if (index >= static_cast<std::uint64_t>(attachment_count)) return false;
     return indices.insert(index).second;
   }
@@ -92,8 +103,7 @@ bool has_valid_placeholders(const json& data, int attachment_count)
 void reconstruct_binary(json& value,
                         const std::vector<std::string>& attachments)
 {
-  if (value.is_object() && value.contains("_placeholder") &&
-      value["_placeholder"].is_boolean() && value["_placeholder"].get<bool>())
+  if (is_binary_placeholder(value))
   {
     const auto index = value["num"].get<size_t>();
     std::vector<std::uint8_t> bytes;
