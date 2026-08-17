@@ -20,6 +20,7 @@ add_executable(
   test_custom_parser.cpp
   test_socket.cpp
   test_engineio_client.cpp
+  test_http_polling_transport.cpp
   test_reconnection.cpp
 )
 

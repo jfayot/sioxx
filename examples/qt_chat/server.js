@@ -57,7 +57,7 @@ chat.on("connection", (socket) => {
 
   socket.on("attachment", (payload, acknowledge) => {
     const bytes = payload?.bytes;
-    if (useMsgpack && typeof payload?.name === "string" && bytes instanceof Uint8Array) {
+    if (typeof payload?.name === "string" && bytes instanceof Uint8Array) {
       const buffer = Buffer.from(bytes);
       chat.emit("attachment", {
         username,
@@ -73,7 +73,7 @@ chat.on("connection", (socket) => {
     if (acknowledge) {
       acknowledge({
         status: "rejected",
-        reason: "use MessagePack for binary data",
+        reason: "invalid attachment",
       });
     }
   });

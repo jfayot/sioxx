@@ -49,8 +49,9 @@ template <typename... Args> inline message_list make_args(Args&&... args)
 /**
  * @brief Construct a binary payload from raw memory.
  *
- * The returned JSON value holds a `binary_t` which maps directly onto
- * MessagePack’s `bin` type when using the `msgpack` parser.
+ * The returned JSON value holds a `binary_t`. The default JSON parser sends it
+ * as a Socket.IO binary attachment, while the MessagePack parser maps it onto
+ * MessagePack's `bin` type.
  *
  * @param data  Pointer to the first byte.
  * @param len   Number of bytes.

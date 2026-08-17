@@ -42,7 +42,8 @@ Features
 * Engine.IO v4 and Socket.IO namespace support.
 * WebSocket and secure WebSocket transports through Boost.Beast and OpenSSL.
 * HTTP long-polling fallback, or a polling-only mode when required.
-* JSON and MessagePack wire protocols selectable for each client.
+* JSON and MessagePack wire protocols selectable for each client, both with
+  nested binary payload support.
 * Custom parser strategies for other wire formats.
 * Event listeners, event emission, acknowledgements, and lifecycle callbacks.
 * Namespace authentication, custom Engine.IO paths, and handshake query
@@ -73,8 +74,6 @@ specific releases or delivery dates.
 Client protocol completeness
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* Complete support for binary attachments with the default JSON parser,
-  including ``BINARY_EVENT`` and ``BINARY_ACK`` packet reconstruction.
 * Upgrade an established HTTP long-polling connection to WebSocket.
 * Try alternative transports when the preferred transport cannot connect.
 * Investigate WebTransport support once there is sufficient demand and suitable

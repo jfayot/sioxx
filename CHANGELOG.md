@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Additions :tada:
 
+- Added complete binary attachment support to the default JSON parser,
+  including nested and multiple `BINARY_EVENT` and `BINARY_ACK` attachments
+  over WebSocket and HTTP long-polling.
 - Added tagged CMake `FetchContent` examples for consuming sioxx directly and
   selecting parent-provided Boost and nlohmann-json versions.
 - Added an optional Qt Widgets chat example demonstrating safe GUI-thread
@@ -22,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes :wrench:
 
+- Serialized HTTP long-polling writes so multi-frame binary packets and
+  back-to-back events preserve their wire order.
 - Avoided passing the comparatively large `client_options` structure by value
   when constructing a client while retaining efficient temporary handling.
 

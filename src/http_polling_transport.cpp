@@ -127,7 +127,8 @@ http_polling_transport::~http_polling_transport()
   // callbacks from this noexcept destructor.
   closing_ = true;
   state_ = transport_state::closed;
-  join_write_threads();
+  write_condition_.notify_all();
+  join_write_thread();
   if (poll_thread_.joinable())
   {
     if (poll_thread_.get_id() == std::this_thread::get_id())
@@ -154,6 +155,7 @@ void http_polling_transport::connect(const std::string& url)
   url_ = parse_ws_url(url);
   closing_ = false;
   state_ = transport_state::connecting;
+  write_thread_ = std::thread([this] { run_writes(); });
   poll_thread_ = std::thread([self = shared_from_this()] { self->run(); });
 }
 
@@ -187,10 +189,29 @@ void http_polling_transport::run()
 
 void http_polling_transport::send(const std::string& payload, bool is_binary)
 {
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (closing_ || state_ != transport_state::open) return;
-  write_threads_.emplace_back([self = shared_from_this(), payload, is_binary]
-                              { self->post(payload, is_binary); });
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (closing_ || state_ != transport_state::open) return;
+    write_queue_.emplace_back(payload, is_binary);
+  }
+  write_condition_.notify_one();
+}
+
+void http_polling_transport::run_writes()
+{
+  while (true)
+  {
+    std::pair<std::string, bool> write;
+    {
+      std::unique_lock<std::mutex> lock(mutex_);
+      write_condition_.wait(
+        lock, [this] { return closing_ || !write_queue_.empty(); });
+      if (write_queue_.empty()) return;
+      write = std::move(write_queue_.front());
+      write_queue_.pop_front();
+    }
+    post(std::move(write.first), write.second);
+  }
 }
 
 void http_polling_transport::post(std::string payload, bool is_binary)
@@ -290,7 +311,8 @@ void http_polling_transport::close()
 {
   if (closing_.exchange(true)) return;
   state_ = transport_state::closed;
-  join_write_threads();
+  write_condition_.notify_all();
+  join_write_thread();
   // Ending the Engine.IO session causes a pending poll to return promptly.
   if (!sid_.empty())
   {
@@ -303,26 +325,24 @@ void http_polling_transport::close()
   if (on_close_) on_close_("closed");
 }
 
-void http_polling_transport::join_write_threads()
+void http_polling_transport::join_write_thread()
 {
-  std::vector<std::thread> threads;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    threads.swap(write_threads_);
-  }
-  for (auto& thread : threads)
-  {
-    if (!thread.joinable()) continue;
-    if (thread.get_id() == std::this_thread::get_id())
-      thread.detach();
-    else
-      thread.join();
-  }
+  if (!write_thread_.joinable()) return;
+  if (write_thread_.get_id() == std::this_thread::get_id())
+    write_thread_.detach();
+  else
+    write_thread_.join();
 }
 
 void http_polling_transport::fail(const std::string& message)
 {
+  if (closing_.exchange(true)) return;
   state_ = transport_state::closed;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    write_queue_.clear();
+  }
+  write_condition_.notify_all();
   if (on_error_) on_error_(message);
   if (on_close_) on_close_(message);
 }

@@ -182,6 +182,11 @@ arguments. Passing a scalar or object sends one argument. For example,
 ``emit("position", sioxx::json::array({10, 20}))`` sends two arguments, while
 ``emit("position", sioxx::json{{"x", 10}, {"y", 20}})`` sends one object.
 
+Create binary values with ``sioxx::binary_message(...)`` and place them at any
+depth in an event or acknowledgement payload. Both the default JSON parser and
+the optional MessagePack parser support binary values; the selected parser
+must still match the server.
+
 Port acknowledgements
 ---------------------
 
@@ -333,11 +338,6 @@ uses one of these APIs:
   application's logging.
 * Proxy configuration and an application-supplied ``asio::io_context`` are not
   currently exposed.
-* The default JSON parser does not yet reconstruct Socket.IO binary
-  attachments. If the server supports ``socket.io-msgpack-parser``, set
-  ``options.parser = sioxx::parser_kind::msgpack`` on the client and configure
-  the matching parser on the server before sending binary values with
-  ``sioxx::binary_message(...)``.
 * ``sioxx`` can use HTTP long-polling and automatically falls back to it when
   the initial WebSocket connection fails. Set
   ``options.force_http_polling = true`` when polling must be used from the
@@ -354,7 +354,7 @@ Migration checklist
    settings into ``client_options`` or the relevant namespace socket.
 #. Replace incoming acknowledgement mutation with the acknowledgement-aware
    listener overload.
-#. Audit the unsupported APIs and binary parser choice above.
+#. Audit the unsupported APIs above.
 #. Run the application against the same Socket.IO server and verify connect,
    namespace authentication, representative events, acknowledgements,
    reconnection, and clean shutdown.

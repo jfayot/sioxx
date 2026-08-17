@@ -112,6 +112,20 @@ e2e.on("connection", (socket) => {
     const acknowledgement = args.pop();
     acknowledgement(...args);
   });
+
+  socket.on("json_binary_echo_with_ack", (...args) => {
+    const acknowledgement = args.pop();
+    acknowledgement(...args);
+  });
+
+  socket.emit(
+    "json_binary_ack_request",
+    Buffer.from([0x00, 0x7f, 0xff]),
+    { nested: [Buffer.from([0x01, 0x02])] },
+    (...reply) => {
+      socket.emit("json_binary_ack_reply_received", ...reply);
+    },
+  );
 });
 
 function close() {
