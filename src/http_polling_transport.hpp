@@ -10,6 +10,7 @@
 #include <thread>
 #include <vector>
 
+#include "proxy.hpp"
 #include "sioxx/message.hpp"
 #include "transport.hpp"
 #include "url_parse.hpp"
@@ -34,6 +35,8 @@ class http_polling_transport final
   void set_extra_headers(
     std::vector<std::pair<std::string, std::string>> headers);
   void set_verify_tls(bool verify);
+  void set_proxy(const std::string& uri, const std::string& username,
+                 const std::string& password);
 
  private:
   struct response
@@ -55,6 +58,7 @@ class http_polling_transport final
   url_parts url_;
   std::string sid_;
   std::vector<std::pair<std::string, std::string>> extra_headers_;
+  std::optional<detail::proxy_config> proxy_;
   bool verify_tls_{true};
   std::atomic<bool> closing_{false};
   std::thread poll_thread_;

@@ -63,6 +63,30 @@ function startServer(mode, port = 0) {
   });
 }
 
+function startProxy() {
+  return new Promise((resolve, reject) => {
+    const child = fork(path.join(__dirname, "proxy.js"), {
+      stdio: ["ignore", "inherit", "inherit", "ipc"],
+    });
+    servers.push(child);
+    child.once("error", reject);
+    child.once("exit", (code, signal) => {
+      if (!finishing) {
+        reject(
+          new Error(
+            `proxy exited early (code=${code}, signal=${signal})`,
+          ),
+        );
+      }
+    });
+    child.on("message", (message) => {
+      if (message?.type === "ready") {
+        resolve({ url: `http://127.0.0.1:${message.port}` });
+      }
+    });
+  });
+}
+
 function stopServers() {
   for (const server of servers) {
     if (server.connected) server.send("shutdown");
@@ -89,12 +113,14 @@ async function run() {
     msgpackServer,
     customOptionsServer,
     tlsServer,
+    proxyServer,
   ] = await Promise.all([
     startServer("default"),
     startServer("polling-only"),
     startServer("msgpack"),
     startServer("custom-options"),
     startServer("tls"),
+    startProxy(),
   ]);
 
   runGoogleTest({
@@ -104,6 +130,7 @@ async function run() {
     SIOXX_E2E_MSGPACK_URL: msgpackServer.url,
     SIOXX_E2E_CUSTOM_OPTIONS_URL: customOptionsServer.url,
     SIOXX_E2E_TLS_URL: tlsServer.url,
+    SIOXX_E2E_PROXY_URL: proxyServer.url,
   });
 }
 

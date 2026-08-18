@@ -4,15 +4,18 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
 #include <boost/beast/ssl.hpp>
 #include <boost/beast/websocket.hpp>
 #include <boost/beast/websocket/ssl.hpp>
 #include <deque>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <thread>
 
+#include "proxy.hpp"
 #include "transport.hpp"
 #include "url_parse.hpp"
 
@@ -48,15 +51,21 @@ class websocket_transport final
 
   // Disable TLS certificate verification (development/self-signed only).
   void set_verify_tls(bool verify);
+  void set_proxy(const std::string& uri, const std::string& username,
+                 const std::string& password);
 
  private:
   void run_plain();
   void run_tls();
+  void establish_proxy_tunnel(std::function<void()> continuation);
+  void start_plain_handshake();
+  void start_tls_handshake();
   void do_read_plain();
   void do_read_tls();
   void queue_write(std::string payload, bool is_binary);
   void pump_write_queue_plain();
   void pump_write_queue_tls();
+  void fail(const std::string& what);
   void fail(const std::string& what, beast::error_code ec);
 
   net::io_context ioc_;
@@ -71,8 +80,13 @@ class websocket_transport final
     ws_tls_;
 
   beast::flat_buffer buffer_;
+  beast::flat_buffer proxy_buffer_;
+  boost::beast::http::request<boost::beast::http::empty_body> proxy_request_;
+  boost::beast::http::response_parser<boost::beast::http::empty_body>
+    proxy_response_;
   url_parts url_;
   std::vector<std::pair<std::string, std::string>> extra_headers_;
+  std::optional<detail::proxy_config> proxy_;
   bool verify_tls_{true};
 
   std::recursive_mutex write_mutex_;

@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added complete binary attachment support to the default JSON parser,
   including nested and multiple `BINARY_EVENT` and `BINARY_ACK` attachments
   over WebSocket and HTTP long-polling.
+- Added HTTP proxy support with optional Basic authentication for WebSocket,
+  secure WebSocket, HTTP polling, and HTTPS polling connections.
+- Added a dedicated checklist for planning and validating the 1.0.0 release.
 - Added tagged CMake `FetchContent` examples for consuming sioxx directly and
   selecting parent-provided Boost and nlohmann-json versions.
 - Added an optional Qt Widgets chat example demonstrating safe GUI-thread

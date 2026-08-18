@@ -57,6 +57,9 @@ void client_impl::ensure_engineio()
     polling->set_verify_tls(options_.verify_tls);
     if (!options_.extra_headers.empty())
       polling->set_extra_headers(options_.extra_headers);
+    if (options_.proxy)
+      polling->set_proxy(options_.proxy->uri, options_.proxy->username,
+                         options_.proxy->password);
     transport = std::move(polling);
   }
   else
@@ -65,6 +68,9 @@ void client_impl::ensure_engineio()
     websocket->set_verify_tls(options_.verify_tls);
     if (!options_.extra_headers.empty())
       websocket->set_extra_headers(options_.extra_headers);
+    if (options_.proxy)
+      websocket->set_proxy(options_.proxy->uri, options_.proxy->username,
+                           options_.proxy->password);
     transport = std::move(websocket);
   }
   engineio_->set_transport(std::move(transport));

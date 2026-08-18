@@ -42,6 +42,7 @@ Features
 * Engine.IO v4 and Socket.IO namespace support.
 * WebSocket and secure WebSocket transports through Boost.Beast and OpenSSL.
 * HTTP long-polling fallback, or a polling-only mode when required.
+* HTTP proxy support with optional Basic authentication.
 * JSON and MessagePack wire protocols selectable for each client, both with
   nested binary payload support.
 * Custom parser strategies for other wire formats.
@@ -94,8 +95,7 @@ Client API
 ~~~~~~~~~~
 
 * Catch-all listeners for outgoing events.
-* Additional connection options for authentication, query parameters, headers,
-  proxies and transport selection.
+* Additional connection options for transport selection.
 * Improved connection and transport diagnostics.
 * Coroutine-friendly asynchronous APIs alongside the existing callback-based
   interface.

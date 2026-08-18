@@ -82,6 +82,8 @@ opts.reconnect_attempts = 5;
 opts.reconnect_delay = std::chrono::milliseconds(1000);
 opts.reconnect_delay_max = std::chrono::milliseconds(30000);
 opts.reconnect_randomization_factor = 0.5;
+opts.proxy = sioxx::proxy_options{  // optional
+    "http://proxy.example.com:8080", "user", "password"};
 
 sioxx::client client(opts);
 client.set_open_listener([] { /* engine.io + "/" namespace connected */ });
@@ -327,6 +329,8 @@ is available; otherwise CMake skips it without making Qt a required dependency.
 - HTTP long-polling is used automatically only when the initial WebSocket
   connection fails. It is intentionally not upgraded back to WebSocket, and
   it opens a fresh HTTP connection for each poll/write.
+- Proxy connections support HTTP proxies. HTTPS proxy endpoints and proxy
+  authentication schemes other than Basic are not currently supported.
 
 ## Documentation
 
@@ -444,7 +448,8 @@ cmake --install build-docs --prefix /usr/local
 ## Contributing
 
 Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for
-development setup, testing expectations, and pull request guidelines.
+development setup, testing expectations, and pull request guidelines. Work
+toward the stable API is tracked in the [1.0.0 TODO](TODO.md).
 
 ## AI disclosure
 
