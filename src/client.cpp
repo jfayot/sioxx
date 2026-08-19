@@ -243,7 +243,8 @@ void client_impl::send_packet(const packet& packet)
   std::lock_guard<std::mutex> lock(send_mutex_);
   auto engineio = engineio_;
   if (!engineio) return;
-  parser_->encode(packet, [engineio](const std::string& payload, bool is_binary)
+  parser_->encode(packet, [engineio = std::move(engineio)](
+                            const std::string& payload, bool is_binary)
                   { engineio->send(payload, is_binary); });
 }
 

@@ -1,5 +1,6 @@
 .DS_Store
 node_modules
+artifacts
 build
 build-tidy
 build-shared
@@ -7,6 +8,7 @@ build-docs
 build-release
 build-e2e
 build-tests
+build-coverage-local
 install
 logs
 Testing
