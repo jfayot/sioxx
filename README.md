@@ -86,7 +86,7 @@ opts.proxy = sioxx::proxy_options{  // optional
     "http://proxy.example.com:8080", "user", "password"};
 
 sioxx::client client(opts);
-client.set_open_listener([] { /* engine.io + "/" namespace connected */ });
+client.set_open_listener([] { /* Engine.IO connection opened */ });
 client.set_close_listener([](const std::string& reason) { /* ... */ });
 
 auto sock = client.socket("/chat");  // any namespace path

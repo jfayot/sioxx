@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes :wrench:
 
+- Invoked the client open listener when Engine.IO opens, even when the client
+  only requests non-root Socket.IO namespaces.
 - Serialized HTTP long-polling writes so multi-frame binary packets and
   back-to-back events preserve their wire order.
 - Avoided passing the comparatively large `client_options` structure by value
