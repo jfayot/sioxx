@@ -142,13 +142,13 @@ TEST(E2E, ConnectsAndReceivesMultipleArguments)
   client.close();
 }
 
-TEST(E2E, RootNamespaceInvokesClientOpenListener)
+TEST(E2E, NonRootNamespaceInvokesClientOpenListener)
 {
   auto opened = std::make_shared<completion_signal>();
   auto connected = std::make_shared<completion_signal>();
   auto error = std::make_shared<async_value<std::string>>();
   sioxx::client client;
-  auto socket = client.socket();
+  auto socket = client.socket("/e2e");
 
   configure_failure_reporting(client, error);
   client.set_open_listener([opened] { opened->set(); });

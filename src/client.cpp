@@ -118,12 +118,15 @@ void client_impl::activate_polling_fallback()
 
 void client_impl::on_engineio_open()
 {
-  // Auto-CONNECT every namespace socket that's already been requested.
-  std::lock_guard<std::mutex> lock(sockets_mutex_);
-  for (auto& [nsp, sock] : sockets_)
   {
-    sock->connect();
+    // Auto-CONNECT every namespace socket that's already been requested.
+    std::lock_guard<std::mutex> lock(sockets_mutex_);
+    for (auto& [nsp, sock] : sockets_)
+    {
+      sock->connect();
+    }
   }
+  if (on_open_) on_open_();
 }
 
 void client_impl::on_engineio_close(const std::string& reason)
@@ -188,7 +191,6 @@ void client_impl::on_engineio_frame(const std::string& payload, bool is_binary)
     {
       sock->mark_connected(true);
     }
-    if (packet.nsp == "/" && on_open_) on_open_();
     break;
 
   case packet_type::disconnect:
