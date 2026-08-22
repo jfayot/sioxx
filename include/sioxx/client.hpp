@@ -56,7 +56,16 @@ class client
    */
   explicit client(client_options&& options);
 
-  /** @brief Destructor – cleans up the internal implementation. */
+  client(const client&) = delete;
+  client& operator=(const client&) = delete;
+
+  /**
+   * @brief Destructor that requests shutdown and waits for background workers.
+   *
+   * As with sync_close(), destroy the client outside library callbacks. A
+   * worker executing the destructor cannot wait for itself and finishes after
+   * the callback returns.
+   */
   ~client();
 
   /**
@@ -69,8 +78,23 @@ class client
    */
   void connect(const std::string& uri);
 
-  /** @brief Close the underlying Engine.IO connection. */
+  /**
+   * @brief Start closing the connection and return without waiting.
+   *
+   * This operation is safe to call from library callbacks. Use sync_close()
+   * when the caller must wait for all background workers to stop. Repeated
+   * calls are safe.
+   */
   void close();
+
+  /**
+   * @brief Close the connection and wait for background workers to stop.
+   *
+   * Do not call this operation from a library callback: a worker cannot wait
+   * for itself to finish. Use close() in callbacks instead. Repeated calls are
+   * safe.
+   */
+  void sync_close();
 
   /**
    * @brief Obtain a socket for a specific namespace.

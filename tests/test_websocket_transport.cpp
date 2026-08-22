@@ -6,6 +6,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <exception>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -17,6 +18,65 @@ using namespace std::chrono_literals;
 
 namespace
 {
+
+TEST(WebSocketTransport, ConcurrentCloseAndSyncCloseReleaseTransport)
+{
+  namespace http = boost::beast::http;
+  boost::asio::io_context io_context;
+  boost::asio::ip::tcp::acceptor acceptor(io_context,
+                                          {boost::asio::ip::tcp::v4(), 0});
+  const auto port = acceptor.local_endpoint().port();
+  std::promise<void> request_received;
+  auto request_received_future = request_received.get_future();
+  std::promise<void> release_server;
+  auto release_server_future = release_server.get_future();
+  std::exception_ptr server_error;
+  std::thread server(
+    [&]
+    {
+      try
+      {
+        boost::asio::ip::tcp::socket socket(io_context);
+        acceptor.accept(socket);
+        boost::beast::flat_buffer buffer;
+        http::request<http::empty_body> request;
+        http::read(socket, buffer, request);
+        request_received.set_value();
+        release_server_future.wait();
+      }
+      catch (...)
+      {
+        server_error = std::current_exception();
+        request_received.set_value();
+      }
+    });
+
+  auto transport = std::make_shared<sioxx::websocket_transport>();
+  std::weak_ptr<sioxx::websocket_transport> weak_transport = transport;
+  transport->connect("ws://127.0.0.1:" + std::to_string(port) +
+                     "/socket.io/?EIO=4&transport=websocket");
+
+  const bool request_was_received =
+    request_received_future.wait_for(5s) == std::future_status::ready;
+  std::thread first_close([&] { transport->close(); });
+  std::thread second_close([&] { transport->close(); });
+  first_close.join();
+  second_close.join();
+  std::thread first_sync_close([&] { transport->sync_close(); });
+  std::thread second_sync_close([&] { transport->sync_close(); });
+  first_sync_close.join();
+  second_sync_close.join();
+  transport.reset();
+  const bool transport_was_released = weak_transport.expired();
+  release_server.set_value();
+  boost::beast::error_code ec;
+  acceptor.close(ec);
+  server.join();
+
+  ASSERT_TRUE(request_was_received);
+  ASSERT_EQ(server_error, nullptr);
+  EXPECT_TRUE(transport_was_released);
+}
 
 TEST(WebSocketTransport, AuthenticatesProxyConnectTunnel)
 {

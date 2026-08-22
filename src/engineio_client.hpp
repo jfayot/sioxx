@@ -38,6 +38,7 @@ class engineio_client : public std::enable_shared_from_this<engineio_client>
   // wss://host:port/socket.io/?EIO=4&transport=websocket
   void open(const std::string& ws_url);
   void close();
+  void sync_close();
 
   // Send a raw engine.io MESSAGE frame (payload already encoded by the
   // socket.io parser).
@@ -55,6 +56,7 @@ class engineio_client : public std::enable_shared_from_this<engineio_client>
   void handle_transport_open();
   void handle_transport_close(const std::string& reason);
   void start_heartbeat_timer();
+  void request_heartbeat_stop();
   void stop_heartbeat_timer();
 
   std::shared_ptr<transport_base> transport_;

@@ -23,6 +23,22 @@ namespace
 {
 constexpr std::uint64_t max_http_response_body_size = 8 * 1024 * 1024;
 constexpr std::size_t max_http_read_buffer_size = 64 * 1024;
+thread_local http_polling_transport* active_http_polling_transport = nullptr;
+
+class polling_worker_scope
+{
+ public:
+  explicit polling_worker_scope(http_polling_transport* transport)
+      : previous_(active_http_polling_transport)
+  {
+    active_http_polling_transport = transport;
+  }
+
+  ~polling_worker_scope() { active_http_polling_transport = previous_; }
+
+ private:
+  http_polling_transport* previous_;
+};
 
 template <typename Stream, typename Body>
 void read_http_response(Stream& stream, beast::flat_buffer& buffer,
@@ -137,7 +153,13 @@ http_polling_transport::~http_polling_transport()
     else
       poll_thread_.join();
   }
-  if (close_thread_.joinable()) close_thread_.join();
+  if (close_thread_.joinable())
+  {
+    if (close_thread_.get_id() == std::this_thread::get_id())
+      close_thread_.detach();
+    else
+      close_thread_.join();
+  }
 }
 
 void http_polling_transport::set_extra_headers(
@@ -160,15 +182,18 @@ void http_polling_transport::set_proxy(const std::string& uri,
 
 void http_polling_transport::connect(const std::string& url)
 {
+  std::lock_guard<std::mutex> lock(connect_mutex_);
+  if (closing_) return;
   url_ = parse_ws_url(url);
-  closing_ = false;
   state_ = transport_state::connecting;
-  write_thread_ = std::thread([this] { run_writes(); });
+  write_thread_ =
+    std::thread([self = shared_from_this()] { self->run_writes(); });
   poll_thread_ = std::thread([self = shared_from_this()] { self->run(); });
 }
 
 void http_polling_transport::run()
 {
+  polling_worker_scope worker_scope(this);
   try
   {
     auto initial = request(http::verb::get, url_.target);
@@ -177,6 +202,7 @@ void http_polling_transport::run()
                   std::to_string(initial.status));
     state_ = transport_state::open;
     if (on_open_) on_open_();
+    if (closing_) return;
     deliver(initial.body);
 
     while (!closing_)
@@ -207,6 +233,7 @@ void http_polling_transport::send(const std::string& payload, bool is_binary)
 
 void http_polling_transport::run_writes()
 {
+  polling_worker_scope worker_scope(this);
   while (true)
   {
     std::pair<std::string, bool> write;
@@ -294,6 +321,7 @@ http_polling_transport::response http_polling_transport::request(
 
 std::string http_polling_transport::poll_target() const
 {
+  std::lock_guard<std::mutex> lock(mutex_);
   return url_.target +
          (url_.target.find('?') == std::string::npos ? "?sid=" : "&sid=") +
          sid_;
@@ -303,11 +331,15 @@ void http_polling_transport::deliver(const std::string& body)
 {
   for (const auto& packet : detail::polling_split_payload(body))
   {
+    if (closing_) return;
     if (packet[0] == '0')
     {
       json handshake = json::parse(packet.substr(1), nullptr, false);
       if (!handshake.is_discarded())
+      {
+        std::lock_guard<std::mutex> lock(mutex_);
         sid_ = handshake.value("sid", std::string());
+      }
     }
     if (packet[0] == 'b')
     {
@@ -324,20 +356,41 @@ void http_polling_transport::deliver(const std::string& body)
 
 void http_polling_transport::close()
 {
-  if (closing_.exchange(true)) return;
-  state_ = transport_state::closed;
-  write_condition_.notify_all();
-  join_write_thread();
-  // Ending the Engine.IO session causes a pending poll to return promptly.
-  if (!sid_.empty())
+  bool notify_close = false;
   {
-    close_thread_ = std::thread([this] { post("1", false); });
+    std::lock_guard<std::mutex> lock(connect_mutex_);
+    std::call_once(shutdown_once_,
+                   [this, &notify_close]
+                   {
+                     notify_close = !closing_.exchange(true);
+                     state_ = transport_state::closed;
+                     write_condition_.notify_all();
+                     // Ending the Engine.IO session causes a pending poll to
+                     // return promptly.
+                     bool has_session = false;
+                     {
+                       std::lock_guard<std::mutex> queue_lock(mutex_);
+                       has_session = !sid_.empty();
+                     }
+                     if (has_session)
+                     {
+                       auto self = shared_from_this();
+                       close_thread_ = std::thread([self = std::move(self)]
+                                                   { self->post("1", false); });
+                     }
+                   });
   }
-  if (close_thread_.joinable()) close_thread_.join();
-  if (poll_thread_.joinable() &&
-      poll_thread_.get_id() != std::this_thread::get_id())
-    poll_thread_.join();
-  if (on_close_) on_close_("closed");
+
+  if (notify_close && on_close_) on_close_("closed");
+}
+
+void http_polling_transport::sync_close()
+{
+  close();
+  // A polling callback cannot wait for the worker executing that callback.
+  // Call close() from callbacks and reserve sync_close() for other threads.
+  if (active_http_polling_transport == this) return;
+  join_threads();
 }
 
 void http_polling_transport::join_write_thread()
@@ -347,6 +400,18 @@ void http_polling_transport::join_write_thread()
     write_thread_.detach();
   else
     write_thread_.join();
+}
+
+void http_polling_transport::join_threads()
+{
+  std::lock_guard<std::mutex> lock(join_mutex_);
+  join_write_thread();
+  if (close_thread_.joinable() &&
+      close_thread_.get_id() != std::this_thread::get_id())
+    close_thread_.join();
+  if (poll_thread_.joinable() &&
+      poll_thread_.get_id() != std::this_thread::get_id())
+    poll_thread_.join();
 }
 
 void http_polling_transport::fail(const std::string& message)

@@ -44,6 +44,7 @@ class websocket_transport final
   void connect(const std::string& url) override;
   void send(const std::string& payload, bool is_binary) override;
   void close() override;
+  void sync_close() override;
 
   // Extra headers to send with the websocket upgrade request, e.g. cookies.
   void set_extra_headers(
@@ -65,6 +66,8 @@ class websocket_transport final
   void queue_write(std::string payload, bool is_binary);
   void pump_write_queue_plain();
   void pump_write_queue_tls();
+  void shutdown_on_io_thread();
+  void join_io_thread();
   void fail(const std::string& what);
   void fail(const std::string& what, beast::error_code ec);
 
@@ -89,10 +92,12 @@ class websocket_transport final
   std::optional<detail::proxy_config> proxy_;
   bool verify_tls_{true};
 
-  std::recursive_mutex write_mutex_;
   std::deque<std::pair<std::string, bool>> write_queue_;
   bool write_in_progress_{false};
   std::atomic<bool> closing_{false};
+  std::once_flag shutdown_once_;
+  std::mutex connect_mutex_;
+  std::mutex join_mutex_;
 };
 
 }  // namespace sioxx

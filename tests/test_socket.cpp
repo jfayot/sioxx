@@ -2,11 +2,17 @@
 
 #include <sioxx/client.hpp>
 #include <sioxx/socket.hpp>
+#include <type_traits>
 
 using namespace sioxx;
 
 namespace
 {
+
+static_assert(!std::is_copy_constructible<client>::value,
+              "client owns a single connection and must not be copied");
+static_assert(!std::is_copy_assignable<client>::value,
+              "client owns a single connection and must not be copied");
 
 // A default-constructed weak_ptr<client_impl> is enough to build a
 // socket for these tests: emit()/connect()/disconnect() will just

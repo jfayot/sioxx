@@ -322,9 +322,14 @@ The remaining namespace method translations are direct:
      - unchanged
    * - ``client.close()``
      - unchanged
+   * - ``client.sync_close()``
+     - unchanged
 
-Callbacks run on sioxx's connection background thread. Continue dispatching
-to the UI or application executor before accessing thread-affine state.
+``client.close()`` requests shutdown without waiting, whereas
+``client.sync_close()`` waits for all library workers to stop. Call only the
+non-blocking form from a library callback. Callbacks run on sioxx's connection
+background thread; continue dispatching to the UI or application executor
+before accessing thread-affine state.
 
 Check unsupported or different features
 ---------------------------------------

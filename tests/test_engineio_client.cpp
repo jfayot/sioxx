@@ -38,6 +38,8 @@ class fake_transport : public transport_base
     if (on_close_) on_close_("closed");
   }
 
+  void sync_close() override { ++sync_close_calls; }
+
   void simulate_message(const std::string& payload, bool is_binary = false)
   {
     if (on_message_) on_message_(payload, is_binary);
@@ -57,6 +59,7 @@ class fake_transport : public transport_base
   std::string last_connect_url;
   std::vector<std::pair<std::string, bool>> sent;
   int close_calls{0};
+  int sync_close_calls{0};
 };
 
 std::string make_open_payload(int ping_interval_ms = 25000,
@@ -324,6 +327,19 @@ TEST_F(EngineioClientFixture, CloseIsIdempotent)
   client->close();
 
   EXPECT_EQ(transport->close_calls, 1);
+}
+
+TEST_F(EngineioClientFixture, SyncCloseWaitsAfterCloseRequest)
+{
+  client->close();
+
+  EXPECT_EQ(transport->close_calls, 1);
+  EXPECT_EQ(transport->sync_close_calls, 0);
+
+  client->sync_close();
+
+  EXPECT_EQ(transport->close_calls, 1);
+  EXPECT_EQ(transport->sync_close_calls, 1);
 }
 
 TEST_F(EngineioClientFixture,

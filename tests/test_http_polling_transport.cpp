@@ -55,6 +55,7 @@ TEST(HttpPollingTransport, ConnectionFailureNotifiesErrorAndCloseOnce)
   std::string error_message;
   std::string close_reason;
   auto transport = std::make_shared<sioxx::http_polling_transport>();
+  std::weak_ptr<sioxx::http_polling_transport> weak_transport = transport;
 
   transport->set_error_handler(
     [&](const std::string& message)
@@ -89,7 +90,14 @@ TEST(HttpPollingTransport, ConnectionFailureNotifiesErrorAndCloseOnce)
   EXPECT_EQ(error_message, "polling handshake returned HTTP 500");
   EXPECT_EQ(close_reason, error_message);
 
-  transport->close();
+  std::thread first_close([&] { transport->close(); });
+  std::thread second_close([&] { transport->close(); });
+  first_close.join();
+  second_close.join();
+  transport->sync_close();
+  transport.reset();
+
+  EXPECT_TRUE(weak_transport.expired());
   std::lock_guard<std::mutex> lock(mutex);
   EXPECT_EQ(error_count, 1);
   EXPECT_EQ(close_count, 1);

@@ -5,11 +5,17 @@
 #include <boost/asio/ssl/error.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
+#include <future>
 #include <memory>
 #include <string>
 
 namespace sioxx
 {
+
+namespace
+{
+thread_local websocket_transport* active_websocket_transport = nullptr;
+}
 
 websocket_transport::websocket_transport()
     : work_guard_(net::make_work_guard(ioc_)),
@@ -60,34 +66,44 @@ void websocket_transport::set_proxy(const std::string& uri,
 
 void websocket_transport::fail(const std::string& what)
 {
+  if (closing_) return;
   state_ = transport_state::closed;
   if (on_error_) on_error_(what);
 }
 
 void websocket_transport::fail(const std::string& what, beast::error_code ec)
 {
+  if (closing_) return;
   state_ = transport_state::closed;
   if (on_error_) on_error_(what + ": " + ec.message());
 }
 
 void websocket_transport::connect(const std::string& url)
 {
-  url_ = parse_ws_url(url);
-  state_ = transport_state::connecting;
-
-  if (url_.tls)
+  std::promise<void> start_signal;
+  auto start = start_signal.get_future();
   {
-    io_thread_ = std::thread([self = shared_from_this()] { self->run_tls(); });
+    std::lock_guard<std::mutex> lock(connect_mutex_);
+    if (closing_) return;
+    url_ = parse_ws_url(url);
+    state_ = transport_state::connecting;
+    const bool use_tls = url_.tls;
+    io_thread_ = std::thread(
+      [self = shared_from_this(), start = std::move(start), use_tls]() mutable
+      {
+        start.wait();
+        if (use_tls)
+          self->run_tls();
+        else
+          self->run_plain();
+      });
   }
-  else
-  {
-    io_thread_ =
-      std::thread([self = shared_from_this()] { self->run_plain(); });
-  }
+  start_signal.set_value();
 }
 
 void websocket_transport::run_plain()
 {
+  active_websocket_transport = this;
   auto self = shared_from_this();
   const auto& endpoint = proxy_ ? proxy_->endpoint : url_;
   resolver_.async_resolve(
@@ -95,6 +111,7 @@ void websocket_transport::run_plain()
     [this, self = std::move(self)](beast::error_code ec,
                                    const tcp::resolver::results_type& results)
     {
+      if (closing_) return;
       if (ec) return fail("resolve", ec);
 
       ws_plain_ = std::make_unique<websocket::stream<beast::tcp_stream>>(
@@ -107,6 +124,7 @@ void websocket_transport::run_plain()
                          beast::error_code ec2,
                          const tcp::resolver::results_type::endpoint_type&)
                        {
+                         if (closing_) return;
                          if (ec2) return fail("connect", ec2);
                          beast::get_lowest_layer(*ws_plain_).expires_never();
                          if (proxy_)
@@ -117,10 +135,17 @@ void websocket_transport::run_plain()
                        });
     });
   ioc_.run();
+  if (closing_)
+  {
+    ioc_.restart();
+    ioc_.poll();
+  }
+  active_websocket_transport = nullptr;
 }
 
 void websocket_transport::run_tls()
 {
+  active_websocket_transport = this;
   auto self = shared_from_this();
   if (!verify_tls_) ssl_ctx_.set_verify_mode(ssl::verify_none);
 
@@ -130,6 +155,7 @@ void websocket_transport::run_tls()
     [this, self = std::move(self)](beast::error_code ec,
                                    const tcp::resolver::results_type& results)
     {
+      if (closing_) return;
       if (ec) return fail("resolve", ec);
 
       ws_tls_ = std::make_unique<
@@ -151,6 +177,7 @@ void websocket_transport::run_tls()
           beast::error_code ec2,
           const tcp::resolver::results_type::endpoint_type&)
         {
+          if (closing_) return;
           if (ec2) return fail("connect", ec2);
           if (proxy_)
             establish_proxy_tunnel([this, self = std::move(self)]
@@ -160,6 +187,12 @@ void websocket_transport::run_tls()
         });
     });
   ioc_.run();
+  if (closing_)
+  {
+    ioc_.restart();
+    ioc_.poll();
+  }
+  active_websocket_transport = nullptr;
 }
 
 void websocket_transport::establish_proxy_tunnel(
@@ -182,6 +215,7 @@ void websocket_transport::establish_proxy_tunnel(
     [this, self = std::move(self), continuation = std::move(continuation)](
       beast::error_code ec, std::size_t) mutable
     {
+      if (closing_) return;
       if (ec) return fail("proxy write", ec);
       auto& read_stream = url_.tls ? beast::get_lowest_layer(*ws_tls_)
                                    : beast::get_lowest_layer(*ws_plain_);
@@ -190,6 +224,7 @@ void websocket_transport::establish_proxy_tunnel(
         [this, self = std::move(self), continuation = std::move(continuation)](
           beast::error_code read_ec, std::size_t) mutable
         {
+          if (closing_) return;
           if (read_ec) return fail("proxy read", read_ec);
           const auto status = proxy_response_.get().result_int();
           if (status / 100 != 2)
@@ -216,11 +251,12 @@ void websocket_transport::start_plain_handshake()
     url_.host, url_.target,
     [this, self = std::move(self)](beast::error_code ec)
     {
+      if (closing_) return;
       if (ec) return fail("handshake", ec);
       ws_plain_->binary(true);
       state_ = transport_state::open;
       if (on_open_) on_open_();
-      do_read_plain();
+      if (!closing_) do_read_plain();
     });
 }
 
@@ -231,6 +267,7 @@ void websocket_transport::start_tls_handshake()
     ssl::stream_base::client,
     [this, self = std::move(self)](beast::error_code ec)
     {
+      if (closing_) return;
       if (ec) return fail("ssl_handshake", ec);
       beast::get_lowest_layer(*ws_tls_).expires_never();
       ws_tls_->set_option(
@@ -247,11 +284,12 @@ void websocket_transport::start_tls_handshake()
         url_.host, url_.target,
         [this, self = std::move(handshake_self)](beast::error_code ws_ec)
         {
+          if (closing_) return;
           if (ws_ec) return fail("handshake", ws_ec);
           ws_tls_->binary(true);
           state_ = transport_state::open;
           if (on_open_) on_open_();
-          do_read_tls();
+          if (!closing_) do_read_tls();
         });
     });
 }
@@ -263,6 +301,7 @@ void websocket_transport::do_read_plain()
     buffer_,
     [this, self = std::move(self)](beast::error_code ec, std::size_t)
     {
+      if (closing_) return;
       if (ec)
       {
         state_ = transport_state::closed;
@@ -276,7 +315,7 @@ void websocket_transport::do_read_plain()
       std::string payload = beast::buffers_to_string(buffer_.data());
       buffer_.consume(buffer_.size());
       if (on_message_) on_message_(payload, is_binary);
-      do_read_plain();
+      if (!closing_) do_read_plain();
     });
 }
 
@@ -287,6 +326,7 @@ void websocket_transport::do_read_tls()
     buffer_,
     [this, self = std::move(self)](beast::error_code ec, std::size_t)
     {
+      if (closing_) return;
       if (ec)
       {
         state_ = transport_state::closed;
@@ -300,7 +340,7 @@ void websocket_transport::do_read_tls()
       std::string payload = beast::buffers_to_string(buffer_.data());
       buffer_.consume(buffer_.size());
       if (on_message_) on_message_(payload, is_binary);
-      do_read_tls();
+      if (!closing_) do_read_tls();
     });
 }
 
@@ -316,21 +356,10 @@ void websocket_transport::queue_write(std::string payload, bool is_binary)
             [this, self = std::move(self), payload = std::move(payload),
              is_binary]() mutable
             {
-              bool should_start = false;
-              {
-                std::lock_guard<std::recursive_mutex> lock(write_mutex_);
-                write_queue_.emplace_back(std::move(payload), is_binary);
-                if (!write_in_progress_)
-                {
-                  write_in_progress_ = true;
-                  should_start = true;
-                }
-              }
-              // pump_write_queue_* takes write_mutex_ itself, so it must be
-              // called only after the lock above has gone out of scope --
-              // calling it while still holding the lock (as before)
-              // self-deadlocks the single io_context thread on the very first
-              // queued write.
+              if (closing_) return;
+              write_queue_.emplace_back(std::move(payload), is_binary);
+              const bool should_start = !write_in_progress_;
+              write_in_progress_ = true;
               if (should_start)
               {
                 if (url_.tls)
@@ -343,6 +372,7 @@ void websocket_transport::queue_write(std::string payload, bool is_binary)
 
 void websocket_transport::pump_write_queue_plain()
 {
+  if (closing_) return;
   if (!ws_plain_)
   {
     write_in_progress_ = false;
@@ -350,41 +380,40 @@ void websocket_transport::pump_write_queue_plain()
   }
   std::string payload;
   bool is_binary;
+  if (write_queue_.empty())
   {
-    std::lock_guard<std::recursive_mutex> lock(write_mutex_);
-    if (write_queue_.empty())
-    {
-      write_in_progress_ = false;
-      return;
-    }
-    payload = std::move(write_queue_.front().first);
-    is_binary = write_queue_.front().second;
+    write_in_progress_ = false;
+    return;
   }
+  payload = std::move(write_queue_.front().first);
+  is_binary = write_queue_.front().second;
   ws_plain_->binary(is_binary);
   auto self = shared_from_this();
   auto buf = std::make_shared<std::string>(std::move(payload));
   auto write_buffer = net::buffer(*buf);
-  ws_plain_->async_write(
-    write_buffer,
-    [this, self = std::move(self), buf = std::move(buf)](beast::error_code ec,
-                                                         std::size_t)
-    {
-      {
-        std::lock_guard<std::recursive_mutex> lock(write_mutex_);
-        if (!write_queue_.empty()) write_queue_.pop_front();
-      }
-      if (ec)
-      {
-        fail("write", ec);
-        write_in_progress_ = false;
-        return;
-      }
-      pump_write_queue_plain();
-    });
+  ws_plain_->async_write(write_buffer,
+                         [this, self = std::move(self), buf = std::move(buf)](
+                           beast::error_code ec, std::size_t)
+                         {
+                           if (closing_)
+                           {
+                             write_in_progress_ = false;
+                             return;
+                           }
+                           if (!write_queue_.empty()) write_queue_.pop_front();
+                           if (ec)
+                           {
+                             fail("write", ec);
+                             write_in_progress_ = false;
+                             return;
+                           }
+                           pump_write_queue_plain();
+                         });
 }
 
 void websocket_transport::pump_write_queue_tls()
 {
+  if (closing_) return;
   if (!ws_tls_)
   {
     write_in_progress_ = false;
@@ -392,58 +421,94 @@ void websocket_transport::pump_write_queue_tls()
   }
   std::string payload;
   bool is_binary;
+  if (write_queue_.empty())
   {
-    std::lock_guard<std::recursive_mutex> lock(write_mutex_);
-    if (write_queue_.empty())
-    {
-      write_in_progress_ = false;
-      return;
-    }
-    payload = std::move(write_queue_.front().first);
-    is_binary = write_queue_.front().second;
+    write_in_progress_ = false;
+    return;
   }
+  payload = std::move(write_queue_.front().first);
+  is_binary = write_queue_.front().second;
   ws_tls_->binary(is_binary);
   auto self = shared_from_this();
   auto buf = std::make_shared<std::string>(std::move(payload));
   auto write_buffer = net::buffer(*buf);
-  ws_tls_->async_write(
-    write_buffer,
-    [this, self = std::move(self), buf = std::move(buf)](beast::error_code ec,
-                                                         std::size_t)
-    {
-      {
-        std::lock_guard<std::recursive_mutex> lock(write_mutex_);
-        if (!write_queue_.empty()) write_queue_.pop_front();
-      }
-      if (ec)
-      {
-        fail("write", ec);
-        write_in_progress_ = false;
-        return;
-      }
-      pump_write_queue_tls();
-    });
+  ws_tls_->async_write(write_buffer,
+                       [this, self = std::move(self), buf = std::move(buf)](
+                         beast::error_code ec, std::size_t)
+                       {
+                         if (closing_)
+                         {
+                           write_in_progress_ = false;
+                           return;
+                         }
+                         if (!write_queue_.empty()) write_queue_.pop_front();
+                         if (ec)
+                         {
+                           fail("write", ec);
+                           write_in_progress_ = false;
+                           return;
+                         }
+                         pump_write_queue_tls();
+                       });
 }
 
 void websocket_transport::close()
 {
-  if (closing_.exchange(true)) return;
-  state_ = transport_state::closing;
-  auto self = shared_from_this();
-  net::post(ioc_,
-            [this, self = std::move(self)]()
-            {
-              beast::error_code ec;
-              if (ws_tls_ && ws_tls_->is_open())
-              {
-                ws_tls_->close(websocket::close_code::normal, ec);
-              }
-              else if (ws_plain_ && ws_plain_->is_open())
-              {
-                ws_plain_->close(websocket::close_code::normal, ec);
-              }
-              state_ = transport_state::closed;
-            });
+  const bool on_io_thread = active_websocket_transport == this;
+  std::lock_guard<std::mutex> lock(connect_mutex_);
+  std::call_once(shutdown_once_,
+                 [this, on_io_thread]
+                 {
+                   closing_ = true;
+                   state_ = transport_state::closing;
+                   if (!io_thread_.joinable() || on_io_thread)
+                     shutdown_on_io_thread();
+                   else
+                     net::post(ioc_, [this] { shutdown_on_io_thread(); });
+                 });
+}
+
+void websocket_transport::sync_close()
+{
+  close();
+  // A callback already running on the I/O thread cannot join its own thread.
+  // Call close() from callbacks and reserve sync_close() for other threads.
+  if (active_websocket_transport == this) return;
+
+  join_io_thread();
+}
+
+void websocket_transport::shutdown_on_io_thread()
+{
+  resolver_.cancel();
+  write_queue_.clear();
+  write_in_progress_ = false;
+  if (ws_tls_)
+  {
+    beast::get_lowest_layer(*ws_tls_).close();
+  }
+  if (ws_plain_)
+  {
+    beast::get_lowest_layer(*ws_plain_).close();
+  }
+  work_guard_.reset();
+  state_ = transport_state::closed;
+  ioc_.stop();
+}
+
+void websocket_transport::join_io_thread()
+{
+  std::lock_guard<std::mutex> lock(join_mutex_);
+  if (!io_thread_.joinable()) return;
+  io_thread_.join();
+
+  // stop() leaves cancellation completions queued. Drain them before
+  // destroying either WebSocket stream; Beast requires all asynchronous
+  // operations to complete before their stream is destroyed.
+  ioc_.restart();
+  ioc_.poll();
+  ws_tls_.reset();
+  ws_plain_.reset();
 }
 
 }  // namespace sioxx
