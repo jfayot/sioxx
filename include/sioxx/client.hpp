@@ -128,6 +128,18 @@ class client
   void sync_close();
 
   /**
+   * @brief Report whether the Engine.IO handshake has completed.
+   * @return `true` while the underlying Engine.IO connection is open.
+   */
+  bool opened() const;
+
+  /**
+   * @brief Return the current Engine.IO session identifier.
+   * @return The handshake `sid`, or an empty string before a session exists.
+   */
+  std::string get_sessionid() const;
+
+  /**
    * @brief Obtain a socket for a specific namespace.
    *
    * @param nsp   Namespace string (default is the root namespace `/`).
@@ -150,6 +162,20 @@ class client
   void set_close_listener(std::function<void(const std::string&)> h);
   /** @brief Set a callback that runs when the Engine.IO handshake fails. */
   void set_fail_listener(std::function<void()> h);
+  /**
+   * @brief Set a callback that runs when a reconnect attempt starts.
+   *
+   * This callback runs after the configured back-off delay, immediately
+   * before opening the replacement Engine.IO connection.
+   */
+  void set_reconnecting_listener(std::function<void()> h);
+  /**
+   * @brief Set a callback that runs when a reconnect attempt is scheduled.
+   *
+   * The callback receives the zero-based attempt index and the selected
+   * back-off delay in milliseconds.
+   */
+  void set_reconnect_listener(std::function<void(unsigned, unsigned)> h);
   /** @brief Set a callback that runs on any error condition. */
   void set_error_listener(std::function<void(const std::string&)> h);
   /** @} */

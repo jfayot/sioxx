@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Additions :tada:
 
+- Added reconnect scheduling/attempt callbacks and thread-safe
+  `client::opened()` and `client::get_sessionid()` accessors for closer
+  `socket.io-client-cpp` API compatibility.
 - Added client constructors accepting a caller-owned Boost.Asio `io_context`
   for WebSocket and HTTP long-polling networking.
 - Added complete binary attachment support to the default JSON parser,

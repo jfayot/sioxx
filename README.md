@@ -88,6 +88,10 @@ opts.proxy = sioxx::proxy_options{  // optional
 sioxx::client client(opts);
 client.set_open_listener([] { /* Engine.IO connection opened */ });
 client.set_close_listener([](const std::string& reason) { /* ... */ });
+client.set_reconnect_listener([](unsigned attempt, unsigned delay_ms) {
+    /* reconnect scheduled; attempt is zero-based */
+});
+client.set_reconnecting_listener([] { /* reconnect attempt starting */ });
 
 auto sock = client.socket("/chat");  // any namespace path
 sock->on("message", [](const std::string& event, sioxx::message data) {
@@ -98,6 +102,10 @@ sock->on_any([](const std::string& event, sioxx::message data) {
 });
 
 client.connect("wss://chat.example");
+
+if (client.opened()) {
+    const std::string session_id = client.get_sessionid();
+}
 
 // Events emitted before the namespace connects are buffered and sent in order.
 sock->emit("hello", sioxx::json{"world"});

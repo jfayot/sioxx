@@ -50,6 +50,7 @@ class engineio_client : public std::enable_shared_from_this<engineio_client>
   void on_error(error_handler h) { on_error_ = std::move(h); }
 
   bool is_open() const { return open_.load(); }
+  std::string session_id() const;
 
  private:
   void handle_transport_message(const std::string& payload, bool is_binary);
@@ -68,6 +69,9 @@ class engineio_client : public std::enable_shared_from_this<engineio_client>
   std::atomic<bool> open_{false};
   std::atomic<bool> closing_{false};
   std::atomic<bool> heartbeat_stop_requested_{true};
+
+  mutable std::mutex session_mutex_;
+  std::string session_id_;
 
   int ping_interval_ms_{25000};
   int ping_timeout_ms_{20000};

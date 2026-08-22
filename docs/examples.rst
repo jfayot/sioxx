@@ -263,6 +263,17 @@ Reconnects use capped exponential back-off with jitter:
    options.reconnect_delay_max = 30s;
    options.reconnect_randomization_factor = 0.5;
 
+   client.set_reconnect_listener([](unsigned attempt, unsigned delay_ms) {
+       // A retry was scheduled. attempt is zero-based.
+   });
+   client.set_reconnecting_listener([] {
+       // The back-off elapsed and the retry is starting.
+   });
+
+Use ``client.opened()`` to query whether the Engine.IO handshake is currently
+open. ``client.get_sessionid()`` returns the handshake session ID, or an empty
+string before a session exists.
+
 Run the bundled client and server
 ---------------------------------
 

@@ -286,6 +286,12 @@ Client-level listener names are similar, but close and error details differ:
    client.set_fail_listener([] {
        // The configured reconnect attempts were exhausted.
    });
+   client.set_reconnect_listener([](unsigned attempt, unsigned delay_ms) {
+       // A retry was scheduled. attempt is zero-based.
+   });
+   client.set_reconnecting_listener([] {
+       // The back-off elapsed and the retry is starting.
+   });
    client.set_error_listener([](const std::string& error) {
        std::cerr << error << '\n';
    });
@@ -343,18 +349,25 @@ The supplied context must outlive the client. The application runs it; sioxx
 does not run or stop it. WebSocket and HTTP polling networking and callbacks
 use that context.
 
+The connection-state and session accessors translate directly:
+
+.. code-block:: cpp
+
+   if (client.opened()) {
+       std::cout << "Engine.IO session: " << client.get_sessionid() << '\n';
+   }
+
+``get_sessionid()`` returns a value rather than a reference so callers can
+safely retain the result while a connection transition replaces the session.
+
 Check unsupported or different features
 ---------------------------------------
 
 Do not treat the migration as a namespace-only rename if the old application
 uses one of these APIs:
 
-* ``opened()``, ``get_sessionid()``, and ``sync_close()`` have no direct
-  equivalents. Track application connection state from lifecycle callbacks and
-  use ``close()`` for shutdown.
-* Reconnecting/reconnect listeners and built-in log-level setters have no
-  direct equivalents. Use the open, close, fail, and error listeners with the
-  application's logging.
+* Built-in log-level setters have no direct equivalents. Use the lifecycle and
+  error listeners with the application's logging.
 * ``sioxx`` can use HTTP long-polling and automatically falls back to it when
   the initial WebSocket connection fails. Set
   ``options.force_http_polling = true`` when polling must be used from the
