@@ -19,6 +19,38 @@ using namespace std::chrono_literals;
 namespace
 {
 
+void expect_queued_send_before_connect_is_discarded(const std::string& scheme)
+{
+  boost::asio::io_context io_context;
+  boost::asio::ip::tcp::acceptor acceptor(io_context,
+                                          {boost::asio::ip::tcp::v4(), 0});
+  const auto port = acceptor.local_endpoint().port();
+  boost::beast::error_code close_error;
+  acceptor.close(close_error);
+
+  std::mutex mutex;
+  std::condition_variable condition;
+  std::string error;
+  auto transport = std::make_shared<sioxx::websocket_transport>();
+  transport->set_error_handler(
+    [&](const std::string& message)
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      error = message;
+      condition.notify_all();
+    });
+
+  transport->send("queued before connect", false);
+  transport->connect(scheme + "://127.0.0.1:" + std::to_string(port) +
+                     "/socket.io/?EIO=4&transport=websocket");
+
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    EXPECT_TRUE(condition.wait_for(lock, 5s, [&] { return !error.empty(); }));
+  }
+  transport->sync_close();
+}
+
 TEST(WebSocketTransport, ConcurrentCloseAndSyncCloseReleaseTransport)
 {
   namespace http = boost::beast::http;
@@ -76,6 +108,12 @@ TEST(WebSocketTransport, ConcurrentCloseAndSyncCloseReleaseTransport)
   ASSERT_TRUE(request_was_received);
   ASSERT_EQ(server_error, nullptr);
   EXPECT_TRUE(transport_was_released);
+}
+
+TEST(WebSocketTransport, DiscardsQueuedSendBeforeStreamCreation)
+{
+  expect_queued_send_before_connect_is_discarded("ws");
+  expect_queued_send_before_connect_is_discarded("wss");
 }
 
 TEST(WebSocketTransport, AuthenticatesProxyConnectTunnel)

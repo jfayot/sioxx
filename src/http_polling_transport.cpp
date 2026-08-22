@@ -145,21 +145,7 @@ http_polling_transport::~http_polling_transport()
   closing_ = true;
   state_ = transport_state::closed;
   write_condition_.notify_all();
-  join_write_thread();
-  if (poll_thread_.joinable())
-  {
-    if (poll_thread_.get_id() == std::this_thread::get_id())
-      poll_thread_.detach();
-    else
-      poll_thread_.join();
-  }
-  if (close_thread_.joinable())
-  {
-    if (close_thread_.get_id() == std::this_thread::get_id())
-      close_thread_.detach();
-    else
-      close_thread_.join();
-  }
+  join_threads();
 }
 
 void http_polling_transport::set_extra_headers(
@@ -393,25 +379,21 @@ void http_polling_transport::sync_close()
   join_threads();
 }
 
-void http_polling_transport::join_write_thread()
+void http_polling_transport::join_thread(std::thread& thread)
 {
-  if (!write_thread_.joinable()) return;
-  if (write_thread_.get_id() == std::this_thread::get_id())
-    write_thread_.detach();
+  if (!thread.joinable()) return;
+  if (thread.get_id() == std::this_thread::get_id())
+    thread.detach();
   else
-    write_thread_.join();
+    thread.join();
 }
 
 void http_polling_transport::join_threads()
 {
   std::lock_guard<std::mutex> lock(join_mutex_);
-  join_write_thread();
-  if (close_thread_.joinable() &&
-      close_thread_.get_id() != std::this_thread::get_id())
-    close_thread_.join();
-  if (poll_thread_.joinable() &&
-      poll_thread_.get_id() != std::this_thread::get_id())
-    poll_thread_.join();
+  join_thread(write_thread_);
+  join_thread(close_thread_);
+  join_thread(poll_thread_);
 }
 
 void http_polling_transport::fail(const std::string& message)

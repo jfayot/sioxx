@@ -54,7 +54,7 @@ class http_polling_transport final
   std::string poll_target() const;
   void deliver(const std::string& body);
   void fail(const std::string& message);
-  void join_write_thread();
+  void join_thread(std::thread& thread);
   void join_threads();
 
   url_parts url_;

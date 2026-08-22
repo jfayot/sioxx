@@ -31,6 +31,20 @@ std::shared_ptr<transport_base> make_configured_transport(
                          options.proxy->password);
   return transport;
 }
+
+template <typename Operation>
+void capture_shutdown_error(std::exception_ptr& first_error,
+                            Operation&& operation)
+{
+  try
+  {
+    std::forward<Operation>(operation)();
+  }
+  catch (...)
+  {
+    if (!first_error) first_error = std::current_exception();
+  }
+}
 }  // namespace
 
 client_impl::client_impl(client_options&& options)
@@ -359,58 +373,36 @@ void client_impl::close()
   std::exception_ptr first_error;
   {
     std::lock_guard<std::mutex> lock(sockets_mutex_);
-    for (auto& [nsp, sock] : sockets_)
+    for (auto& entry : sockets_)
     {
-      try
-      {
-        if (sock->connected()) sock->disconnect();
-      }
-      catch (...)
-      {
-        if (!first_error) first_error = std::current_exception();
-      }
+      auto& sock = entry.second;
+      capture_shutdown_error(first_error,
+                             [&sock]
+                             {
+                               if (sock->connected()) sock->disconnect();
+                             });
     }
   }
-  try
-  {
-    if (auto engineio = current_engineio()) engineio->close();
-  }
-  catch (...)
-  {
-    if (!first_error) first_error = std::current_exception();
-  }
+  capture_shutdown_error(first_error,
+                         [this]
+                         {
+                           if (auto engineio = current_engineio())
+                             engineio->close();
+                         });
   if (first_error) std::rethrow_exception(first_error);
 }
 
 void client_impl::sync_close()
 {
   std::exception_ptr first_error;
-  try
-  {
-    close();
-  }
-  catch (...)
-  {
-    first_error = std::current_exception();
-  }
-
-  try
-  {
-    stop_reconnect_thread();
-  }
-  catch (...)
-  {
-    if (!first_error) first_error = std::current_exception();
-  }
-
-  try
-  {
-    if (auto engineio = current_engineio()) engineio->sync_close();
-  }
-  catch (...)
-  {
-    if (!first_error) first_error = std::current_exception();
-  }
+  capture_shutdown_error(first_error, [this] { close(); });
+  capture_shutdown_error(first_error, [this] { stop_reconnect_thread(); });
+  capture_shutdown_error(first_error,
+                         [this]
+                         {
+                           if (auto engineio = current_engineio())
+                             engineio->sync_close();
+                         });
 
   if (first_error) std::rethrow_exception(first_error);
 }

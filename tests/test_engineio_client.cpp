@@ -3,6 +3,7 @@
 #include <chrono>
 #include <future>
 #include <sioxx/message.hpp>
+#include <stdexcept>
 
 #include "engineio_client.hpp"
 #include "polling_protocol.hpp"
@@ -38,7 +39,11 @@ class fake_transport : public transport_base
     if (on_close_) on_close_("closed");
   }
 
-  void sync_close() override { ++sync_close_calls; }
+  void sync_close() override
+  {
+    ++sync_close_calls;
+    if (throw_on_sync_close) throw std::runtime_error("sync close failed");
+  }
 
   void simulate_message(const std::string& payload, bool is_binary = false)
   {
@@ -60,6 +65,7 @@ class fake_transport : public transport_base
   std::vector<std::pair<std::string, bool>> sent;
   int close_calls{0};
   int sync_close_calls{0};
+  bool throw_on_sync_close{false};
 };
 
 std::string make_open_payload(int ping_interval_ms = 25000,
@@ -85,6 +91,19 @@ struct EngineioClientFixture : ::testing::Test
 };
 
 }  // namespace
+
+TEST(EngineioClient, DestructorSuppressesTransportSyncCloseExceptions)
+{
+  auto transport = std::make_shared<fake_transport>();
+  transport->throw_on_sync_close = true;
+  {
+    auto client = std::make_shared<engineio_client>();
+    client->set_transport(transport);
+  }
+
+  EXPECT_EQ(transport->close_calls, 1);
+  EXPECT_EQ(transport->sync_close_calls, 1);
+}
 
 TEST(HttpPollingProtocol, BinaryPayloadRoundTripsThroughBase64Packet)
 {
