@@ -331,6 +331,18 @@ non-blocking form from a library callback. Callbacks run on sioxx's connection
 background thread; continue dispatching to the UI or application executor
 before accessing thread-affine state.
 
+Applications that passed an ``asio::io_context`` to socket.io-client-cpp can
+retain the same ownership model:
+
+.. code-block:: cpp
+
+   boost::asio::io_context io_context;
+   sioxx::client client(io_context, options);
+
+The supplied context must outlive the client. The application runs it; sioxx
+does not run or stop it. WebSocket and HTTP polling networking and callbacks
+use that context.
+
 Check unsupported or different features
 ---------------------------------------
 
@@ -343,7 +355,6 @@ uses one of these APIs:
 * Reconnecting/reconnect listeners and built-in log-level setters have no
   direct equivalents. Use the open, close, fail, and error listeners with the
   application's logging.
-* An application-supplied ``asio::io_context`` is not currently exposed.
 * ``sioxx`` can use HTTP long-polling and automatically falls back to it when
   the initial WebSocket connection fails. Set
   ``options.force_http_polling = true`` when polling must be used from the

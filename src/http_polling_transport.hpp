@@ -2,6 +2,7 @@
 #define SIOXX_SRC_HTTP_POLLING_TRANSPORT_HPP
 
 #include <atomic>
+#include <boost/asio.hpp>
 #include <boost/beast/http.hpp>
 #include <condition_variable>
 #include <deque>
@@ -26,6 +27,7 @@ class http_polling_transport final
 {
  public:
   http_polling_transport();
+  explicit http_polling_transport(boost::asio::io_context& io_context);
   ~http_polling_transport() override;
 
   void connect(const std::string& url) override;
@@ -46,11 +48,22 @@ class http_polling_transport final
     std::string body;
   };
 
+  using request_handler =
+    std::function<void(boost::beast::error_code, const response&)>;
+  struct async_request_operation;
+
   void run();
   void run_writes();
   void post(std::string payload, bool is_binary);
   response request(boost::beast::http::verb method, const std::string& target,
                    const std::string& body = {});
+  void async_request(boost::beast::http::verb method, std::string target,
+                     std::string body, request_handler handler);
+  void start_external();
+  void poll_external(bool handshake);
+  void start_next_external_write();
+  void cancel_external_requests();
+  void remove_external_request(const async_request_operation* operation);
   std::string poll_target() const;
   void deliver(const std::string& body);
   void fail(const std::string& message);
@@ -62,6 +75,11 @@ class http_polling_transport final
   std::vector<std::pair<std::string, std::string>> extra_headers_;
   std::optional<detail::proxy_config> proxy_;
   bool verify_tls_{true};
+  boost::asio::io_context* io_context_{nullptr};
+  std::optional<boost::asio::strand<boost::asio::io_context::executor_type>>
+    strand_;
+  std::vector<std::weak_ptr<async_request_operation>> external_requests_;
+  bool external_write_in_progress_{false};
   std::atomic<bool> closing_{false};
   std::thread poll_thread_;
   std::thread close_thread_;

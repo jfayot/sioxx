@@ -18,6 +18,14 @@
 #include "client_options.hpp"
 #include "socket.hpp"
 
+namespace boost
+{
+namespace asio
+{
+class io_context;
+}
+}  // namespace boost
+
 namespace sioxx
 {
 
@@ -55,6 +63,29 @@ class client
    * @param options Client options to move from.
    */
   explicit client(client_options&& options);
+
+  /**
+   * @brief Construct a client that uses a caller-owned I/O context.
+   * @param io_context Context used for all transport networking and callbacks.
+   *
+   * The caller must keep the context alive for the lifetime of the client and
+   * is responsible for running it. sioxx never runs or stops this context.
+   */
+  explicit client(boost::asio::io_context& io_context);
+
+  /**
+   * @brief Construct a configured client using a caller-owned I/O context.
+   * @param io_context Context used for all transport networking and callbacks.
+   * @param options Client options to copy.
+   */
+  client(boost::asio::io_context& io_context, const client_options& options);
+
+  /**
+   * @brief Construct a configured client using a caller-owned I/O context.
+   * @param io_context Context used for all transport networking and callbacks.
+   * @param options Client options to move from.
+   */
+  client(boost::asio::io_context& io_context, client_options&& options);
 
   client(const client&) = delete;
   client& operator=(const client&) = delete;

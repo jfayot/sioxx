@@ -116,6 +116,36 @@ TEST(WebSocketTransport, DiscardsQueuedSendBeforeStreamCreation)
   expect_queued_send_before_connect_is_discarded("wss");
 }
 
+TEST(WebSocketTransport, UsesCallerOwnedIoContext)
+{
+  boost::asio::io_context server_context;
+  boost::asio::ip::tcp::acceptor acceptor(server_context,
+                                          {boost::asio::ip::tcp::v4(), 0});
+  const auto port = acceptor.local_endpoint().port();
+  boost::beast::error_code close_error;
+  acceptor.close(close_error);
+
+  boost::asio::io_context client_context;
+  bool failed = false;
+  std::thread::id callback_thread;
+  auto transport = std::make_shared<sioxx::websocket_transport>(client_context);
+  transport->set_error_handler(
+    [&](const std::string&)
+    {
+      failed = true;
+      callback_thread = std::this_thread::get_id();
+    });
+  transport->connect("ws://127.0.0.1:" + std::to_string(port) +
+                     "/socket.io/?EIO=4&transport=websocket");
+
+  EXPECT_FALSE(failed);
+  const auto run_thread = std::this_thread::get_id();
+  client_context.run();
+
+  EXPECT_TRUE(failed);
+  EXPECT_EQ(callback_thread, run_thread);
+}
+
 TEST(WebSocketTransport, AuthenticatesProxyConnectTunnel)
 {
   namespace http = boost::beast::http;

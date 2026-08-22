@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <boost/asio/io_context.hpp>
 #include <sioxx/client.hpp>
 #include <stdexcept>
 #include <utility>
@@ -77,6 +78,16 @@ TEST(CustomParser, FactoryIsUsedWithMovedOptions)
   client instance(std::move(options));
 
   EXPECT_EQ(calls, 1);
+}
+
+TEST(Client, SupportsCallerOwnedIoContextConstructors)
+{
+  boost::asio::io_context io_context;
+  client_options options;
+
+  EXPECT_NO_THROW(client default_instance(io_context));
+  EXPECT_NO_THROW(client copied_options_instance(io_context, options));
+  EXPECT_NO_THROW(client moved_options_instance(io_context, client_options{}));
 }
 
 TEST(CustomParser, ClientDestructorCompletesWhenDisconnectEncodingThrows)

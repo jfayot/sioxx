@@ -29,16 +29,16 @@ namespace ssl = boost::asio::ssl;
 using tcp = net::ip::tcp;
 
 // ws:// and wss:// transport built on Boost.Beast, replacing websocketpp.
-// Runs its own io_context on a background thread so the public API
-// (connect/send/close) can be called freely from user code; handlers
-// (on_message/on_open/on_close/on_error) fire on that background thread,
-// so callers that touch UI state should hop back to their own thread/queue.
+// Uses either a managed io_context thread or a caller-owned context. Handlers
+// fire on the selected context, so callers that touch thread-affine state
+// should hop back to the appropriate thread/queue.
 class websocket_transport final
     : public transport_base,
       public std::enable_shared_from_this<websocket_transport>
 {
  public:
   websocket_transport();
+  explicit websocket_transport(net::io_context& io_context);
   ~websocket_transport() override;
 
   void connect(const std::string& url) override;
@@ -71,7 +71,12 @@ class websocket_transport final
   void fail(const std::string& what);
   void fail(const std::string& what, beast::error_code ec);
 
-  net::io_context ioc_;
+  void start_plain();
+  void start_tls();
+
+  std::unique_ptr<net::io_context> owned_ioc_;
+  net::io_context& ioc_;
+  net::strand<net::io_context::executor_type> strand_;
   std::optional<net::executor_work_guard<net::io_context::executor_type>>
     work_guard_;
   std::thread io_thread_;

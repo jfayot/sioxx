@@ -103,11 +103,56 @@ TEST(HttpPollingTransport, ConnectionFailureNotifiesErrorAndCloseOnce)
   EXPECT_EQ(close_count, 1);
 }
 
+TEST(HttpPollingTransport, UsesCallerOwnedIoContext)
+{
+  namespace http = boost::beast::http;
+  boost::asio::io_context server_context;
+  boost::asio::ip::tcp::acceptor acceptor(server_context,
+                                          {boost::asio::ip::tcp::v4(), 0});
+  const auto port = acceptor.local_endpoint().port();
+  std::thread server(
+    [&]
+    {
+      boost::asio::ip::tcp::socket socket(server_context);
+      acceptor.accept(socket);
+      boost::beast::flat_buffer buffer;
+      http::request<http::string_body> request;
+      http::read(socket, buffer, request);
+      http::response<http::empty_body> response{
+        http::status::internal_server_error, request.version()};
+      response.prepare_payload();
+      http::write(socket, response);
+    });
+
+  boost::asio::io_context client_context;
+  bool failed = false;
+  std::thread::id callback_thread;
+  auto transport =
+    std::make_shared<sioxx::http_polling_transport>(client_context);
+  transport->set_error_handler(
+    [&](const std::string&)
+    {
+      failed = true;
+      callback_thread = std::this_thread::get_id();
+    });
+  transport->connect("ws://127.0.0.1:" + std::to_string(port) +
+                     "/socket.io/?EIO=4&transport=polling");
+  transport->send("before open", false);
+
+  EXPECT_FALSE(failed);
+  const auto run_thread = std::this_thread::get_id();
+  client_context.run();
+  server.join();
+
+  EXPECT_TRUE(failed);
+  EXPECT_EQ(callback_thread, run_thread);
+}
+
 TEST(HttpPollingTransport, SendsPlainRequestsThroughAuthenticatedProxy)
 {
   namespace http = boost::beast::http;
-  boost::asio::io_context io_context;
-  boost::asio::ip::tcp::acceptor acceptor(io_context,
+  boost::asio::io_context server_context;
+  boost::asio::ip::tcp::acceptor acceptor(server_context,
                                           {boost::asio::ip::tcp::v4(), 0});
   const auto port = acceptor.local_endpoint().port();
   std::exception_ptr server_error;
@@ -118,7 +163,7 @@ TEST(HttpPollingTransport, SendsPlainRequestsThroughAuthenticatedProxy)
     {
       try
       {
-        boost::asio::ip::tcp::socket socket(io_context);
+        boost::asio::ip::tcp::socket socket(server_context);
         acceptor.accept(socket);
         boost::beast::flat_buffer buffer;
         http::request<http::string_body> request;
@@ -137,26 +182,18 @@ TEST(HttpPollingTransport, SendsPlainRequestsThroughAuthenticatedProxy)
       }
     });
 
-  std::mutex mutex;
-  std::condition_variable condition;
+  boost::asio::io_context client_context;
   std::string error;
-  auto transport = std::make_shared<sioxx::http_polling_transport>();
+  auto transport =
+    std::make_shared<sioxx::http_polling_transport>(client_context);
   transport->set_proxy("http://127.0.0.1:" + std::to_string(port), "user",
                        "password");
-  transport->set_error_handler(
-    [&](const std::string& message)
-    {
-      std::lock_guard<std::mutex> lock(mutex);
-      error = message;
-      condition.notify_all();
-    });
+  transport->set_error_handler([&](const std::string& message)
+                               { error = message; });
   transport->connect(
     "ws://origin.example:3000/socket.io/?EIO=4&transport=polling");
 
-  {
-    std::unique_lock<std::mutex> lock(mutex);
-    ASSERT_TRUE(condition.wait_for(lock, 5s, [&] { return !error.empty(); }));
-  }
+  client_context.run();
   server.join();
 
   ASSERT_EQ(server_error, nullptr);
@@ -169,8 +206,8 @@ TEST(HttpPollingTransport, SendsPlainRequestsThroughAuthenticatedProxy)
 TEST(HttpPollingTransport, AuthenticatesConnectTunnelForTls)
 {
   namespace http = boost::beast::http;
-  boost::asio::io_context io_context;
-  boost::asio::ip::tcp::acceptor acceptor(io_context,
+  boost::asio::io_context server_context;
+  boost::asio::ip::tcp::acceptor acceptor(server_context,
                                           {boost::asio::ip::tcp::v4(), 0});
   const auto port = acceptor.local_endpoint().port();
   std::exception_ptr server_error;
@@ -182,7 +219,7 @@ TEST(HttpPollingTransport, AuthenticatesConnectTunnelForTls)
     {
       try
       {
-        boost::asio::ip::tcp::socket socket(io_context);
+        boost::asio::ip::tcp::socket socket(server_context);
         acceptor.accept(socket);
         boost::beast::flat_buffer buffer;
         http::request<http::empty_body> request;
@@ -202,25 +239,17 @@ TEST(HttpPollingTransport, AuthenticatesConnectTunnelForTls)
       }
     });
 
-  std::mutex mutex;
-  std::condition_variable condition;
+  boost::asio::io_context client_context;
   std::string error;
-  auto transport = std::make_shared<sioxx::http_polling_transport>();
+  auto transport =
+    std::make_shared<sioxx::http_polling_transport>(client_context);
   transport->set_proxy("http://127.0.0.1:" + std::to_string(port), "user",
                        "password");
-  transport->set_error_handler(
-    [&](const std::string& message)
-    {
-      std::lock_guard<std::mutex> lock(mutex);
-      error = message;
-      condition.notify_all();
-    });
+  transport->set_error_handler([&](const std::string& message)
+                               { error = message; });
   transport->connect("wss://origin.example/socket.io/?EIO=4&transport=polling");
 
-  {
-    std::unique_lock<std::mutex> lock(mutex);
-    ASSERT_TRUE(condition.wait_for(lock, 5s, [&] { return !error.empty(); }));
-  }
+  client_context.run();
   server.join();
 
   ASSERT_EQ(server_error, nullptr);
