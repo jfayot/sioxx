@@ -16,6 +16,23 @@
 namespace sioxx
 {
 
+namespace
+{
+template <typename Transport>
+std::shared_ptr<transport_base> make_configured_transport(
+  const client_options& options)
+{
+  auto transport = std::make_shared<Transport>();
+  transport->set_verify_tls(options.verify_tls);
+  if (!options.extra_headers.empty())
+    transport->set_extra_headers(options.extra_headers);
+  if (options.proxy)
+    transport->set_proxy(options.proxy->uri, options.proxy->username,
+                         options.proxy->password);
+  return transport;
+}
+}  // namespace
+
 client_impl::client_impl(client_options&& options)
     : options_(std::move(options))
 {
@@ -53,69 +70,13 @@ void client_impl::connect(const std::string& uri)
 std::shared_ptr<engineio_client> client_impl::ensure_engineio()
 {
   auto engineio = std::make_shared<engineio_client>();
-  std::shared_ptr<transport_base> transport;
   if (using_polling_.load())
-  {
-    auto polling = std::make_shared<http_polling_transport>();
-    polling->set_verify_tls(options_.verify_tls);
-    if (!options_.extra_headers.empty())
-      polling->set_extra_headers(options_.extra_headers);
-    if (options_.proxy)
-      polling->set_proxy(options_.proxy->uri, options_.proxy->username,
-                         options_.proxy->password);
-    transport = std::move(polling);
-  }
+    engineio->set_transport(
+      make_configured_transport<http_polling_transport>(options_));
   else
-  {
-    auto websocket = std::make_shared<websocket_transport>();
-    websocket->set_verify_tls(options_.verify_tls);
-    if (!options_.extra_headers.empty())
-      websocket->set_extra_headers(options_.extra_headers);
-    if (options_.proxy)
-      websocket->set_proxy(options_.proxy->uri, options_.proxy->username,
-                           options_.proxy->password);
-    transport = std::move(websocket);
-  }
-  engineio->set_transport(std::move(transport));
-
-  const auto weak_self = weak_from_this();
-  const std::weak_ptr<engineio_client> weak_engineio = engineio;
-  engineio->on_open(
-    [weak_self, weak_engineio]
-    {
-      auto self = weak_self.lock();
-      auto source = weak_engineio.lock();
-      if (self && source && self->is_current_engineio(source))
-        self->on_engineio_open();
-    });
-  engineio->on_close(
-    [weak_self, weak_engineio](const std::string& reason)
-    {
-      auto self = weak_self.lock();
-      auto source = weak_engineio.lock();
-      if (self && source && self->is_current_engineio(source))
-        self->on_engineio_close(reason);
-    });
-  engineio->on_frame(
-    [weak_self, weak_engineio](const std::string& payload, bool is_binary)
-    {
-      auto self = weak_self.lock();
-      auto source = weak_engineio.lock();
-      if (self && source && self->is_current_engineio(source))
-        self->on_engineio_frame(payload, is_binary);
-    });
-  engineio->on_error(
-    [weak_self, weak_engineio](const std::string& msg)
-    {
-      auto self = weak_self.lock();
-      auto source = weak_engineio.lock();
-      if (!self || !source || !self->is_current_engineio(source)) return;
-      if (!self->using_polling_.load() && !source->is_open())
-      {
-        self->activate_polling_fallback();
-      }
-      if (self->on_error_) self->on_error_(msg);
-    });
+    engineio->set_transport(
+      make_configured_transport<websocket_transport>(options_));
+  bind_engineio_callbacks(engineio);
 
   std::shared_ptr<engineio_client> previous_engineio;
   {
@@ -131,6 +92,66 @@ std::shared_ptr<engineio_client> client_impl::ensure_engineio()
   // destruction, so release it without holding engineio_mutex_.
   previous_engineio.reset();
   return engineio;
+}
+
+void client_impl::bind_engineio_callbacks(
+  const std::shared_ptr<engineio_client>& engineio)
+{
+  const auto weak_self = weak_from_this();
+  const std::weak_ptr<engineio_client> weak_engineio = engineio;
+  engineio->on_open(
+    [weak_self, weak_engineio]
+    {
+      if (auto self = weak_self.lock())
+        self->handle_engineio_open(weak_engineio.lock());
+    });
+  engineio->on_close(
+    [weak_self, weak_engineio](const std::string& reason)
+    {
+      if (auto self = weak_self.lock())
+        self->handle_engineio_close(weak_engineio.lock(), reason);
+    });
+  engineio->on_frame(
+    [weak_self, weak_engineio](const std::string& payload, bool is_binary)
+    {
+      if (auto self = weak_self.lock())
+        self->handle_engineio_frame(weak_engineio.lock(), payload, is_binary);
+    });
+  engineio->on_error(
+    [weak_self, weak_engineio](const std::string& msg)
+    {
+      if (auto self = weak_self.lock())
+        self->handle_engineio_error(weak_engineio.lock(), msg);
+    });
+}
+
+void client_impl::handle_engineio_open(
+  const std::shared_ptr<engineio_client>& engineio)
+{
+  if (engineio && is_current_engineio(engineio)) on_engineio_open();
+}
+
+void client_impl::handle_engineio_close(
+  const std::shared_ptr<engineio_client>& engineio, const std::string& reason)
+{
+  if (engineio && is_current_engineio(engineio)) on_engineio_close(reason);
+}
+
+void client_impl::handle_engineio_frame(
+  const std::shared_ptr<engineio_client>& engineio, const std::string& payload,
+  bool is_binary)
+{
+  if (engineio && is_current_engineio(engineio))
+    on_engineio_frame(payload, is_binary);
+}
+
+void client_impl::handle_engineio_error(
+  const std::shared_ptr<engineio_client>& engineio, const std::string& msg)
+{
+  if (!engineio || !is_current_engineio(engineio)) return;
+  if (!using_polling_.load() && !engineio->is_open())
+    activate_polling_fallback();
+  if (on_error_) on_error_(msg);
 }
 
 std::shared_ptr<engineio_client> client_impl::current_engineio()

@@ -41,6 +41,15 @@ class client_impl : public std::enable_shared_from_this<client_impl>
 
  private:
   std::shared_ptr<engineio_client> ensure_engineio();
+  void bind_engineio_callbacks(
+    const std::shared_ptr<engineio_client>& engineio);
+  void handle_engineio_open(const std::shared_ptr<engineio_client>& engineio);
+  void handle_engineio_close(const std::shared_ptr<engineio_client>& engineio,
+                             const std::string& reason);
+  void handle_engineio_frame(const std::shared_ptr<engineio_client>& engineio,
+                             const std::string& payload, bool is_binary);
+  void handle_engineio_error(const std::shared_ptr<engineio_client>& engineio,
+                             const std::string& msg);
   std::shared_ptr<engineio_client> current_engineio();
   bool is_current_engineio(
     const std::shared_ptr<engineio_client>& engineio) const;
