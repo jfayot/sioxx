@@ -244,10 +244,13 @@ void client_impl::schedule_reconnect()
     reconnect_thread_ = std::thread(
       [self = std::move(self), delay, uri = std::move(uri)]
       {
-        std::unique_lock<std::mutex> lock(self->reconnect_mutex_);
-        if (self->reconnect_condition_.wait_for(
-              lock, delay, [&self] { return self->intentional_close_.load(); }))
-          return;
+        {
+          std::unique_lock<std::mutex> lock(self->reconnect_mutex_);
+          if (self->reconnect_condition_.wait_for(
+                lock, delay,
+                [&self] { return self->intentional_close_.load(); }))
+            return;
+        }
         if (self->intentional_close_.load()) return;
         try
         {
@@ -259,13 +262,11 @@ void client_impl::schedule_reconnect()
         }
         catch (const std::exception& error)
         {
-          lock.unlock();
           if (self->on_error_)
             self->on_error_(std::string("sioxx reconnect: ") + error.what());
         }
         catch (...)
         {
-          lock.unlock();
           if (self->on_error_) self->on_error_("sioxx reconnect failed");
         }
       });
