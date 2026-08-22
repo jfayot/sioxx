@@ -20,9 +20,10 @@ namespace
 {
 template <typename Transport>
 std::shared_ptr<transport_base> make_configured_transport(
-  const client_options& options)
+  const client_options& options, boost::asio::io_context* io_context)
 {
-  auto transport = std::make_shared<Transport>();
+  auto transport = io_context ? std::make_shared<Transport>(*io_context)
+                              : std::make_shared<Transport>();
   transport->set_verify_tls(options.verify_tls);
   if (!options.extra_headers.empty())
     transport->set_extra_headers(options.extra_headers);
@@ -47,8 +48,9 @@ void capture_shutdown_error(std::exception_ptr& first_error,
 }
 }  // namespace
 
-client_impl::client_impl(client_options&& options)
-    : options_(std::move(options))
+client_impl::client_impl(client_options&& options,
+                         boost::asio::io_context* io_context)
+    : options_(std::move(options)), io_context_(io_context)
 {
   if (options_.parser_factory)
   {
@@ -86,10 +88,10 @@ std::shared_ptr<engineio_client> client_impl::ensure_engineio()
   auto engineio = std::make_shared<engineio_client>();
   if (using_polling_.load())
     engineio->set_transport(
-      make_configured_transport<http_polling_transport>(options_));
+      make_configured_transport<http_polling_transport>(options_, io_context_));
   else
     engineio->set_transport(
-      make_configured_transport<websocket_transport>(options_));
+      make_configured_transport<websocket_transport>(options_, io_context_));
   bind_engineio_callbacks(engineio);
 
   std::shared_ptr<engineio_client> previous_engineio;
@@ -416,6 +418,22 @@ client::client(const client_options& options) : client(client_options(options))
 
 client::client(client_options&& options)
     : impl_(std::make_shared<client_impl>(std::move(options)))
+{
+}
+
+client::client(boost::asio::io_context& io_context)
+    : client(io_context, client_options{})
+{
+}
+
+client::client(boost::asio::io_context& io_context,
+               const client_options& options)
+    : client(io_context, client_options(options))
+{
+}
+
+client::client(boost::asio::io_context& io_context, client_options&& options)
+    : impl_(std::make_shared<client_impl>(std::move(options), &io_context))
 {
 }
 

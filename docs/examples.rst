@@ -36,6 +36,28 @@ the server accepts the namespace:
 Callbacks run on the connection's background thread. Dispatch back to your
 application thread before modifying thread-affine state such as a UI.
 
+Use an existing Asio event loop
+-------------------------------
+
+Pass a caller-owned ``boost::asio::io_context`` to make both WebSocket and
+HTTP polling networking run on an application's existing event loop:
+
+.. code-block:: cpp
+
+   #include <boost/asio/io_context.hpp>
+   #include <sioxx/sioxx.hpp>
+
+   boost::asio::io_context io_context;
+   sioxx::client_options options;
+   sioxx::client client(io_context, options);
+
+   client.connect("wss://example.com");
+   io_context.run();
+
+The context must outlive the client. The application is responsible for
+running it; sioxx does not run or stop a supplied context. Transport callbacks
+run through the supplied context and are serialized by an internal strand.
+
 Emit an event and receive an acknowledgement
 ---------------------------------------------
 

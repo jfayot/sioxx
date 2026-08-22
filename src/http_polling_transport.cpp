@@ -1,5 +1,8 @@
 #include "http_polling_transport.hpp"
 
+#include <openssl/err.h>
+
+#include <algorithm>
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ssl/error.hpp>
 #include <boost/beast/core.hpp>
@@ -136,7 +139,214 @@ std::vector<std::string> detail::polling_split_payload(
   return packets;
 }
 
+struct http_polling_transport::async_request_operation
+    : std::enable_shared_from_this<async_request_operation>
+{
+  async_request_operation(std::shared_ptr<http_polling_transport> transport,
+                          http::verb method, std::string target,
+                          std::string body, request_handler handler)
+      : transport(std::move(transport)),
+        resolver(*this->transport->strand_),
+        ssl_context(ssl::context::tls_client),
+        request(method, std::move(target), 11),
+        handler(std::move(handler))
+  {
+    const auto& url = this->transport->url_;
+    request.set(http::field::host, detail::authority(url));
+    request.set(http::field::user_agent, "sioxx-client");
+    request.set(http::field::content_type, "text/plain; charset=UTF-8");
+    if (this->transport->proxy_ && !url.tls &&
+        !this->transport->proxy_->authorization.empty())
+      request.set(http::field::proxy_authorization,
+                  this->transport->proxy_->authorization);
+    for (const auto& [key, value] : this->transport->extra_headers_)
+      request.set(key, value);
+    request.body() = std::move(body);
+    request.prepare_payload();
+    parser.body_limit(max_http_response_body_size);
+  }
+
+  void start()
+  {
+    const auto& endpoint =
+      transport->proxy_ ? transport->proxy_->endpoint : transport->url_;
+    resolver.async_resolve(
+      endpoint.host, endpoint.port,
+      [self = shared_from_this()](beast::error_code ec,
+                                  const tcp::resolver::results_type& results)
+      {
+        if (ec) return self->finish(ec);
+        self->connect(results);
+      });
+  }
+
+  void connect(const tcp::resolver::results_type& results)
+  {
+    if (transport->url_.tls)
+    {
+      ssl_context.set_default_verify_paths();
+      ssl_context.set_verify_mode(transport->verify_tls_ ? ssl::verify_peer
+                                                         : ssl::verify_none);
+      tls_stream = std::make_unique<beast::ssl_stream<beast::tcp_stream>>(
+        *transport->strand_, ssl_context);
+      if (!SSL_set_tlsext_host_name(tls_stream->native_handle(),
+                                    transport->url_.host.c_str()))
+      {
+        return finish({static_cast<int>(::ERR_get_error()),
+                       net::error::get_ssl_category()});
+      }
+      beast::get_lowest_layer(*tls_stream)
+        .async_connect(results,
+                       [self = shared_from_this()](
+                         beast::error_code ec,
+                         const tcp::resolver::results_type::endpoint_type&)
+                       {
+                         if (ec) return self->finish(ec);
+                         if (self->transport->proxy_)
+                           self->write_proxy_connect();
+                         else
+                           self->handshake_tls();
+                       });
+      return;
+    }
+
+    plain_stream = std::make_unique<beast::tcp_stream>(*transport->strand_);
+    plain_stream->async_connect(
+      results,
+      [self = shared_from_this()](
+        beast::error_code ec, const tcp::resolver::results_type::endpoint_type&)
+      {
+        if (ec) return self->finish(ec);
+        self->write_request();
+      });
+  }
+
+  void write_proxy_connect()
+  {
+    const auto authority = detail::connect_authority(transport->url_);
+    proxy_request = {http::verb::connect, authority, 11};
+    proxy_request.set(http::field::host, authority);
+    proxy_request.set(http::field::user_agent, "sioxx-client");
+    if (!transport->proxy_->authorization.empty())
+      proxy_request.set(http::field::proxy_authorization,
+                        transport->proxy_->authorization);
+    proxy_parser.skip(true);
+    http::async_write(
+      beast::get_lowest_layer(*tls_stream), proxy_request,
+      [self = shared_from_this()](beast::error_code ec, std::size_t)
+      {
+        if (ec) return self->finish(ec);
+        http::async_read(beast::get_lowest_layer(*self->tls_stream),
+                         self->proxy_buffer, self->proxy_parser,
+                         [self](beast::error_code read_ec, std::size_t)
+                         {
+                           if (read_ec) return self->finish(read_ec);
+                           const auto status =
+                             self->proxy_parser.get().result_int();
+                           if (status / 100 != 2)
+                           {
+                             self->transport->fail(
+                               "polling transport: proxy CONNECT "
+                               "returned HTTP " +
+                               std::to_string(status));
+                             return self->finish(net::error::operation_aborted);
+                           }
+                           self->handshake_tls();
+                         });
+      });
+  }
+
+  void handshake_tls()
+  {
+    tls_stream->async_handshake(
+      ssl::stream_base::client,
+      [self = shared_from_this()](beast::error_code ec)
+      {
+        if (ec) return self->finish(ec);
+        self->write_request();
+      });
+  }
+
+  void write_request()
+  {
+    if (tls_stream)
+      http::async_write(
+        *tls_stream, request,
+        [self = shared_from_this()](beast::error_code ec, std::size_t)
+        {
+          if (ec) return self->finish(ec);
+          self->read_response();
+        });
+    else
+      http::async_write(
+        *plain_stream, request,
+        [self = shared_from_this()](beast::error_code ec, std::size_t)
+        {
+          if (ec) return self->finish(ec);
+          self->read_response();
+        });
+  }
+
+  void read_response()
+  {
+    if (tls_stream)
+      http::async_read(
+        *tls_stream, buffer, parser,
+        [self = shared_from_this()](beast::error_code ec, std::size_t)
+        { self->complete_response(ec); });
+    else
+      http::async_read(
+        *plain_stream, buffer, parser,
+        [self = shared_from_this()](beast::error_code ec, std::size_t)
+        { self->complete_response(ec); });
+  }
+
+  void complete_response(beast::error_code ec)
+  {
+    if (ec) return finish(ec);
+    auto result = parser.release();
+    finish({}, {result.result_int(), std::move(result.body())});
+  }
+
+  void cancel()
+  {
+    resolver.cancel();
+    beast::error_code ignored;
+    if (plain_stream) plain_stream->socket().close(ignored);
+    if (tls_stream)
+      beast::get_lowest_layer(*tls_stream).socket().close(ignored);
+  }
+
+  void finish(beast::error_code ec, response result = {})
+  {
+    if (finished) return;
+    finished = true;
+    transport->remove_external_request(this);
+    auto completion = std::move(handler);
+    completion(ec, std::move(result));
+  }
+
+  std::shared_ptr<http_polling_transport> transport;
+  tcp::resolver resolver;
+  ssl::context ssl_context;
+  http::request<http::string_body> request;
+  beast::flat_buffer buffer{max_http_read_buffer_size};
+  http::response_parser<http::string_body> parser;
+  std::unique_ptr<beast::tcp_stream> plain_stream;
+  std::unique_ptr<beast::ssl_stream<beast::tcp_stream>> tls_stream;
+  http::request<http::empty_body> proxy_request;
+  beast::flat_buffer proxy_buffer{max_http_read_buffer_size};
+  http::response_parser<http::empty_body> proxy_parser;
+  request_handler handler;
+  bool finished{false};
+};
+
 http_polling_transport::http_polling_transport() = default;
+
+http_polling_transport::http_polling_transport(net::io_context& io_context)
+    : io_context_(&io_context), strand_(net::make_strand(io_context))
+{
+}
 
 http_polling_transport::~http_polling_transport()
 {
@@ -172,6 +382,12 @@ void http_polling_transport::connect(const std::string& url)
   if (closing_) return;
   url_ = parse_ws_url(url);
   state_ = transport_state::connecting;
+  if (io_context_)
+  {
+    net::post(*strand_,
+              [self = shared_from_this()] { self->start_external(); });
+    return;
+  }
   write_thread_ =
     std::thread([self = shared_from_this()] { self->run_writes(); });
   poll_thread_ = std::thread([self = shared_from_this()] { self->run(); });
@@ -209,6 +425,18 @@ void http_polling_transport::run()
 
 void http_polling_transport::send(const std::string& payload, bool is_binary)
 {
+  if (io_context_)
+  {
+    net::post(*strand_,
+              [self = shared_from_this(), payload, is_binary]
+              {
+                if (self->closing_ || self->state_ != transport_state::open)
+                  return;
+                self->write_queue_.emplace_back(payload, is_binary);
+                self->start_next_external_write();
+              });
+    return;
+  }
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (closing_ || state_ != transport_state::open) return;
@@ -305,6 +533,85 @@ http_polling_transport::response http_polling_transport::request(
   return {res.result_int(), std::move(res.body())};
 }
 
+void http_polling_transport::async_request(http::verb method,
+                                           std::string target, std::string body,
+                                           request_handler handler)
+{
+  if (proxy_ && !url_.tls) target = detail::absolute_http_target(url_, target);
+  auto operation = std::make_shared<async_request_operation>(
+    shared_from_this(), method, std::move(target), std::move(body),
+    std::move(handler));
+  external_requests_.push_back(operation);
+  operation->start();
+}
+
+void http_polling_transport::start_external() { poll_external(true); }
+
+void http_polling_transport::poll_external(bool handshake)
+{
+  const auto target = handshake ? url_.target : poll_target();
+  async_request(
+    http::verb::get, target, {},
+    [self = shared_from_this(), handshake](beast::error_code ec,
+                                           const response& result)
+    {
+      if (self->closing_) return;
+      if (ec) return self->fail("polling transport: " + ec.message());
+      if (result.status / 100 != 2)
+        return self->fail(
+          std::string(handshake ? "polling handshake" : "polling request") +
+          " returned HTTP " + std::to_string(result.status));
+      if (handshake)
+      {
+        self->state_ = transport_state::open;
+        if (self->on_open_) self->on_open_();
+        if (self->closing_) return;
+      }
+      self->deliver(result.body);
+      if (!self->closing_) self->poll_external(false);
+    });
+}
+
+void http_polling_transport::start_next_external_write()
+{
+  if (external_write_in_progress_ || write_queue_.empty() || closing_) return;
+  external_write_in_progress_ = true;
+  auto write = std::move(write_queue_.front());
+  write_queue_.pop_front();
+  if (write.second) write.first = detail::polling_encode_binary(write.first);
+  async_request(
+    http::verb::post, poll_target(), std::move(write.first),
+    [self = shared_from_this()](beast::error_code ec, const response& result)
+    {
+      self->external_write_in_progress_ = false;
+      if (self->closing_) return;
+      if (ec) return self->fail("polling write: " + ec.message());
+      if (result.status / 100 != 2)
+        return self->fail("polling write returned HTTP " +
+                          std::to_string(result.status));
+      self->start_next_external_write();
+    });
+}
+
+void http_polling_transport::cancel_external_requests()
+{
+  for (auto& weak_request : external_requests_)
+    if (auto operation = weak_request.lock()) operation->cancel();
+}
+
+void http_polling_transport::remove_external_request(
+  const async_request_operation* operation)
+{
+  external_requests_.erase(
+    std::remove_if(external_requests_.begin(), external_requests_.end(),
+                   [operation](const auto& weak_request)
+                   {
+                     const auto active = weak_request.lock();
+                     return !active || active.get() == operation;
+                   }),
+    external_requests_.end());
+}
+
 std::string http_polling_transport::poll_target() const
 {
   std::lock_guard<std::mutex> lock(mutex_);
@@ -342,29 +649,44 @@ void http_polling_transport::deliver(const std::string& body)
 
 void http_polling_transport::close()
 {
+  if (io_context_ && !strand_->running_in_this_thread())
+  {
+    net::post(*strand_, [self = shared_from_this()] { self->close(); });
+    return;
+  }
   bool notify_close = false;
   {
     std::lock_guard<std::mutex> lock(connect_mutex_);
-    std::call_once(shutdown_once_,
-                   [this, &notify_close]
-                   {
-                     notify_close = !closing_.exchange(true);
-                     state_ = transport_state::closed;
-                     write_condition_.notify_all();
-                     // Ending the Engine.IO session causes a pending poll to
-                     // return promptly.
-                     bool has_session = false;
-                     {
-                       std::lock_guard<std::mutex> queue_lock(mutex_);
-                       has_session = !sid_.empty();
-                     }
-                     if (has_session)
-                     {
-                       auto self = shared_from_this();
-                       close_thread_ = std::thread([self = std::move(self)]
-                                                   { self->post("1", false); });
-                     }
-                   });
+    std::call_once(
+      shutdown_once_,
+      [this, &notify_close]
+      {
+        notify_close = !closing_.exchange(true);
+        state_ = transport_state::closed;
+        if (io_context_)
+        {
+          write_queue_.clear();
+          cancel_external_requests();
+          if (!sid_.empty())
+            async_request(http::verb::post, poll_target(), "1",
+                          [](beast::error_code, const response&) {});
+          return;
+        }
+        write_condition_.notify_all();
+        // Ending the Engine.IO session causes a pending poll to
+        // return promptly.
+        bool has_session = false;
+        {
+          std::lock_guard<std::mutex> queue_lock(mutex_);
+          has_session = !sid_.empty();
+        }
+        if (has_session)
+        {
+          auto self = shared_from_this();
+          close_thread_ =
+            std::thread([self = std::move(self)] { self->post("1", false); });
+        }
+      });
   }
 
   if (notify_close && on_close_) on_close_("closed");
@@ -373,6 +695,7 @@ void http_polling_transport::close()
 void http_polling_transport::sync_close()
 {
   close();
+  if (io_context_) return;
   // A polling callback cannot wait for the worker executing that callback.
   // Call close() from callbacks and reserve sync_close() for other threads.
   if (active_http_polling_transport == this) return;
@@ -400,6 +723,7 @@ void http_polling_transport::fail(const std::string& message)
 {
   if (closing_.exchange(true)) return;
   state_ = transport_state::closed;
+  if (io_context_) cancel_external_requests();
   {
     std::lock_guard<std::mutex> lock(mutex_);
     write_queue_.clear();

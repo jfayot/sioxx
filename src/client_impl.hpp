@@ -16,6 +16,14 @@
 #include "sioxx/parser.hpp"
 #include "sioxx/socket.hpp"
 
+namespace boost
+{
+namespace asio
+{
+class io_context;
+}
+}  // namespace boost
+
 namespace sioxx
 {
 
@@ -27,7 +35,8 @@ class client_impl : public std::enable_shared_from_this<client_impl>
   using error_handler = std::function<void(const std::string&)>;
   using fail_handler = std::function<void()>;
 
-  explicit client_impl(client_options&& options);
+  explicit client_impl(client_options&& options,
+                       boost::asio::io_context* io_context = nullptr);
   void connect(const std::string& uri);
   void close();
   void sync_close();
@@ -61,6 +70,7 @@ class client_impl : public std::enable_shared_from_this<client_impl>
   void activate_polling_fallback();
 
   client_options options_;
+  boost::asio::io_context* io_context_;
   std::unique_ptr<parser_base> parser_;
   mutable std::mutex engineio_mutex_;
   std::shared_ptr<engineio_client> engineio_;

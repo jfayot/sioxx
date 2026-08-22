@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <boost/asio/io_context.hpp>
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
@@ -7,6 +8,7 @@
 #include <mutex>
 #include <sioxx/sioxx.hpp>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace std::chrono_literals;
@@ -293,6 +295,80 @@ TEST(E2E, ConnectsWithHttpPollingOnly)
   EXPECT_EQ(acknowledgement->value()[0], "polling");
 
   client.close();
+}
+
+TEST(E2E, ConnectsUsingCallerOwnedIoContext)
+{
+  boost::asio::io_context io_context;
+  sioxx::client_options options;
+  options.verify_tls = false;
+  options.proxy = sioxx::proxy_options{server_url("SIOXX_E2E_PROXY_URL"),
+                                       "sioxx", "proxy-password"};
+  auto connected = std::make_shared<completion_signal>();
+  auto acknowledgement = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client(io_context, options);
+  auto socket = client.socket("/e2e");
+
+  configure_failure_reporting(client, error);
+  socket->on_connect([connected] { connected->set(); });
+  client.connect(server_url("SIOXX_E2E_TLS_URL"));
+  std::thread io_thread([&] { io_context.run(); });
+
+  const bool did_connect = connected->wait_for(5s);
+  bool did_acknowledge = false;
+  if (did_connect)
+  {
+    socket->emit("transport_with_ack", sioxx::json::array(),
+                 [acknowledgement](sioxx::message data)
+                 { acknowledgement->set(std::move(data)); });
+    did_acknowledge = acknowledgement->wait_for(5s);
+  }
+
+  client.close();
+  io_thread.join();
+
+  ASSERT_TRUE(did_connect) << "connection error: " << error->value();
+  ASSERT_TRUE(did_acknowledge);
+  EXPECT_EQ(acknowledgement->value()[0], "websocket");
+}
+
+TEST(E2E, HttpPollingUsesCallerOwnedIoContext)
+{
+  boost::asio::io_context io_context;
+  sioxx::client_options options;
+  options.verify_tls = false;
+  options.force_http_polling = true;
+  options.extra_headers = {{"X-Sioxx-Test", "external-polling-header"}};
+  options.proxy = sioxx::proxy_options{server_url("SIOXX_E2E_PROXY_URL"),
+                                       "sioxx", "proxy-password"};
+  auto connected = std::make_shared<completion_signal>();
+  auto acknowledgement = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client(io_context, options);
+  auto socket = client.socket("/e2e");
+
+  configure_failure_reporting(client, error);
+  socket->on_connect([connected] { connected->set(); });
+  client.connect(server_url("SIOXX_E2E_TLS_URL"));
+  std::thread io_thread([&] { io_context.run(); });
+
+  const bool did_connect = connected->wait_for(5s);
+  bool did_acknowledge = false;
+  if (did_connect)
+  {
+    socket->emit("transport_with_ack", sioxx::json::array(),
+                 [acknowledgement](sioxx::message data)
+                 { acknowledgement->set(std::move(data)); });
+    did_acknowledge = acknowledgement->wait_for(5s);
+  }
+
+  client.close();
+  io_thread.join();
+
+  ASSERT_TRUE(did_connect) << "connection error: " << error->value();
+  ASSERT_TRUE(did_acknowledge);
+  EXPECT_EQ(acknowledgement->value()[0], "polling");
 }
 
 TEST(E2E, CloseFromPollingCallbackDoesNotDeadlock)

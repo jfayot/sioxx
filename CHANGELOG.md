@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Additions :tada:
 
+- Added client constructors accepting a caller-owned Boost.Asio `io_context`
+  for WebSocket and HTTP long-polling networking.
 - Added complete binary attachment support to the default JSON parser,
   including nested and multiple `BINARY_EVENT` and `BINARY_ACK` attachments
   over WebSocket and HTTP long-polling.

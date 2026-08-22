@@ -285,6 +285,26 @@ blocks until pending reconnect, transport, and heartbeat workers have stopped;
 call it only from outside library callbacks. Destroying a client performs the
 synchronous form automatically and should likewise happen outside callbacks.
 
+To integrate transport networking with an existing Asio event loop, pass its
+`io_context` when constructing the client:
+
+```cpp
+#include <boost/asio/io_context.hpp>
+#include <sioxx/sioxx.hpp>
+
+boost::asio::io_context io_context;
+sioxx::client client(io_context);  // options may be passed as a second argument
+client.connect("wss://example.com");
+io_context.run();
+```
+
+In this mode, WebSocket and HTTP polling operations and their callbacks run on
+the supplied context. The caller must keep it alive longer than the client and
+is responsible for running it; sioxx never runs or stops it. Operations are
+serialized on an internal strand, so the context may be run by multiple
+threads. Reconnection delays and Engine.IO heartbeat monitoring remain managed
+by sioxx workers.
+
 ### Example test server
 
 The repository includes a small Socket.IO server in
