@@ -10,7 +10,7 @@ required_conan_version = ">=2.28"
 
 class SioxxConan(ConanFile):
     name = "sioxx"
-    version = "0.2.0"
+    version = "0.3.0"
     package_type = "library"
 
     license = "MIT"
