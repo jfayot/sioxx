@@ -25,6 +25,7 @@ changelog_file="$repo_root/CHANGELOG.md"
 conan_file="$repo_root/conanfile.py"
 readme_file="$repo_root/README.md"
 docs_versions_file="$repo_root/docs/_static/versions.json"
+consumer_cmake_file="$repo_root/tests/integration/consumer/CMakeLists.txt"
 release_date="$(date +%Y-%m-%d)"
 
 current_version="$(
@@ -69,6 +70,10 @@ if ! grep -Fq "sioxx/$current_version" "$readme_file"; then
   echo "README.md has no sioxx/$current_version package reference" >&2
   exit 1
 fi
+if ! grep -Fq "GIT_TAG v$current_version" "$readme_file"; then
+  echo "README.md has no v$current_version FetchContent reference" >&2
+  exit 1
+fi
 if ! grep -Fq "\"name\": \"$current_version (current)\"" "$docs_versions_file" ||
   ! grep -Fq "\"version\": \"$current_version\"" "$docs_versions_file"; then
   echo "Unexpected current version in docs/_static/versions.json" >&2
@@ -82,18 +87,28 @@ if ! grep -Fxq "$expected_unreleased" "$changelog_file"; then
   exit 1
 fi
 
+current_compat_version="${current_version%.*}"
+new_compat_version="${version%.*}"
+if ! grep -Fxq "find_package(sioxx $current_compat_version CONFIG REQUIRED)" \
+  "$consumer_cmake_file"; then
+  echo "Unexpected integration consumer version; expected $current_compat_version" >&2
+  exit 1
+fi
+
 cmake_tmp="$(mktemp "$repo_root/.CMakeLists.txt.XXXXXX")"
 changelog_tmp="$(mktemp "$repo_root/.CHANGELOG.md.XXXXXX")"
 conan_tmp="$(mktemp "$repo_root/.conanfile.py.XXXXXX")"
 readme_tmp="$(mktemp "$repo_root/.README.md.XXXXXX")"
 docs_versions_tmp="$(mktemp "$repo_root/.versions.json.XXXXXX")"
+consumer_cmake_tmp="$(mktemp "$repo_root/.consumer-CMakeLists.txt.XXXXXX")"
 cleanup() {
   rm -f \
     "$cmake_tmp" \
     "$changelog_tmp" \
     "$conan_tmp" \
     "$readme_tmp" \
-    "$docs_versions_tmp"
+    "$docs_versions_tmp" \
+    "$consumer_cmake_tmp"
 }
 trap cleanup EXIT
 
@@ -140,6 +155,7 @@ awk -v version="$version" -v old_version="$current_version" '
 awk -v version="$version" -v old_version="$current_version" '
   {
     replaced += gsub("sioxx/" old_version, "sioxx/" version)
+    replaced += gsub("GIT_TAG v" old_version, "GIT_TAG v" version)
     print
   }
   END { if (!replaced) exit 1 }
@@ -160,11 +176,24 @@ awk -v version="$version" -v old_version="$current_version" '
   END { if (!name_updated || !version_updated) exit 1 }
 ' "$docs_versions_file" > "$docs_versions_tmp"
 
+awk \
+  -v old_version="$current_compat_version" \
+  -v version="$new_compat_version" '
+  $0 == "find_package(sioxx " old_version " CONFIG REQUIRED)" {
+    print "find_package(sioxx " version " CONFIG REQUIRED)"
+    updated = 1
+    next
+  }
+  { print }
+  END { if (!updated) exit 1 }
+' "$consumer_cmake_file" > "$consumer_cmake_tmp"
+
 cp "$cmake_tmp" "$cmake_file"
 cp "$changelog_tmp" "$changelog_file"
 cp "$conan_tmp" "$conan_file"
 cp "$readme_tmp" "$readme_file"
 cp "$docs_versions_tmp" "$docs_versions_file"
+cp "$consumer_cmake_tmp" "$consumer_cmake_file"
 cleanup
 trap - EXIT
 

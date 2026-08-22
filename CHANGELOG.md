@@ -37,6 +37,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes :wrench:
 
+- Kept FetchContent examples and the installed-package integration consumer
+  synchronized when preparing a new release.
 - Added explicit two-phase client shutdown: `close()` requests shutdown
   without waiting, while `sync_close()` cancels pending reconnect delays and
   waits for transport and heartbeat workers. Client destruction uses the
