@@ -105,7 +105,7 @@ sock->emit("ping_ack", sioxx::json::array({1, 2, 3}), [](sioxx::message reply) {
     // ack callback
 });
 
-client.close();
+client.sync_close();
 ```
 
 ## Installation and configuration
@@ -271,12 +271,19 @@ library and carries the same values natively in one binary frame.
 
 ### Threading model
 
-`websocket_transport` runs its own `boost::asio::io_context` on a background
-thread per connection. All `on_*` callbacks (`socket->on(...)`,
-`socket->on_any(...)`, open/close
-listeners, ack callbacks) fire on that thread — if you're updating UI state
-or anything not thread-safe, hop back to your own thread/queue from inside
-the callback.
+WebSocket connections run a dedicated `boost::asio::io_context` thread, while
+HTTP polling uses separate poll and write workers. The `on_*` callbacks
+(`socket->on(...)`, `socket->on_any(...)`, open/close listeners, ack callbacks)
+run on the thread handling the event—normally a library worker, though an
+intentional close can notify on the thread calling `close()`. If you're
+updating UI state or anything not thread-safe, hop back to your own thread or
+queue from inside the callback.
+
+`client.close()` requests shutdown and returns immediately, so it is safe to
+call from a library callback. `client.sync_close()` requests shutdown and
+blocks until pending reconnect, transport, and heartbeat workers have stopped;
+call it only from outside library callbacks. Destroying a client performs the
+synchronous form automatically and should likewise happen outside callbacks.
 
 ### Example test server
 

@@ -31,6 +31,7 @@ class http_polling_transport final
   void connect(const std::string& url) override;
   void send(const std::string& payload, bool is_binary) override;
   void close() override;
+  void sync_close() override;
 
   void set_extra_headers(
     std::vector<std::pair<std::string, std::string>> headers);
@@ -53,7 +54,8 @@ class http_polling_transport final
   std::string poll_target() const;
   void deliver(const std::string& body);
   void fail(const std::string& message);
-  void join_write_thread();
+  void join_thread(std::thread& thread);
+  void join_threads();
 
   url_parts url_;
   std::string sid_;
@@ -64,9 +66,12 @@ class http_polling_transport final
   std::thread poll_thread_;
   std::thread close_thread_;
   std::thread write_thread_;
-  std::mutex mutex_;
+  mutable std::mutex mutex_;
   std::condition_variable write_condition_;
   std::deque<std::pair<std::string, bool>> write_queue_;
+  std::once_flag shutdown_once_;
+  std::mutex connect_mutex_;
+  std::mutex join_mutex_;
 };
 
 }  // namespace sioxx

@@ -7,7 +7,17 @@ namespace sioxx
 
 engineio_client::engineio_client() = default;
 
-engineio_client::~engineio_client() { close(); }
+engineio_client::~engineio_client()
+{
+  try
+  {
+    sync_close();
+  }
+  catch (...)
+  {
+    // Destructors cannot report shutdown errors.
+  }
+}
 
 void engineio_client::set_transport(std::shared_ptr<transport_base> transport)
 {
@@ -41,7 +51,7 @@ void engineio_client::set_transport(std::shared_ptr<transport_base> transport)
 
 void engineio_client::open(const std::string& ws_url)
 {
-  closing_ = false;
+  if (closing_) return;
   open_ = false;
   if (!transport_)
     throw std::runtime_error("sioxx: no transport set on engineio_client");
@@ -51,9 +61,16 @@ void engineio_client::open(const std::string& ws_url)
 void engineio_client::close()
 {
   if (closing_.exchange(true)) return;
-  stop_heartbeat_timer();
+  request_heartbeat_stop();
   open_ = false;
   if (transport_) transport_->close();
+}
+
+void engineio_client::sync_close()
+{
+  close();
+  stop_heartbeat_timer();
+  if (transport_) transport_->sync_close();
 }
 
 void engineio_client::send(const std::string& payload, bool is_binary)
@@ -186,15 +203,10 @@ void engineio_client::start_heartbeat_timer()
 
 void engineio_client::stop_heartbeat_timer()
 {
+  request_heartbeat_stop();
   std::thread thread_to_join;
   {
     std::lock_guard<std::mutex> thread_lock(heartbeat_thread_mutex_);
-    heartbeat_stop_requested_ = true;
-    {
-      std::lock_guard<std::mutex> lock(heartbeat_mutex_);
-      heartbeat_cv_.notify_all();
-    }
-
     if (heartbeat_thread_.joinable() &&
         heartbeat_thread_.get_id() != std::this_thread::get_id())
     {
@@ -206,6 +218,15 @@ void engineio_client::stop_heartbeat_timer()
     }
   }
   if (thread_to_join.joinable()) thread_to_join.join();
+}
+
+void engineio_client::request_heartbeat_stop()
+{
+  {
+    std::lock_guard<std::mutex> thread_lock(heartbeat_thread_mutex_);
+    heartbeat_stop_requested_ = true;
+  }
+  heartbeat_cv_.notify_all();
 }
 
 }  // namespace sioxx

@@ -295,6 +295,25 @@ TEST(E2E, ConnectsWithHttpPollingOnly)
   client.close();
 }
 
+TEST(E2E, CloseFromPollingCallbackDoesNotDeadlock)
+{
+  sioxx::client_options options;
+  options.force_http_polling = true;
+
+  auto close_returned = std::make_shared<completion_signal>();
+  sioxx::client client(options);
+  client.set_open_listener(
+    [&client, close_returned]
+    {
+      client.close();
+      close_returned->set();
+    });
+  client.connect(server_url());
+
+  EXPECT_TRUE(close_returned->wait_for(5s));
+  client.sync_close();
+}
+
 TEST(E2E, ConnectsWithWebsocketThroughAuthenticatedProxy)
 {
   sioxx::client_options options;
@@ -622,6 +641,29 @@ TEST(E2E, FallsBackToPollingWhenWebsocketIsUnavailable)
   client.close();
 }
 
+TEST(E2E, CloseDuringFallbackNotificationPreventsPollingConnection)
+{
+  auto close_returned = std::make_shared<completion_signal>();
+  auto connections = std::make_shared<event_counter>();
+  sioxx::client client;
+  auto socket = client.socket("/e2e");
+
+  client.set_error_listener(
+    [&client, close_returned](const std::string& message)
+    {
+      if (message.find("switching to HTTP long-polling") == std::string::npos)
+        return;
+      client.close();
+      close_returned->set();
+    });
+  socket->on_connect([connections] { connections->increment(); });
+  client.connect(server_url("SIOXX_E2E_POLLING_ONLY_URL"));
+
+  ASSERT_TRUE(close_returned->wait_for(5s));
+  EXPECT_FALSE(connections->wait_for(1, 1s));
+  client.sync_close();
+}
+
 TEST(E2E, ReconnectsAfterUnexpectedWebsocketClose)
 {
   sioxx::client_options options;
@@ -682,6 +724,42 @@ TEST(E2E, ReconnectsAfterUnexpectedWebsocketClose)
               {{{"received", sioxx::json::array({"after-reconnect"})}}}));
 
   client.close();
+}
+
+TEST(E2E, DestructionCancelsPendingReconnect)
+{
+  sioxx::client_options options;
+  options.reconnect_attempts = 1;
+  options.reconnect_delay = 200ms;
+  options.reconnect_delay_max = 200ms;
+  options.reconnect_randomization_factor = 0.0;
+
+  auto connections = std::make_shared<event_counter>();
+  auto closed = std::make_shared<completion_signal>();
+  auto drop_requested = std::make_shared<async_value<sioxx::message>>();
+  auto error = std::make_shared<async_value<std::string>>();
+  {
+    sioxx::client client(options);
+    auto socket = client.socket("/e2e");
+
+    configure_failure_reporting(client, error);
+    client.set_close_listener([closed](const std::string&) { closed->set(); });
+    socket->on_connect([connections] { connections->increment(); });
+    client.connect(server_url());
+
+    ASSERT_TRUE(connections->wait_for(1, 5s))
+      << "connection error: " << error->value();
+
+    socket->emit("drop_transport", sioxx::json::array(),
+                 [drop_requested](sioxx::message data)
+                 { drop_requested->set(std::move(data)); });
+
+    ASSERT_TRUE(drop_requested->wait_for(5s));
+    ASSERT_TRUE(closed->wait_for(5s))
+      << "client did not observe the WebSocket transport close";
+  }
+
+  EXPECT_FALSE(connections->wait_for(2, 2s));
 }
 
 TEST(E2E, ExchangesMessagePackEventsAcknowledgementsAndBinary)

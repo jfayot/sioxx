@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changes :construction:
 
+- Made `client` explicitly non-copyable so one façade has unambiguous
+  ownership of connection shutdown.
 - Lowered the supported dependency minimums to Boost 1.74.0 and nlohmann-json
   3.8.0 while retaining the newer default fetched versions.
 - Grouped the basic client, custom CBOR parser, and matching Socket.IO server
@@ -28,6 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes :wrench:
 
+- Added explicit two-phase client shutdown: `close()` requests shutdown
+  without waiting, while `sync_close()` cancels pending reconnect delays and
+  waits for transport and heartbeat workers. Client destruction uses the
+  synchronous form.
 - Invoked the client open listener when Engine.IO opens, even when the client
   only requests non-root Socket.IO namespaces.
 - Serialized HTTP long-polling writes so multi-frame binary packets and

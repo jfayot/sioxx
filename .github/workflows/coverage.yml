@@ -72,6 +72,7 @@ jobs:
             --root . \
             --filter src/ \
             --filter include/sioxx/ \
+            --gcov-ignore-parse-errors=negative_hits.warn_once_per_file \
             --cobertura-pretty \
             --output coverage.xml \
             build-coverage
