@@ -395,11 +395,7 @@ void websocket_transport::pump_write_queue_plain()
                          [this, self = std::move(self), buf = std::move(buf)](
                            beast::error_code ec, std::size_t)
                          {
-                           if (closing_)
-                           {
-                             write_in_progress_ = false;
-                             return;
-                           }
+                           if (closing_) return;
                            if (!write_queue_.empty()) write_queue_.pop_front();
                            if (ec)
                            {
@@ -436,11 +432,7 @@ void websocket_transport::pump_write_queue_tls()
                        [this, self = std::move(self), buf = std::move(buf)](
                          beast::error_code ec, std::size_t)
                        {
-                         if (closing_)
-                         {
-                           write_in_progress_ = false;
-                           return;
-                         }
+                         if (closing_) return;
                          if (!write_queue_.empty()) write_queue_.pop_front();
                          if (ec)
                          {
