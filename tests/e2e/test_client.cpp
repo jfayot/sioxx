@@ -9,6 +9,7 @@
 #include <sioxx/sioxx.hpp>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 using namespace std::chrono_literals;
@@ -754,17 +755,27 @@ TEST(E2E, ReconnectsAfterUnexpectedWebsocketClose)
   auto initial_transport = std::make_shared<async_value<sioxx::message>>();
   auto reconnected_transport = std::make_shared<async_value<sioxx::message>>();
   auto acknowledgement = std::make_shared<async_value<sioxx::message>>();
+  auto reconnect_scheduled =
+    std::make_shared<async_value<std::pair<unsigned, unsigned>>>();
+  auto reconnecting = std::make_shared<completion_signal>();
   auto error = std::make_shared<async_value<std::string>>();
   sioxx::client client(options);
   auto socket = client.socket("/e2e");
 
   configure_failure_reporting(client, error);
   client.set_close_listener([closed](const std::string&) { closed->set(); });
+  client.set_reconnect_listener(
+    [reconnect_scheduled](unsigned attempt, unsigned delay)
+    { reconnect_scheduled->set({attempt, delay}); });
+  client.set_reconnecting_listener([reconnecting] { reconnecting->set(); });
   socket->on_connect([connections] { connections->increment(); });
   client.connect(server_url());
 
   ASSERT_TRUE(connections->wait_for(1, 5s))
     << "connection error: " << error->value();
+  EXPECT_TRUE(client.opened());
+  const auto initial_session_id = client.get_sessionid();
+  EXPECT_FALSE(initial_session_id.empty());
 
   socket->emit("transport_with_ack", sioxx::json::array(),
                [initial_transport](sioxx::message data)
@@ -780,8 +791,16 @@ TEST(E2E, ReconnectsAfterUnexpectedWebsocketClose)
   ASSERT_TRUE(drop_requested->wait_for(5s));
   ASSERT_TRUE(closed->wait_for(5s))
     << "client did not observe the WebSocket transport close";
+  EXPECT_FALSE(client.opened());
+  ASSERT_TRUE(reconnect_scheduled->wait_for(5s));
+  EXPECT_EQ(reconnect_scheduled->value(),
+            std::make_pair(0U, static_cast<unsigned>((100ms).count())));
+  ASSERT_TRUE(reconnecting->wait_for(5s));
   ASSERT_TRUE(connections->wait_for(2, 5s))
     << "client did not reconnect after the server restarted";
+  EXPECT_TRUE(client.opened());
+  EXPECT_FALSE(client.get_sessionid().empty());
+  EXPECT_NE(client.get_sessionid(), initial_session_id);
 
   socket->emit("transport_with_ack", sioxx::json::array(),
                [reconnected_transport](sioxx::message data)

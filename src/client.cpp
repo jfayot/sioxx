@@ -1,6 +1,8 @@
 #include "sioxx/client.hpp"
 
+#include <algorithm>
 #include <exception>
+#include <limits>
 #include <random>
 #include <stdexcept>
 #include <thread>
@@ -228,13 +230,18 @@ void client_impl::schedule_reconnect()
     if (on_fail_) on_fail_();
     return;
   }
-  ++reconnect_attempts_used_;
+  const auto attempt = reconnect_attempts_used_++;
   thread_local std::mt19937 jitter_engine{std::random_device{}()};
   std::uniform_real_distribution<double> jitter_distribution(0.0, 1.0);
   auto delay = reconnect_delay_for_attempt(
     options_.reconnect_delay, options_.reconnect_delay_max,
     options_.reconnect_randomization_factor, reconnect_attempts_used_,
     jitter_distribution(jitter_engine));
+  if (on_reconnect_)
+    on_reconnect_(
+      static_cast<unsigned>(attempt),
+      static_cast<unsigned>(std::min<std::chrono::milliseconds::rep>(
+        delay.count(), std::numeric_limits<unsigned>::max())));
   auto uri = base_uri_;
   {
     std::lock_guard<std::mutex> lock(reconnect_mutex_);
@@ -258,9 +265,13 @@ void client_impl::schedule_reconnect()
         {
           auto engineio = self->ensure_engineio();
           if (engineio)
+          {
+            if (self->on_reconnecting_) self->on_reconnecting_();
+            if (self->intentional_close_.load()) return;
             engineio->open(detail::build_engineio_url(
               uri, self->options_.engineio_path, self->options_.query,
               self->using_polling_.load() ? "polling" : "websocket"));
+          }
         }
         catch (const std::exception& error)
         {
@@ -410,6 +421,18 @@ void client_impl::sync_close()
   if (first_error) std::rethrow_exception(first_error);
 }
 
+bool client_impl::opened() const
+{
+  std::lock_guard<std::mutex> lock(engineio_mutex_);
+  return engineio_ && engineio_->is_open();
+}
+
+std::string client_impl::get_sessionid() const
+{
+  std::lock_guard<std::mutex> lock(engineio_mutex_);
+  return engineio_ ? engineio_->session_id() : std::string{};
+}
+
 client::client() : client(client_options{}) {}
 
 client::client(const client_options& options) : client(client_options(options))
@@ -455,6 +478,10 @@ void client::close() { impl_->close(); }
 
 void client::sync_close() { impl_->sync_close(); }
 
+bool client::opened() const { return impl_->opened(); }
+
+std::string client::get_sessionid() const { return impl_->get_sessionid(); }
+
 std::shared_ptr<sioxx::socket> client::socket(const std::string& nsp,
                                               message auth)
 {
@@ -474,6 +501,16 @@ void client::set_close_listener(std::function<void(const std::string&)> h)
 void client::set_fail_listener(std::function<void()> h)
 {
   impl_->set_fail_handler(std::move(h));
+}
+
+void client::set_reconnecting_listener(std::function<void()> h)
+{
+  impl_->set_reconnecting_handler(std::move(h));
+}
+
+void client::set_reconnect_listener(std::function<void(unsigned, unsigned)> h)
+{
+  impl_->set_reconnect_handler(std::move(h));
 }
 
 void client::set_error_listener(std::function<void(const std::string&)> h)

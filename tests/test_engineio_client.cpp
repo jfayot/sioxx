@@ -165,6 +165,7 @@ TEST(HttpPollingProtocol, IgnoresEmptyPacketsWhenSplitting)
 TEST_F(EngineioClientFixture, NotOpenBeforeHandshake)
 {
   EXPECT_FALSE(client->is_open());
+  EXPECT_TRUE(client->session_id().empty());
 }
 
 TEST(EngineioClient, OpenWithoutTransportThrows)
@@ -196,6 +197,7 @@ TEST_F(EngineioClientFixture, OpenHandshakeMarksClientOpenAndFiresCallback)
   transport->simulate_message(make_open_payload());
 
   EXPECT_TRUE(client->is_open());
+  EXPECT_EQ(client->session_id(), "test-sid");
   EXPECT_TRUE(open_fired);
 }
 

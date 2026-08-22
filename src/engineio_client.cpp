@@ -53,6 +53,10 @@ void engineio_client::open(const std::string& ws_url)
 {
   if (closing_) return;
   open_ = false;
+  {
+    std::lock_guard<std::mutex> lock(session_mutex_);
+    session_id_.clear();
+  }
   if (!transport_)
     throw std::runtime_error("sioxx: no transport set on engineio_client");
   transport_->connect(ws_url);
@@ -87,6 +91,12 @@ void engineio_client::send(const std::string& payload, bool is_binary)
   {
     transport_->send("4" + payload, false);
   }
+}
+
+std::string engineio_client::session_id() const
+{
+  std::lock_guard<std::mutex> lock(session_mutex_);
+  return session_id_;
 }
 
 void engineio_client::handle_transport_open()
@@ -131,6 +141,12 @@ void engineio_client::handle_transport_message(const std::string& payload,
         ping_timeout_ms_ = handshake.value("pingTimeout", 20000);
       }
       last_pong_ = std::chrono::steady_clock::now();
+    }
+    {
+      std::lock_guard<std::mutex> lock(session_mutex_);
+      session_id_ = handshake.is_discarded()
+                      ? std::string{}
+                      : handshake.value("sid", std::string{});
     }
     open_ = true;
     start_heartbeat_timer();
