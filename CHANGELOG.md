@@ -5,6 +5,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixes :wrench:
+
+- Synchronized listener replacement with reconnect callback invocation and
+  prevented overflow when calculating reconnect delays for invalid attempts.
+
 ## [0.3.0] - 2026-08-22
 
 ### Additions :tada:

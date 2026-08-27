@@ -12,8 +12,8 @@ std::chrono::milliseconds reconnect_delay_for_attempt(
 {
   const auto initial = std::max<int64_t>(0, initial_delay.count());
   const auto maximum = std::max<int64_t>(0, max_delay.count());
-  const int exponent = std::max(0, attempt - 1);
-  const long double multiplier = std::ldexp(1.0L, std::min(exponent, 62));
+  const int exponent = attempt <= 1 ? 0 : std::min(attempt - 1, 62);
+  const long double multiplier = std::ldexp(1.0L, exponent);
   const long double exponential =
     std::min<long double>(static_cast<long double>(maximum),
                           static_cast<long double>(initial) * multiplier);

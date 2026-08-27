@@ -169,7 +169,7 @@ void client_impl::handle_engineio_error(
   if (!engineio || !is_current_engineio(engineio)) return;
   if (!using_polling_.load() && !engineio->is_open())
     activate_polling_fallback();
-  if (on_error_) on_error_(msg);
+  if (auto handler = current_handler(on_error_)) handler(msg);
 }
 
 std::shared_ptr<engineio_client> client_impl::current_engineio()
@@ -188,8 +188,8 @@ bool client_impl::is_current_engineio(
 void client_impl::activate_polling_fallback()
 {
   if (intentional_close_.load() || using_polling_.exchange(true)) return;
-  if (on_error_)
-    on_error_("WebSocket connection failed; switching to HTTP long-polling");
+  if (auto handler = current_handler(on_error_))
+    handler("WebSocket connection failed; switching to HTTP long-polling");
   auto engineio = ensure_engineio();
   if (engineio)
     engineio->open(detail::build_engineio_url(base_uri_, options_.engineio_path,
@@ -206,7 +206,7 @@ void client_impl::on_engineio_open()
       sock->connect();
     }
   }
-  if (on_open_) on_open_();
+  if (auto handler = current_handler(on_open_)) handler();
 }
 
 void client_impl::on_engineio_close(const std::string& reason)
@@ -215,7 +215,7 @@ void client_impl::on_engineio_close(const std::string& reason)
     std::lock_guard<std::mutex> lock(sockets_mutex_);
     for (auto& [nsp, sock] : sockets_) sock->mark_connected(false);
   }
-  if (on_close_) on_close_(reason);
+  if (auto handler = current_handler(on_close_)) handler(reason);
 
   if (!intentional_close_.load() && options_.reconnect_attempts > 0)
   {
@@ -227,7 +227,7 @@ void client_impl::schedule_reconnect()
 {
   if (reconnect_attempts_used_ >= options_.reconnect_attempts)
   {
-    if (on_fail_) on_fail_();
+    if (auto handler = current_handler(on_fail_)) handler();
     return;
   }
   const auto attempt = reconnect_attempts_used_++;
@@ -237,11 +237,10 @@ void client_impl::schedule_reconnect()
     options_.reconnect_delay, options_.reconnect_delay_max,
     options_.reconnect_randomization_factor, reconnect_attempts_used_,
     jitter_distribution(jitter_engine));
-  if (on_reconnect_)
-    on_reconnect_(
-      static_cast<unsigned>(attempt),
-      static_cast<unsigned>(std::min<std::chrono::milliseconds::rep>(
-        delay.count(), std::numeric_limits<unsigned>::max())));
+  if (auto handler = current_handler(on_reconnect_))
+    handler(static_cast<unsigned>(attempt),
+            static_cast<unsigned>(std::min<std::chrono::milliseconds::rep>(
+              delay.count(), std::numeric_limits<unsigned>::max())));
   auto uri = base_uri_;
   {
     std::lock_guard<std::mutex> lock(reconnect_mutex_);
@@ -266,7 +265,8 @@ void client_impl::schedule_reconnect()
           auto engineio = self->ensure_engineio();
           if (engineio)
           {
-            if (self->on_reconnecting_) self->on_reconnecting_();
+            if (auto handler = self->current_handler(self->on_reconnecting_))
+              handler();
             if (self->intentional_close_.load()) return;
             engineio->open(detail::build_engineio_url(
               uri, self->options_.engineio_path, self->options_.query,
@@ -275,12 +275,13 @@ void client_impl::schedule_reconnect()
         }
         catch (const std::exception& error)
         {
-          if (self->on_error_)
-            self->on_error_(std::string("sioxx reconnect: ") + error.what());
+          if (auto handler = self->current_handler(self->on_error_))
+            handler(std::string("sioxx reconnect: ") + error.what());
         }
         catch (...)
         {
-          if (self->on_error_) self->on_error_("sioxx reconnect failed");
+          if (auto handler = self->current_handler(self->on_error_))
+            handler("sioxx reconnect failed");
         }
       });
   }

@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <limits>
+
 #include "reconnection.hpp"
 
 using namespace sioxx;
@@ -25,4 +27,11 @@ TEST(ReconnectionPolicy, ClampsInputsAndMaximum)
   EXPECT_EQ(reconnect_delay_for_attempt(100ms, 50ms, 0.0, 1, 0.5), 50ms);
   EXPECT_EQ(reconnect_delay_for_attempt(100ms, 500ms, 2.0, 1, -1.0), 0ms);
   EXPECT_EQ(reconnect_delay_for_attempt(100ms, 500ms, 2.0, 1, 2.0), 200ms);
+}
+
+TEST(ReconnectionPolicy, HandlesMinimumAttemptWithoutOverflow)
+{
+  EXPECT_EQ(reconnect_delay_for_attempt(100ms, 500ms, 0.0,
+                                        std::numeric_limits<int>::min(), 0.5),
+            100ms);
 }

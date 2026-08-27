@@ -45,18 +45,27 @@ class client_impl : public std::enable_shared_from_this<client_impl>
   std::string get_sessionid() const;
   std::shared_ptr<sioxx::socket> socket(const std::string& nsp = "/",
                                         message auth = json());
-  void set_open_handler(connect_handler h) { on_open_ = std::move(h); }
-  void set_close_handler(close_handler h) { on_close_ = std::move(h); }
-  void set_fail_handler(fail_handler h) { on_fail_ = std::move(h); }
+  void set_open_handler(connect_handler h)
+  {
+    set_handler(on_open_, std::move(h));
+  }
+  void set_close_handler(close_handler h)
+  {
+    set_handler(on_close_, std::move(h));
+  }
+  void set_fail_handler(fail_handler h) { set_handler(on_fail_, std::move(h)); }
   void set_reconnecting_handler(connect_handler h)
   {
-    on_reconnecting_ = std::move(h);
+    set_handler(on_reconnecting_, std::move(h));
   }
   void set_reconnect_handler(reconnect_handler h)
   {
-    on_reconnect_ = std::move(h);
+    set_handler(on_reconnect_, std::move(h));
   }
-  void set_error_handler(error_handler h) { on_error_ = std::move(h); }
+  void set_error_handler(error_handler h)
+  {
+    set_handler(on_error_, std::move(h));
+  }
   void send_packet(const packet& packet);
 
  private:
@@ -80,6 +89,20 @@ class client_impl : public std::enable_shared_from_this<client_impl>
   void stop_reconnect_thread();
   void activate_polling_fallback();
 
+  template <typename Handler>
+  void set_handler(Handler& destination, Handler handler)
+  {
+    std::lock_guard<std::mutex> lock(handler_mutex_);
+    destination = std::move(handler);
+  }
+
+  template <typename Handler>
+  Handler current_handler(const Handler& handler) const
+  {
+    std::lock_guard<std::mutex> lock(handler_mutex_);
+    return handler;
+  }
+
   client_options options_;
   boost::asio::io_context* io_context_;
   std::unique_ptr<parser_base> parser_;
@@ -89,6 +112,7 @@ class client_impl : public std::enable_shared_from_this<client_impl>
   std::mutex send_mutex_;
   std::mutex sockets_mutex_;
   std::map<std::string, std::shared_ptr<sioxx::socket>> sockets_;
+  mutable std::mutex handler_mutex_;
   connect_handler on_open_;
   close_handler on_close_;
   fail_handler on_fail_;
