@@ -2,6 +2,7 @@
 #define SIOXX_SRC_TRANSPORT_HPP
 #include <atomic>
 #include <functional>
+#include <mutex>
 #include <string>
 
 namespace sioxx
@@ -34,18 +35,46 @@ class transport_base
   virtual void close() = 0;
   virtual void sync_close() = 0;
 
-  void set_message_handler(message_handler h) { on_message_ = std::move(h); }
-  void set_open_handler(open_handler h) { on_open_ = std::move(h); }
-  void set_close_handler(close_handler h) { on_close_ = std::move(h); }
-  void set_error_handler(error_handler h) { on_error_ = std::move(h); }
+  void set_message_handler(message_handler h)
+  {
+    set_handler(on_message_, std::move(h));
+  }
+  void set_open_handler(open_handler h) { set_handler(on_open_, std::move(h)); }
+  void set_close_handler(close_handler h)
+  {
+    set_handler(on_close_, std::move(h));
+  }
+  void set_error_handler(error_handler h)
+  {
+    set_handler(on_error_, std::move(h));
+  }
 
   transport_state state() const { return state_.load(); }
 
  protected:
+  template <typename Handler>
+  Handler current_handler(const Handler& handler) const
+  {
+    std::lock_guard<std::mutex> lock(handler_mutex_);
+    return handler;
+  }
+
   message_handler on_message_;
   open_handler on_open_;
   close_handler on_close_;
   error_handler on_error_;
+
+ private:
+  template <typename Handler>
+  void set_handler(Handler& destination, Handler handler)
+  {
+    std::lock_guard<std::mutex> lock(handler_mutex_);
+    destination = std::move(handler);
+  }
+
+  mutable std::mutex handler_mutex_;
+
+ protected:
   std::atomic<transport_state> state_{transport_state::closed};
 };
 

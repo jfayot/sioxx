@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Synchronized listener replacement with reconnect callback invocation and
   prevented overflow when calculating reconnect delays for invalid attempts.
+- Synchronized HTTP polling worker ownership during shutdown and transport
+  listener replacement during asynchronous callback delivery.
 
 ## [0.3.0] - 2026-08-22
 

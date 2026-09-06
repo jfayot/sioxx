@@ -80,14 +80,15 @@ void websocket_transport::fail(const std::string& what)
 {
   if (closing_) return;
   state_ = transport_state::closed;
-  if (on_error_) on_error_(what);
+  if (auto handler = current_handler(on_error_)) handler(what);
 }
 
 void websocket_transport::fail(const std::string& what, beast::error_code ec)
 {
   if (closing_) return;
   state_ = transport_state::closed;
-  if (on_error_) on_error_(what + ": " + ec.message());
+  if (auto handler = current_handler(on_error_))
+    handler(what + ": " + ec.message());
 }
 
 void websocket_transport::connect(const std::string& url)
@@ -287,7 +288,7 @@ void websocket_transport::start_plain_handshake()
       if (ec) return fail("handshake", ec);
       ws_plain_->binary(true);
       state_ = transport_state::open;
-      if (on_open_) on_open_();
+      if (auto handler = current_handler(on_open_)) handler();
       if (!closing_) do_read_plain();
     });
 }
@@ -320,7 +321,7 @@ void websocket_transport::start_tls_handshake()
           if (ws_ec) return fail("handshake", ws_ec);
           ws_tls_->binary(true);
           state_ = transport_state::open;
-          if (on_open_) on_open_();
+          if (auto handler = current_handler(on_open_)) handler();
           if (!closing_) do_read_tls();
         });
     });
@@ -339,14 +340,15 @@ void websocket_transport::do_read_plain()
         state_ = transport_state::closed;
         if (!closing_.load())
         {
-          if (on_close_) on_close_(ec.message());
+          if (auto handler = current_handler(on_close_)) handler(ec.message());
         }
         return;
       }
       bool is_binary = ws_plain_->got_binary();
       std::string payload = beast::buffers_to_string(buffer_.data());
       buffer_.consume(buffer_.size());
-      if (on_message_) on_message_(payload, is_binary);
+      if (auto handler = current_handler(on_message_))
+        handler(payload, is_binary);
       if (!closing_) do_read_plain();
     });
 }
@@ -364,14 +366,15 @@ void websocket_transport::do_read_tls()
         state_ = transport_state::closed;
         if (!closing_.load())
         {
-          if (on_close_) on_close_(ec.message());
+          if (auto handler = current_handler(on_close_)) handler(ec.message());
         }
         return;
       }
       bool is_binary = ws_tls_->got_binary();
       std::string payload = beast::buffers_to_string(buffer_.data());
       buffer_.consume(buffer_.size());
-      if (on_message_) on_message_(payload, is_binary);
+      if (auto handler = current_handler(on_message_))
+        handler(payload, is_binary);
       if (!closing_) do_read_tls();
     });
 }

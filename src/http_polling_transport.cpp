@@ -403,7 +403,7 @@ void http_polling_transport::run()
       return fail("polling handshake returned HTTP " +
                   std::to_string(initial.status));
     state_ = transport_state::open;
-    if (on_open_) on_open_();
+    if (auto handler = current_handler(on_open_)) handler();
     if (closing_) return;
     deliver(initial.body);
 
@@ -549,9 +549,8 @@ void http_polling_transport::start_external() { poll_external(true); }
 
 void http_polling_transport::poll_external(bool handshake)
 {
-  const auto target = handshake ? url_.target : poll_target();
   async_request(
-    http::verb::get, target, {},
+    http::verb::get, handshake ? url_.target : poll_target(), {},
     [self = shared_from_this(), handshake](beast::error_code ec,
                                            const response& result)
     {
@@ -564,7 +563,7 @@ void http_polling_transport::poll_external(bool handshake)
       if (handshake)
       {
         self->state_ = transport_state::open;
-        if (self->on_open_) self->on_open_();
+        if (auto handler = self->current_handler(self->on_open_)) handler();
         if (self->closing_) return;
       }
       self->deliver(result.body);
@@ -637,12 +636,14 @@ void http_polling_transport::deliver(const std::string& body)
     if (packet[0] == 'b')
     {
       std::string decoded;
-      if (detail::polling_decode_binary(packet, decoded) && on_message_)
-        on_message_(decoded, true);
+      if (detail::polling_decode_binary(packet, decoded))
+      {
+        if (auto handler = current_handler(on_message_)) handler(decoded, true);
+      }
     }
-    else if (on_message_)
+    else if (auto handler = current_handler(on_message_))
     {
-      on_message_(packet, false);
+      handler(packet, false);
     }
   }
 }
@@ -689,7 +690,10 @@ void http_polling_transport::close()
       });
   }
 
-  if (notify_close && on_close_) on_close_("closed");
+  if (notify_close)
+  {
+    if (auto handler = current_handler(on_close_)) handler("closed");
+  }
 }
 
 void http_polling_transport::sync_close()
@@ -713,6 +717,7 @@ void http_polling_transport::join_thread(std::thread& thread)
 
 void http_polling_transport::join_threads()
 {
+  std::lock_guard<std::mutex> connect_lock(connect_mutex_);
   std::lock_guard<std::mutex> lock(join_mutex_);
   join_thread(write_thread_);
   join_thread(close_thread_);
@@ -729,8 +734,8 @@ void http_polling_transport::fail(const std::string& message)
     write_queue_.clear();
   }
   write_condition_.notify_all();
-  if (on_error_) on_error_(message);
-  if (on_close_) on_close_(message);
+  if (auto handler = current_handler(on_error_)) handler(message);
+  if (auto handler = current_handler(on_close_)) handler(message);
 }
 
 }  // namespace sioxx
