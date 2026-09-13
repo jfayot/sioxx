@@ -277,6 +277,32 @@ and attachment frames. `msgpack_parser` is implemented on top of
 `nlohmann::json::to_msgpack` / `from_msgpack`, so it needs no extra MessagePack
 library and carries the same values natively in one binary frame.
 
+### Acknowledgement deadlines
+
+Use the timeout overload to bound how long an emission waits for a reply:
+
+```cpp
+sock->emit("save", sioxx::json::array({"draft"}), std::chrono::seconds(5),
+    [](sioxx::socket::ack_status status, sioxx::message reply) {
+        if (status == sioxx::socket::ack_status::timeout) {
+            // No acknowledgement arrived before the deadline.
+            return;
+        }
+        // Use reply.
+    });
+```
+
+The duration must be positive and the callback nonempty. The deadline starts
+at `emit()`, including time buffered before connection. Expired buffered events
+are discarded. Namespace/transport disconnects and automatic reconnection do not
+reset deadlines. Explicit client shutdown and socket destruction cancel pending
+timed acknowledgements and their buffered events without notification. After
+client shutdown, timed emissions throw `std::logic_error` until `client.connect()`
+is called again. A timeout returns null reply
+data and does not prove that the server did not process an already-sent event.
+Late acknowledgements are ignored and no automatic retry occurs. The existing
+three-argument acknowledgement overload remains unchanged.
+
 ### Threading model
 
 WebSocket connections run a dedicated `boost::asio::io_context` thread, while
@@ -311,7 +337,14 @@ the supplied context. The caller must keep it alive longer than the client and
 is responsible for running it; sioxx never runs or stops it. Operations are
 serialized on an internal strand, so the context may be run by multiple
 threads. Reconnection delays and Engine.IO heartbeat monitoring remain managed
-by sioxx workers.
+by sioxx workers. Acknowledgement deadlines also use a lazily started worker
+per socket, including with a caller-owned context. Timeout callbacks run on
+that worker, or on the ACK delivery thread if it observes an expired deadline.
+Callbacks run outside socket locks and must not throw. `close()` cancels pending
+deadlines without waiting for callbacks already running. `sync_close()` also
+waits for those callbacks, so none remain in flight when it returns. Call it
+outside library callbacks. Idle deadline workers may remain allocated until
+their sockets are destroyed.
 
 ### Example test server
 

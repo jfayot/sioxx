@@ -94,6 +94,40 @@ contains an acknowledgement ID, and sends at most one response:
            }
        });
 
+Bound acknowledgement waiting
+-----------------------------
+
+Pass a positive duration and an outcome callback to ``emit``:
+
+.. code-block:: cpp
+
+   chat->emit("save", sioxx::json::array({"draft"}), std::chrono::seconds(5),
+       [](sioxx::socket::ack_status status, sioxx::message reply) {
+           if (status == sioxx::socket::ack_status::timeout) {
+               std::cerr << "Acknowledgement deadline elapsed\n";
+               return;
+           }
+           std::cout << reply.dump() << '\n';
+       });
+
+The callback must be nonempty. The deadline begins at ``emit``, including time
+buffered before connection. Expired buffered events are discarded; already-sent
+events cannot be recalled. Late acknowledgements are ignored and events are not
+retried. Timeout reply data is null. Existing acknowledgement callbacks without
+a duration keep their original behavior.
+
+Namespace/transport disconnects and automatic reconnection preserve deadlines.
+Explicit client ``close()`` cancels pending timed acknowledgements and their
+buffered events without notification. ``sync_close()`` also waits for callbacks
+already running; call it outside library callbacks. New timed emissions throw
+``std::logic_error`` after shutdown until ``client.connect()`` is called again.
+Destroying the socket also cancels outstanding deadlines without notification.
+Idle deadline workers may remain allocated until their sockets are destroyed.
+Each socket lazily starts one deadline worker, even with a caller-owned
+``io_context``. The callback runs at most once, outside socket locks, on that
+worker or the ACK delivery thread. Callbacks must not throw; dispatch UI work
+to the application's UI thread.
+
 Send and receive binary attachments
 -----------------------------------
 

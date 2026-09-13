@@ -10,11 +10,13 @@
 #ifndef SIOXX_SOCKET_HPP
 #define SIOXX_SOCKET_HPP
 
+#include <chrono>
+#include <condition_variable>
+#include <deque>
 #include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
-#include <queue>
 #include <string>
 
 #include "message.hpp"
@@ -24,6 +26,7 @@ namespace sioxx
 {
 
 class client_impl;
+class ack_scheduler;
 
 /**
  * @class socket
@@ -46,6 +49,16 @@ class socket : public std::enable_shared_from_this<socket>
   /** @brief Callback used to receive or send acknowledgement data. */
   using ack_callback = std::function<void(message data)>;
 
+  /** @brief Outcome of an emission with an acknowledgement deadline. */
+  enum class ack_status
+  {
+    acknowledged, /**< The server supplied an acknowledgement. */
+    timeout       /**< The deadline elapsed without an acknowledgement. */
+  };
+
+  /** @brief Receives an outcome and reply (null on timeout). */
+  using timed_ack_callback = std::function<void(ack_status, message)>;
+
   /** @brief Listener for events that may request an acknowledgement. */
   using ack_event_listener = std::function<void(
     const std::string& event, message data, ack_callback acknowledge)>;
@@ -65,6 +78,9 @@ class socket : public std::enable_shared_from_this<socket>
    */
   socket(std::weak_ptr<client_impl> client, std::string nsp,
          message auth = json());
+
+  /** @brief Cancel outstanding deadlines without invoking their callbacks. */
+  ~socket();
 
   /** @brief Return the namespace this socket belongs to. */
   const std::string& nsp() const { return nsp_; }
@@ -171,6 +187,34 @@ class socket : public std::enable_shared_from_this<socket>
    */
   void emit(const std::string& event, const message& data,
             ack_callback callback);
+
+  /**
+   * @brief Emit with a finite acknowledgement deadline.
+   *
+   * The deadline starts at this call, including time buffered before CONNECT
+   * and time disconnected. Disconnects do not reset the deadline. An expired
+   * buffered event is discarded; an event already handed to the transport
+   * cannot be recalled. Late acknowledgements are ignored. No retry occurs.
+   * The callback runs at most once, outside socket locks, on the ACK delivery
+   * thread or a socket-owned deadline worker (also with a caller-owned
+   * io_context). Callbacks must not throw. Destroying the socket cancels
+   * pending callbacks without notification. Explicit client close() also
+   * cancels pending timed emissions; sync_close() waits for callbacks already
+   * running. Timed emissions are rejected after client shutdown until the
+   * next client.connect(). Ordinary namespace/transport disconnects preserve
+   * deadlines.
+   *
+   * @param event Event name.
+   * @param data Payload.
+   * @param timeout Positive duration before expiry.
+   * @param callback Receives acknowledged with reply data, or timeout with
+   * null.
+   * @throws std::invalid_argument If timeout is not positive or callback is
+   * empty.
+   * @throws std::logic_error If the client has explicitly shut down.
+   */
+  void emit(const std::string& event, const message& data,
+            std::chrono::milliseconds timeout, timed_ack_callback callback);
   /** @} */
 
   /** @name Namespace control */
@@ -204,6 +248,14 @@ class socket : public std::enable_shared_from_this<socket>
   /** @} */
 
  private:
+  friend class client_impl;
+  void cancel_timed_acks();
+  void wait_for_timed_acks();
+  void resume_timed_acks();
+  void invoke_timed_ack(timed_ack_callback callback, ack_status status,
+                        message data);
+  void finish_timed_ack();
+  void expire_ack(int id);
   void send_or_buffer(packet packet);
   void flush_send_buffer();
   void send_ack(int id, message data);
@@ -219,11 +271,16 @@ class socket : public std::enable_shared_from_this<socket>
   event_listener any_listener_;
   ack_event_listener any_ack_listener_;
   std::map<int, ack_callback> pending_acks_;
-  std::queue<packet> send_buffer_;
+  std::map<int, timed_ack_callback> timed_acks_;
+  std::condition_variable ack_condition_;
+  std::size_t active_timed_acks_{0};
+  bool timed_acks_closed_{false};
+  std::deque<packet> send_buffer_;
   int next_ack_id_{0};
   bool flushing_send_buffer_{false};
   connect_listener on_connect_;
   disconnect_listener on_disconnect_;
+  std::unique_ptr<ack_scheduler> ack_scheduler_;
 };
 
 }  // namespace sioxx

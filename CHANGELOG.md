@@ -5,6 +5,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Additions :tada:
+
+- Added per-emission acknowledgement deadlines with success/timeout outcomes,
+  expiry of buffered events, and suppression of late acknowledgements.
+  Explicit shutdown cancels pending deadlines, and `sync_close()` drains
+  running timed acknowledgement callbacks.
+
 ### Fixes :wrench:
 
 - Synchronized listener replacement with reconnect callback invocation and
