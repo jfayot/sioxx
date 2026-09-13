@@ -255,6 +255,9 @@ class socket : public std::enable_shared_from_this<socket>
   void invoke_timed_ack(timed_ack_callback callback, ack_status status,
                         message data);
   void finish_timed_ack();
+  // Requires mutex_ to be held by the caller.
+  int register_timed_ack(std::chrono::steady_clock::time_point deadline,
+                         timed_ack_callback callback);
   void expire_ack(int id);
   void send_or_buffer(packet packet);
   void flush_send_buffer();

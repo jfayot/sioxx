@@ -180,26 +180,7 @@ void socket::emit(const std::string& event, const message& data,
     packet.data.push_back(data);
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (timed_acks_closed_)
-      throw std::logic_error(
-        "timed emissions require client.connect() after shutdown");
-    if (!ack_scheduler_)
-      ack_scheduler_ = std::make_unique<ack_scheduler>(
-        [weak = weak_from_this()](int id)
-        {
-          if (auto self = weak.lock()) self->expire_ack(id);
-        });
-    packet.id = next_ack_id_++;
-    timed_acks_.emplace(packet.id, std::move(callback));
-    try
-    {
-      ack_scheduler_->add(packet.id, deadline);
-    }
-    catch (...)
-    {
-      timed_acks_.erase(packet.id);
-      throw;
-    }
+    packet.id = register_timed_ack(deadline, std::move(callback));
     if (!connected_ || flushing_send_buffer_)
     {
       send_buffer_.push_back(std::move(packet));
@@ -207,6 +188,32 @@ void socket::emit(const std::string& event, const message& data,
     }
   }
   if (auto c = client_.lock()) c->send_packet(packet);
+}
+
+int socket::register_timed_ack(std::chrono::steady_clock::time_point deadline,
+                               timed_ack_callback callback)
+{
+  if (timed_acks_closed_)
+    throw std::logic_error(
+      "timed emissions require client.connect() after shutdown");
+  if (!ack_scheduler_)
+    ack_scheduler_ = std::make_unique<ack_scheduler>(
+      [weak = weak_from_this()](int id)
+      {
+        if (auto self = weak.lock()) self->expire_ack(id);
+      });
+  const int id = next_ack_id_++;
+  timed_acks_.emplace(id, std::move(callback));
+  try
+  {
+    ack_scheduler_->add(id, deadline);
+  }
+  catch (...)
+  {
+    timed_acks_.erase(id);
+    throw;
+  }
+  return id;
 }
 
 void socket::expire_ack(int id)
@@ -376,6 +383,7 @@ void socket::cancel_timed_acks()
     cancelled.swap(timed_acks_);
   }
   // Destroy captures outside locks: they may release application-owned objects.
+  cancelled.clear();
 }
 
 void socket::wait_for_timed_acks()
