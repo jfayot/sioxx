@@ -1,5 +1,6 @@
 .DS_Store
 .cache
+opencode.json
 node_modules
 artifacts
 build

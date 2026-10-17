@@ -28,7 +28,7 @@ items listed here should either be completed or explicitly resolved before the
 
 ## Reliability
 
-- [ ] Add configurable acknowledgement timeouts.
+- [x] Add configurable acknowledgement timeouts.
 - [ ] Add bounded retries for events that are not acknowledged.
 - [ ] Define event-buffer behavior across namespace disconnects, transport
       failures, reconnection exhaustion, and explicit client shutdown.

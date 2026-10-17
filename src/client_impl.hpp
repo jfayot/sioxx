@@ -9,6 +9,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include "engineio_client.hpp"
 #include "reconnection.hpp"
@@ -69,6 +70,7 @@ class client_impl : public std::enable_shared_from_this<client_impl>
   void send_packet(const packet& packet);
 
  private:
+  std::vector<std::shared_ptr<sioxx::socket>> sockets_snapshot();
   std::shared_ptr<engineio_client> ensure_engineio();
   void bind_engineio_callbacks(
     const std::shared_ptr<engineio_client>& engineio);

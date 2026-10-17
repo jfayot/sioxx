@@ -113,17 +113,21 @@ class client
    * @brief Start closing the connection and return without waiting.
    *
    * This operation is safe to call from library callbacks. Use sync_close()
-   * when the caller must wait for all background workers to stop. Repeated
-   * calls are safe.
+   * when the caller must wait for network workers and active timed ACK
+   * callbacks to finish. Pending timed ACKs and their buffered events are
+   * cancelled silently. New timed emissions require another connect() call.
+   * Repeated calls are safe.
    */
   void close();
 
   /**
-   * @brief Close the connection and wait for background workers to stop.
+   * @brief Close the connection and wait for networking and timed ACK
+   * callbacks.
    *
    * Do not call this operation from a library callback: a worker cannot wait
    * for itself to finish. Use close() in callbacks instead. Repeated calls are
-   * safe.
+   * safe. No timed ACK callback remains in flight when this returns. An idle
+   * deadline worker may remain allocated until its socket is destroyed.
    */
   void sync_close();
 

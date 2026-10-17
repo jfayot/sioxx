@@ -5,3 +5,9 @@ parsers:
 coverage:
   round: nearest
   precision: 0
+  status:
+    project:
+      default:
+        target: 95%
+        threshold: 0%
+    patch: off

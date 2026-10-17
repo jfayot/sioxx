@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <boost/asio/io_context.hpp>
 #include <chrono>
 #include <condition_variable>
@@ -210,6 +211,99 @@ TEST(E2E, ReceivesAcknowledgementFromServer)
     sioxx::json::array({{{"received", sioxx::json::array({42, "hello"})}}}));
 
   client.close();
+}
+
+TEST(E2E, TimedAcknowledgementsSucceedAndExpireAcrossTransports)
+{
+  for (bool polling : {false, true})
+  {
+    SCOPED_TRACE(polling ? "polling" : "websocket");
+    auto connected = std::make_shared<completion_signal>();
+    auto reply = std::make_shared<async_value<sioxx::message>>();
+    auto timeout = std::make_shared<async_value<sioxx::socket::ack_status>>();
+    sioxx::client_options options;
+    options.force_http_polling = polling;
+    sioxx::client client(options);
+    auto socket = client.socket("/e2e");
+    socket->on_connect([connected] { connected->set(); });
+    // Exercise the timed buffer path as well as real ACK delivery.
+    socket->emit("echo_with_ack", sioxx::json::array({42}), 5s,
+                 [reply](sioxx::socket::ack_status status, sioxx::message data)
+                 {
+                   EXPECT_EQ(status, sioxx::socket::ack_status::acknowledged);
+                   reply->set(std::move(data));
+                 });
+    client.connect(server_url());
+    ASSERT_TRUE(connected->wait_for(5s));
+    ASSERT_TRUE(reply->wait_for(5s));
+    EXPECT_EQ(reply->value(),
+              sioxx::json::array({{{"received", sioxx::json::array({42})}}}));
+    socket->emit(
+      "no_ack_handler", sioxx::json(), 50ms,
+      [timeout](sioxx::socket::ack_status status, sioxx::message data)
+      {
+        EXPECT_TRUE(data.is_null());
+        timeout->set(status);
+      });
+    ASSERT_TRUE(timeout->wait_for(5s));
+    EXPECT_EQ(timeout->value(), sioxx::socket::ack_status::timeout);
+    client.sync_close();
+  }
+}
+
+TEST(E2E, ReconnectingAfterExplicitShutdownResumesTimedEmissions)
+{
+  auto calls = std::make_shared<std::atomic<int>>(0);
+  auto received = std::make_shared<async_value<sioxx::message>>();
+  sioxx::client client;
+  auto socket = client.socket("/e2e");
+  // This event must be removed from the buffer when the client closes.
+  socket->emit("timeout_probe", sioxx::json(), 1h,
+               [calls](sioxx::socket::ack_status, sioxx::message)
+               { ++*calls; });
+  client.sync_close();
+  socket->on_connect(
+    [socket, received]
+    {
+      socket->emit(
+        "timeout_probe_count", sioxx::json(), 5s,
+        [received](sioxx::socket::ack_status status, sioxx::message data)
+        {
+          EXPECT_EQ(status, sioxx::socket::ack_status::acknowledged);
+          received->set(std::move(data));
+        });
+    });
+  client.connect(server_url());
+  ASSERT_TRUE(received->wait_for(5s));
+  EXPECT_EQ(received->value(), sioxx::json::array({0}));
+  EXPECT_EQ(calls->load(), 0);
+  client.sync_close();
+  socket->on_connect(nullptr);
+}
+
+TEST(E2E, ExpiredBufferedEventIsNeverSent)
+{
+  auto expired = std::make_shared<completion_signal>();
+  auto count = std::make_shared<async_value<sioxx::message>>();
+  sioxx::client client;
+  auto socket = client.socket("/e2e");
+  socket->emit("timeout_probe", sioxx::json(), 20ms,
+               [expired](sioxx::socket::ack_status status, sioxx::message)
+               {
+                 EXPECT_EQ(status, sioxx::socket::ack_status::timeout);
+                 expired->set();
+               });
+  ASSERT_TRUE(expired->wait_for(5s));
+  socket->emit("timeout_probe_count", sioxx::json(), 5s,
+               [count](sioxx::socket::ack_status status, sioxx::message data)
+               {
+                 EXPECT_EQ(status, sioxx::socket::ack_status::acknowledged);
+                 count->set(std::move(data));
+               });
+  client.connect(server_url());
+  ASSERT_TRUE(count->wait_for(5s));
+  EXPECT_EQ(count->value(), sioxx::json::array({0}));
+  client.sync_close();
 }
 
 TEST(E2E, BuffersOutgoingEventUntilNamespaceConnects)

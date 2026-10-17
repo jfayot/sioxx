@@ -81,6 +81,10 @@ e2e.on("connection", (socket) => {
     socket.emit("server_ack_reply_received", ...reply);
   });
 
+  let timeoutProbeCount = 0;
+  socket.on("timeout_probe", () => { ++timeoutProbeCount; });
+  socket.on("timeout_probe_count", (acknowledge) => { acknowledge(timeoutProbeCount); });
+
   socket.on("echo_with_ack", (...args) => {
     const acknowledgement = args.pop();
     acknowledgement({ received: args });

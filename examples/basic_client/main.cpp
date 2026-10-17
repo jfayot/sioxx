@@ -64,9 +64,15 @@ int main(int argc, char** argv)
 
       sock->emit("hello", sioxx::json{"world"});
 
-      sock->emit("ping_ack", sioxx::json::array({1, 2, 3}),
-                 [](const sioxx::message& reply)
-                 { std::cout << "[ack] " << reply.dump() << "\n"; });
+      sock->emit(
+        "ping_ack", sioxx::json::array({1, 2, 3}), std::chrono::seconds(5),
+        [](sioxx::socket::ack_status status, const sioxx::message& reply)
+        {
+          if (status == sioxx::socket::ack_status::timeout)
+            std::cout << "[ack] timed out\n";
+          else
+            std::cout << "[ack] " << reply.dump() << "\n";
+        });
     });
 
   client.connect(uri);

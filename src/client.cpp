@@ -75,7 +75,11 @@ void client_impl::connect(const std::string& uri)
 {
   if (intentional_close_.load()) stop_reconnect_thread();
   base_uri_ = uri;
-  intentional_close_ = false;
+  {
+    std::lock_guard<std::mutex> lock(sockets_mutex_);
+    intentional_close_ = false;
+    for (auto& entry : sockets_) entry.second->resume_timed_acks();
+  }
   using_polling_ = options_.force_http_polling;
   reconnect_attempts_used_ = 0;
   auto engineio = ensure_engineio();
@@ -365,6 +369,7 @@ std::shared_ptr<sioxx::socket> client_impl::socket(const std::string& nsp,
 
   auto sock = std::make_shared<sioxx::socket>(weak_from_this(), norm_nsp,
                                               std::move(auth));
+  if (intentional_close_.load()) sock->cancel_timed_acks();
   sockets_[norm_nsp] = sock;
   auto engineio = current_engineio();
   if (engineio && engineio->is_open()) sock->connect();
@@ -381,22 +386,28 @@ void client_impl::send_packet(const packet& packet)
                   { engineio->send(payload, is_binary); });
 }
 
+std::vector<std::shared_ptr<sioxx::socket>> client_impl::sockets_snapshot()
+{
+  std::lock_guard<std::mutex> lock(sockets_mutex_);
+  std::vector<std::shared_ptr<sioxx::socket>> result;
+  result.reserve(sockets_.size());
+  for (const auto& entry : sockets_) result.push_back(entry.second);
+  return result;
+}
+
 void client_impl::close()
 {
   intentional_close_ = true;
   reconnect_condition_.notify_all();
   std::exception_ptr first_error;
+  for (const auto& sock : sockets_snapshot())
   {
-    std::lock_guard<std::mutex> lock(sockets_mutex_);
-    for (auto& entry : sockets_)
-    {
-      auto& sock = entry.second;
-      capture_shutdown_error(first_error,
-                             [&sock]
-                             {
-                               if (sock->connected()) sock->disconnect();
-                             });
-    }
+    sock->cancel_timed_acks();
+    capture_shutdown_error(first_error,
+                           [&sock]
+                           {
+                             if (sock->connected()) sock->disconnect();
+                           });
   }
   capture_shutdown_error(first_error,
                          [this]
@@ -418,6 +429,8 @@ void client_impl::sync_close()
                            if (auto engineio = current_engineio())
                              engineio->sync_close();
                          });
+
+  for (const auto& sock : sockets_snapshot()) sock->wait_for_timed_acks();
 
   if (first_error) std::rethrow_exception(first_error);
 }

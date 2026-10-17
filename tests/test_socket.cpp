@@ -1,7 +1,10 @@
 #include <gtest/gtest.h>
 
+#include <atomic>
+#include <future>
 #include <sioxx/client.hpp>
 #include <sioxx/socket.hpp>
+#include <thread>
 #include <type_traits>
 
 using namespace sioxx;
@@ -339,4 +342,247 @@ TEST(Socket, ConnectAndDisconnectDoNotThrowWithNoClientAttached)
   sock->mark_connected(true);
   EXPECT_NO_THROW(sock->disconnect());
   EXPECT_FALSE(sock->connected());
+}
+
+TEST(Socket, TimedAcknowledgementSucceedsOnceAndCancelsDeadline)
+{
+  auto sock = make_socket();
+  auto calls = std::make_shared<std::atomic<int>>(0);
+  sock->emit("request", json::array(), std::chrono::milliseconds(30),
+             [calls](socket::ack_status status, message data)
+             {
+               ++*calls;
+               EXPECT_EQ(status, socket::ack_status::acknowledged);
+               EXPECT_EQ(data, json::array({42}));
+             });
+  sock->dispatch_ack(0, json::array({42}));
+  sock->dispatch_ack(0, json::array({43}));
+  std::this_thread::sleep_for(std::chrono::milliseconds(60));
+  EXPECT_EQ(calls->load(), 1);
+}
+
+TEST(Socket, TimedAcknowledgementExpiresWhileBufferedAndIgnoresLateAck)
+{
+  auto sock = make_socket();
+  auto completed = std::make_shared<std::promise<void>>();
+  auto result = completed->get_future();
+  auto calls = std::make_shared<std::atomic<int>>(0);
+  sock->emit("request", json::array(), std::chrono::milliseconds(20),
+             [completed, calls, weak = std::weak_ptr<socket>(sock)](
+               socket::ack_status status, message data)
+             {
+               ++*calls;
+               EXPECT_EQ(status, socket::ack_status::timeout);
+               EXPECT_TRUE(data.is_null());
+               if (auto self = weak.lock()) self->emit("reentrant");
+               completed->set_value();
+             });
+  ASSERT_EQ(result.wait_for(std::chrono::seconds(2)),
+            std::future_status::ready);
+  sock->mark_connected(true);
+  sock->dispatch_ack(0, json::array({42}));
+  EXPECT_EQ(calls->load(), 1);
+}
+
+TEST(Socket, TimedAcknowledgementDeadlineSurvivesDisconnect)
+{
+  auto sock = make_socket();
+  auto completed = std::make_shared<std::promise<socket::ack_status>>();
+  auto result = completed->get_future();
+  sock->mark_connected(true);
+  sock->emit("request", json::array(), std::chrono::milliseconds(20),
+             [completed](socket::ack_status status, message)
+             { completed->set_value(status); });
+  sock->disconnect();
+  ASSERT_EQ(result.wait_for(std::chrono::seconds(2)),
+            std::future_status::ready);
+  EXPECT_EQ(result.get(), socket::ack_status::timeout);
+}
+
+TEST(Socket, TimedAcknowledgementRejectsInvalidArguments)
+{
+  auto sock = make_socket();
+  auto callback = [](socket::ack_status, message) {};
+  EXPECT_THROW(
+    sock->emit("request", json(), std::chrono::milliseconds(0), callback),
+    std::invalid_argument);
+  EXPECT_THROW(
+    sock->emit("request", json(), std::chrono::milliseconds(-1), callback),
+    std::invalid_argument);
+  EXPECT_THROW(sock->emit("request", json(), std::chrono::milliseconds(1), {}),
+               std::invalid_argument);
+}
+
+TEST(Socket, DestroyingSocketCancelsLongDeadlinePromptly)
+{
+  auto calls = std::make_shared<std::atomic<int>>(0);
+  const auto start = std::chrono::steady_clock::now();
+  {
+    auto sock = make_socket();
+    sock->emit("request", json(), std::chrono::milliseconds::max(),
+               [calls](socket::ack_status, message) { ++*calls; });
+  }
+  EXPECT_LT(std::chrono::steady_clock::now() - start, std::chrono::seconds(1));
+  EXPECT_EQ(calls->load(), 0);
+}
+
+TEST(Socket, EarlierDeadlineWakesWorkerAndCallbackCanReleaseSocket)
+{
+  auto holder = std::make_shared<std::shared_ptr<socket>>(make_socket());
+  auto completed = std::make_shared<std::promise<void>>();
+  auto result = completed->get_future();
+  (*holder)->emit("long", json(), std::chrono::hours(1),
+                  [](socket::ack_status, message)
+                  { ADD_FAILURE() << "Cancelled deadline ran"; });
+  (*holder)->emit("short", json(), std::chrono::milliseconds(20),
+                  [holder, completed](socket::ack_status status, message)
+                  {
+                    EXPECT_EQ(status, socket::ack_status::timeout);
+                    holder->reset();
+                    completed->set_value();
+                  });
+  ASSERT_EQ(result.wait_for(std::chrono::seconds(2)),
+            std::future_status::ready);
+}
+
+TEST(Socket, LateAckTimesOutEvenWhenDeadlineWorkerIsBusy)
+{
+  auto sock = make_socket();
+  auto entered = std::make_shared<std::promise<void>>();
+  auto started = entered->get_future();
+  auto release = std::make_shared<std::promise<void>>();
+  auto gate = release->get_future().share();
+  sock->emit("blocker", json(), std::chrono::milliseconds(1),
+             [entered, gate](socket::ack_status, message)
+             {
+               entered->set_value();
+               gate.wait();
+             });
+  const auto worker_started = started.wait_for(std::chrono::seconds(2));
+  if (worker_started != std::future_status::ready)
+  {
+    release->set_value();
+    FAIL() << "Deadline worker did not start";
+  }
+  auto calls = std::make_shared<std::atomic<int>>(0);
+  sock->emit("late", json(), std::chrono::milliseconds(10),
+             [calls](socket::ack_status status, message data)
+             {
+               ++*calls;
+               EXPECT_EQ(status, socket::ack_status::timeout);
+               EXPECT_TRUE(data.is_null());
+             });
+  std::this_thread::sleep_for(std::chrono::milliseconds(30));
+  sock->dispatch_ack(1, json::array({42}));
+  sock->dispatch_ack(1, json::array({43}));
+  release->set_value();
+  EXPECT_EQ(calls->load(), 1);
+}
+
+TEST(ClientSocket, ShutdownCancelsTimedAcknowledgementsOnRetainedSocket)
+{
+  auto calls = std::make_shared<std::atomic<int>>(0);
+  std::shared_ptr<socket> sock;
+  {
+    client client;
+    sock = client.socket();
+    sock->emit("pending", json(), std::chrono::milliseconds(30),
+               [calls](socket::ack_status, message) { ++*calls; });
+    client.sync_close();
+    sock->dispatch_ack(0, json::array({42}));
+    EXPECT_THROW(sock->emit("closed", json(), std::chrono::seconds(1),
+                            [](socket::ack_status, message) {}),
+                 std::logic_error);
+    auto another = client.socket("/after-close");
+    EXPECT_THROW(another->emit("closed", json(), std::chrono::seconds(1),
+                               [](socket::ack_status, message) {}),
+                 std::logic_error);
+  }
+  std::this_thread::sleep_for(std::chrono::milliseconds(60));
+  EXPECT_EQ(calls->load(), 0);
+}
+
+TEST(ClientSocket, SyncCloseWaitsForRunningTimeoutCallback)
+{
+  client client;
+  auto sock = client.socket();
+  auto entered = std::make_shared<std::promise<void>>();
+  auto started = entered->get_future();
+  auto release = std::make_shared<std::promise<void>>();
+  auto gate = release->get_future().share();
+  sock->emit("pending", json(), std::chrono::milliseconds(1),
+             [entered, gate](socket::ack_status, message)
+             {
+               entered->set_value();
+               gate.wait();
+             });
+  if (started.wait_for(std::chrono::seconds(2)) != std::future_status::ready)
+  {
+    release->set_value();
+    FAIL() << "Timeout callback did not start";
+  }
+  auto closing =
+    std::async(std::launch::async, [&client] { client.sync_close(); });
+  const auto status = closing.wait_for(std::chrono::milliseconds(30));
+  release->set_value();
+  closing.get();
+  EXPECT_EQ(status, std::future_status::timeout);
+}
+
+TEST(ClientSocket, TimeoutCallbackCanCloseClient)
+{
+  client client;
+  auto completed = std::make_shared<std::promise<void>>();
+  auto result = completed->get_future();
+  client.socket()->emit("pending", json(), std::chrono::milliseconds(1),
+                        [&client, completed](socket::ack_status, message)
+                        {
+                          client.close();
+                          completed->set_value();
+                        });
+  ASSERT_EQ(result.wait_for(std::chrono::seconds(2)),
+            std::future_status::ready);
+  client.sync_close();
+}
+
+TEST(ClientSocket, SyncCloseWaitsForRunningTimedAckSuccess)
+{
+  client client;
+  auto sock = client.socket();
+  auto entered = std::make_shared<std::promise<void>>();
+  auto started = entered->get_future();
+  auto release = std::make_shared<std::promise<void>>();
+  auto gate = release->get_future().share();
+  sock->emit("pending", json(), std::chrono::hours(1),
+             [entered, gate](socket::ack_status status, message)
+             {
+               EXPECT_EQ(status, socket::ack_status::acknowledged);
+               entered->set_value();
+               gate.wait();
+             });
+  auto delivery =
+    std::async(std::launch::async, [sock] { sock->dispatch_ack(0, json()); });
+  if (started.wait_for(std::chrono::seconds(2)) != std::future_status::ready)
+  {
+    release->set_value();
+    FAIL() << "ACK callback did not start";
+  }
+  auto closing =
+    std::async(std::launch::async, [&client] { client.sync_close(); });
+  const auto status = closing.wait_for(std::chrono::milliseconds(30));
+  release->set_value();
+  delivery.get();
+  closing.get();
+  EXPECT_EQ(status, std::future_status::timeout);
+}
+
+TEST(ClientSocket, ThrowingTimedAckCallbackDoesNotPreventShutdown)
+{
+  client client;
+  auto sock = client.socket();
+  sock->emit("pending", json(), std::chrono::hours(1),
+             [](socket::ack_status, message)
+             { throw std::runtime_error("callback"); });
+  EXPECT_THROW(sock->dispatch_ack(0, json()), std::runtime_error);
+  client.sync_close();
 }

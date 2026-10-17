@@ -1,7 +1,10 @@
 #include "sioxx/socket.hpp"
 
+#include <algorithm>
 #include <atomic>
+#include <stdexcept>
 
+#include "ack_scheduler.hpp"
 #include "client_impl.hpp"
 
 namespace sioxx
@@ -11,6 +14,8 @@ socket::socket(std::weak_ptr<client_impl> client, std::string nsp, message auth)
     : client_(std::move(client)), nsp_(std::move(nsp)), auth_(std::move(auth))
 {
 }
+
+socket::~socket() = default;
 
 void socket::set_auth(message auth)
 {
@@ -152,13 +157,93 @@ void socket::emit(const std::string& event, const message& data,
   send_or_buffer(std::move(packet));
 }
 
+void socket::emit(const std::string& event, const message& data,
+                  std::chrono::milliseconds timeout,
+                  timed_ack_callback callback)
+{
+  if (timeout.count() <= 0 || !callback)
+    throw std::invalid_argument(
+      "acknowledgement timeout and callback must be valid");
+  const auto now = std::chrono::steady_clock::now();
+  const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+    std::chrono::steady_clock::time_point::max() - now);
+  const auto deadline = timeout >= remaining
+                          ? std::chrono::steady_clock::time_point::max()
+                          : now + timeout;
+  packet packet;
+  packet.type = packet_type::event;
+  packet.nsp = nsp_;
+  packet.data = json::array({event});
+  if (data.is_array())
+    packet.data.insert(packet.data.end(), data.begin(), data.end());
+  else if (!data.is_null())
+    packet.data.push_back(data);
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    packet.id = register_timed_ack(deadline, std::move(callback));
+    // Preparation or lock contention may have consumed the deadline already.
+    // Leave timeout notification to the deadline worker in that case.
+    if (ack_scheduler_->expired(packet.id)) return;
+    if (!connected_ || flushing_send_buffer_)
+    {
+      send_buffer_.push_back(std::move(packet));
+      return;
+    }
+  }
+  if (auto c = client_.lock()) c->send_packet(packet);
+}
+
+int socket::register_timed_ack(std::chrono::steady_clock::time_point deadline,
+                               timed_ack_callback callback)
+{
+  if (timed_acks_closed_)
+    throw std::logic_error(
+      "timed emissions require client.connect() after shutdown");
+  if (!ack_scheduler_)
+    ack_scheduler_ = std::make_unique<ack_scheduler>(
+      [weak = weak_from_this()](int id)
+      {
+        if (auto self = weak.lock()) self->expire_ack(id);
+      });
+  const int id = next_ack_id_++;
+  timed_acks_.emplace(id, std::move(callback));
+  try
+  {
+    ack_scheduler_->add(id, deadline);
+  }
+  catch (...)
+  {
+    timed_acks_.erase(id);
+    throw;
+  }
+  return id;
+}
+
+void socket::expire_ack(int id)
+{
+  timed_ack_callback callback;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = timed_acks_.find(id);
+    if (it == timed_acks_.end()) return;
+    callback = std::move(it->second);
+    timed_acks_.erase(it);
+    ++active_timed_acks_;
+    send_buffer_.erase(std::remove_if(send_buffer_.begin(), send_buffer_.end(),
+                                      [id](const packet& buffered)
+                                      { return buffered.id == id; }),
+                       send_buffer_.end());
+  }
+  invoke_timed_ack(std::move(callback), ack_status::timeout, json());
+}
+
 void socket::send_or_buffer(packet packet)
 {
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (!connected_ || flushing_send_buffer_)
     {
-      send_buffer_.push(std::move(packet));
+      send_buffer_.push_back(std::move(packet));
       return;
     }
   }
@@ -171,6 +256,7 @@ void socket::flush_send_buffer()
   while (true)
   {
     packet packet;
+    bool expired = false;
     {
       std::lock_guard<std::mutex> lock(mutex_);
       if (!connected_ || send_buffer_.empty())
@@ -179,10 +265,15 @@ void socket::flush_send_buffer()
         return;
       }
       packet = std::move(send_buffer_.front());
-      send_buffer_.pop();
+      send_buffer_.pop_front();
+      expired =
+        timed_acks_.count(packet.id) && ack_scheduler_->expired(packet.id);
     }
 
-    if (auto c = client_.lock()) c->send_packet(packet);
+    if (expired)
+      expire_ack(packet.id);
+    else if (auto c = client_.lock())
+      c->send_packet(packet);
   }
 }
 
@@ -247,14 +338,89 @@ void socket::send_ack(int id, message data)
 void socket::dispatch_ack(int id, message data)
 {
   ack_callback cb;
+  timed_ack_callback timed_cb;
+  bool expired = false;
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    auto it = pending_acks_.find(id);
-    if (it == pending_acks_.end()) return;
-    cb = std::move(it->second);
-    pending_acks_.erase(it);
+    auto timed = timed_acks_.find(id);
+    if (timed != timed_acks_.end())
+    {
+      expired = ack_scheduler_->remove(id);
+      timed_cb = std::move(timed->second);
+      ++active_timed_acks_;
+      timed_acks_.erase(timed);
+      send_buffer_.erase(
+        std::remove_if(send_buffer_.begin(), send_buffer_.end(),
+                       [id](const packet& buffered)
+                       { return buffered.id == id; }),
+        send_buffer_.end());
+    }
+    else
+    {
+      auto it = pending_acks_.find(id);
+      if (it == pending_acks_.end()) return;
+      cb = std::move(it->second);
+      pending_acks_.erase(it);
+    }
   }
-  if (cb) cb(std::move(data));
+  if (timed_cb)
+    invoke_timed_ack(std::move(timed_cb),
+                     expired ? ack_status::timeout : ack_status::acknowledged,
+                     expired ? message(json()) : std::move(data));
+  else if (cb)
+    cb(std::move(data));
+}
+
+void socket::cancel_timed_acks()
+{
+  std::map<int, timed_ack_callback> cancelled;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    timed_acks_closed_ = true;
+    if (ack_scheduler_) ack_scheduler_->clear();
+    send_buffer_.erase(
+      std::remove_if(send_buffer_.begin(), send_buffer_.end(),
+                     [this](const packet& buffered)
+                     { return timed_acks_.count(buffered.id) != 0; }),
+      send_buffer_.end());
+    cancelled.swap(timed_acks_);
+  }
+  // Destroy captures outside locks: they may release application-owned objects.
+  cancelled.clear();
+}
+
+void socket::wait_for_timed_acks()
+{
+  std::unique_lock<std::mutex> lock(mutex_);
+  ack_condition_.wait(lock, [this] { return active_timed_acks_ == 0; });
+}
+
+void socket::resume_timed_acks()
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  timed_acks_closed_ = false;
+}
+
+void socket::invoke_timed_ack(timed_ack_callback callback, ack_status status,
+                              message data)
+{
+  try
+  {
+    callback(status, std::move(data));
+  }
+  catch (...)
+  {
+    finish_timed_ack();
+    throw;
+  }
+  finish_timed_ack();
+}
+
+void socket::finish_timed_ack()
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  --active_timed_acks_;
+  ack_condition_.notify_all();
 }
 
 void socket::mark_connected(bool connected,
