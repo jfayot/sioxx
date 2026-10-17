@@ -469,8 +469,8 @@ downstream integration projects.
 Linux CI runs the unit and E2E suites in separate ThreadSanitizer and
 AddressSanitizer/UBSan builds. AddressSanitizer also checks for leaks. Sanitizer
 findings fail the job; no suppression lists are applied. The acknowledgement
-concurrency tests run another 20 times per build to exercise callback delivery
-and shutdown while callbacks are active.
+concurrency tests and immediate heartbeat shutdown regression run another 20
+times per build to exercise callback delivery and shutdown.
 
 To reproduce a Linux build with Clang, install the E2E server dependencies as
 above and run:

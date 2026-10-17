@@ -77,8 +77,9 @@ jobs:
       - name: Run unit and E2E tests
         run: ctest --test-dir build-sanitizers --output-on-failure --timeout 60
 
-      - name: Repeat acknowledgement concurrency tests
+      - name: Repeat concurrency regressions
         run: >
           ctest --test-dir build-sanitizers
-          -R '^AckConcurrency\.' --repeat until-fail:20
+          -R '^(AckConcurrency\.|EngineioClientFixture\.UnexpectedTransportCloseStopsHeartbeatAndNotifiesImmediately$)'
+          --repeat until-fail:20
           --output-on-failure --timeout 30

@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes :wrench:
 
+- Synchronized heartbeat stop notification with the worker's wait mutex to
+  prevent missed wake-ups and shutdown delays of a full heartbeat interval.
 - Discard timed emissions whose deadline elapsed while preparing the packet
   or waiting for the socket lock, before they reach the transport.
 - Synchronized listener replacement with reconnect callback invocation and

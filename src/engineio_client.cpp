@@ -240,6 +240,8 @@ void engineio_client::request_heartbeat_stop()
 {
   {
     std::lock_guard<std::mutex> thread_lock(heartbeat_thread_mutex_);
+    // Serialize the stop predicate with the worker's transition into wait.
+    std::lock_guard<std::mutex> lock(heartbeat_mutex_);
     heartbeat_stop_requested_ = true;
   }
   heartbeat_cv_.notify_all();
