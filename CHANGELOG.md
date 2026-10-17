@@ -12,8 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Explicit shutdown cancels pending deadlines, and `sync_close()` drains
   running timed acknowledgement callbacks.
 
+### Changes :construction:
+
+- Set Codecov's overall coverage target to 95% and disable the patch coverage
+  check.
+
 ### Fixes :wrench:
 
+- Discard timed emissions whose deadline elapsed while preparing the packet
+  or waiting for the socket lock, before they reach the transport.
 - Synchronized listener replacement with reconnect callback invocation and
   prevented overflow when calculating reconnect delays for invalid attempts.
 - Synchronized HTTP polling worker ownership during shutdown and transport

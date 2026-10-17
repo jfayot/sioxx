@@ -293,10 +293,12 @@ sock->emit("save", sioxx::json::array({"draft"}), std::chrono::seconds(5),
 ```
 
 The duration must be positive and the callback nonempty. The deadline starts
-at `emit()`, including time buffered before connection. Expired buffered events
-are discarded. Namespace/transport disconnects and automatic reconnection do not
-reset deadlines. Explicit client shutdown and socket destruction cancel pending
-timed acknowledgements and their buffered events without notification. After
+at `emit()`, including packet preparation, waiting for the socket lock, and
+time buffered before connection. Events that expire during preparation or in
+the socket buffer are discarded. Namespace/transport disconnects and automatic
+reconnection do not reset deadlines. Explicit client shutdown and socket
+destruction cancel pending timed acknowledgements and their buffered events
+without notification. After
 client shutdown, timed emissions throw `std::logic_error` until `client.connect()`
 is called again. A timeout returns null reply
 data and does not prove that the server did not process an already-sent event.
@@ -446,7 +448,8 @@ The E2E suite covers WebSocket and polling connections, automatic polling
 fallback, JSON and MessagePack interoperability, acknowledgements, binary
 payloads with both built-in parsers, routing across multiple namespaces, and
 WebSocket reconnection after an unexpected server shutdown. CI combines unit
-and E2E coverage in the report published to Codecov.
+and E2E coverage in the report published to Codecov. Codecov requires at least
+95% overall coverage; the patch coverage check is disabled.
 
 The package compatibility configurations used by CI are captured in
 `CMakePresets.json` files at the repository root and under

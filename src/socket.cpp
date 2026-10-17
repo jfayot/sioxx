@@ -181,6 +181,9 @@ void socket::emit(const std::string& event, const message& data,
   {
     std::lock_guard<std::mutex> lock(mutex_);
     packet.id = register_timed_ack(deadline, std::move(callback));
+    // Preparation or lock contention may have consumed the deadline already.
+    // Leave timeout notification to the deadline worker in that case.
+    if (ack_scheduler_->expired(packet.id)) return;
     if (!connected_ || flushing_send_buffer_)
     {
       send_buffer_.push_back(std::move(packet));

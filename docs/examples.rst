@@ -111,7 +111,8 @@ Pass a positive duration and an outcome callback to ``emit``:
        });
 
 The callback must be nonempty. The deadline begins at ``emit``, including time
-buffered before connection. Expired buffered events are discarded; already-sent
+buffered before connection. Events that expire during packet preparation,
+waiting for the socket lock, or in the socket buffer are discarded; already-sent
 events cannot be recalled. Late acknowledgements are ignored and events are not
 retried. Timeout reply data is null. Existing acknowledgement callbacks without
 a duration keep their original behavior.
