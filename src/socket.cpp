@@ -175,7 +175,7 @@ void socket::emit(const std::string& event, const message& data,
   packet.nsp = nsp_;
   packet.data = json::array({event});
   if (data.is_array())
-    for (const auto& value : data) packet.data.push_back(value);
+    packet.data.insert(packet.data.end(), data.begin(), data.end());
   else if (!data.is_null())
     packet.data.push_back(data);
   {
