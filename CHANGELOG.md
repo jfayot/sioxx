@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changes :construction:
 
+- Added Linux ThreadSanitizer and AddressSanitizer/UBSan CI jobs covering unit
+  and E2E tests, with repeated synchronized acknowledgement concurrency tests.
 - Set Codecov's overall coverage target to 95% and disable the patch coverage
   check.
 

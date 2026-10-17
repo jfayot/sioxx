@@ -39,6 +39,7 @@ A C++ implementation of `socket.io`'s client functionality with the following st
 - [Documentation](#documentation)
 - [Development](#development)
   - [Testing](#testing)
+  - [Sanitizers](#sanitizers)
   - [Static analysis](#static-analysis)
   - [Building the documentation](#building-the-documentation)
 - [Contributing](#contributing)
@@ -462,6 +463,37 @@ cmake --workflow --list-presets
 The root presets build and install static or shared sioxx variants, while the
 consumer and subproject presets configure, build, and test the corresponding
 downstream integration projects.
+
+### Sanitizers
+
+Linux CI runs the unit and E2E suites in separate ThreadSanitizer and
+AddressSanitizer/UBSan builds. AddressSanitizer also checks for leaks. Sanitizer
+findings fail the job; no suppression lists are applied. The acknowledgement
+concurrency tests run another 20 times per build to exercise callback delivery
+and shutdown while callbacks are active.
+
+To reproduce a Linux build with Clang, install the E2E server dependencies as
+above and run:
+
+```bash
+cmake -S . -B /tmp/sioxx-sanitizers \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_CXX_COMPILER=clang++ \
+  -DCMAKE_CXX_FLAGS_DEBUG="-O1 -g" \
+  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+  -DSIOXX_BUILD_EXAMPLES=OFF \
+  -DSIOXX_BUILD_TESTS=ON \
+  -DSIOXX_BUILD_E2E_TESTS=ON
+cmake --build /tmp/sioxx-sanitizers --parallel 2
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+  ctest --test-dir /tmp/sioxx-sanitizers --output-on-failure --timeout 60
+```
+
+For ThreadSanitizer, use a separate build directory, replace
+`-fsanitize=address,undefined` with `-fsanitize=thread`, and run CTest with
+`TSAN_OPTIONS=halt_on_error=1`. On Linux with LLVM 18, the CI runner sets
+`vm.mmap_rnd_bits=28` to make room for ThreadSanitizer's shadow memory.
 
 ### Static analysis
 
