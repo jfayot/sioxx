@@ -1,0 +1,85 @@
+name: Sanitizers
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sanitizers-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  sanitizers:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: AddressSanitizer / UBSan
+            sanitizer: address,undefined
+          - name: ThreadSanitizer
+            sanitizer: thread
+    env:
+      ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+      TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: tests/e2e/server/pnpm-lock.yaml
+
+      - name: Install E2E dependencies
+        run: pnpm --dir tests/e2e/server install --frozen-lockfile
+
+      - name: Cache fetched CMake dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.cache/fetchcontent
+          key: fetchcontent-v1-${{ runner.os }}-${{ runner.arch }}-clang-${{ hashFiles('CMakeLists.txt', 'CMakePresets.json', 'cmake/SioxxBuildHelpers.cmake', 'tests/CMakeLists.txt') }}
+
+      - name: Configure ThreadSanitizer address space
+        if: matrix.sanitizer == 'thread'
+        # LLVM 18's shadow memory requires a smaller Linux ASLR range.
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+
+      - name: Configure sanitizer build
+        run: |
+          cmake -S . -B build-sanitizers \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_CXX_FLAGS_DEBUG="-O1 -g" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer" \
+            -DFETCHCONTENT_BASE_DIR="$PWD/.cache/fetchcontent" \
+            -DSIOXX_BUILD_EXAMPLES=OFF \
+            -DSIOXX_BUILD_TESTS=ON \
+            -DSIOXX_BUILD_E2E_TESTS=ON
+
+      - name: Build
+        run: cmake --build build-sanitizers --parallel 2
+
+      - name: Run unit and E2E tests
+        run: ctest --test-dir build-sanitizers --output-on-failure --timeout 60
+
+      - name: Repeat concurrency regressions
+        run: >
+          ctest --test-dir build-sanitizers
+          -R '^(AckConcurrency\.|EngineioClientFixture\.UnexpectedTransportCloseStopsHeartbeatAndNotifiesImmediately$)'
+          --repeat until-fail:20
+          --output-on-failure --timeout 30
