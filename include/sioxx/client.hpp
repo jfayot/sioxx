@@ -114,8 +114,10 @@ class client
    *
    * This operation is safe to call from library callbacks. Use sync_close()
    * when the caller must wait for network workers and active timed ACK
-   * callbacks to finish. Pending timed ACKs and their buffered events are
-   * cancelled silently. New timed emissions require another connect() call.
+   * callbacks to finish. All buffered events and pending ACK callbacks are
+   * cancelled silently. Every emit() overload throws std::logic_error until
+   * another connect() call. Already running callbacks may finish, and packets
+   * already handed to a transport cannot be recalled.
    * Repeated calls are safe.
    */
   void close();

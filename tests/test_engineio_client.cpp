@@ -402,3 +402,23 @@ TEST_F(EngineioClientFixture, RepeatedOpenHandshakeRestartsHeartbeatSafely)
   ASSERT_EQ(error.wait_for(std::chrono::seconds(2)), std::future_status::ready);
   EXPECT_EQ(error.get(), "engine.io ping timeout");
 }
+
+TEST_F(EngineioClientFixture, HeartbeatTimeoutCallbackCanCloseClient)
+{
+  auto closed = std::make_shared<std::promise<void>>();
+  auto close_returned = closed->get_future();
+  const std::weak_ptr<engineio_client> weak_client = client;
+  client->on_error(
+    [weak_client, closed](const std::string& message)
+    {
+      EXPECT_EQ(message, "engine.io ping timeout");
+      if (auto instance = weak_client.lock()) instance->close();
+      closed->set_value();
+    });
+  client->open("ws://localhost/socket.io/");
+  transport->simulate_message(make_open_payload(10, 0));
+  EXPECT_EQ(close_returned.wait_for(std::chrono::seconds(2)),
+            std::future_status::ready);
+  client->sync_close();
+  EXPECT_FALSE(client->is_open());
+}

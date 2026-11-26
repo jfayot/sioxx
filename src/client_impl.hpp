@@ -22,7 +22,8 @@ namespace boost
 namespace asio
 {
 class io_context;
-}
+class thread_pool;
+}  // namespace asio
 }  // namespace boost
 
 namespace sioxx
@@ -39,6 +40,7 @@ class client_impl : public std::enable_shared_from_this<client_impl>
 
   explicit client_impl(client_options&& options,
                        boost::asio::io_context* io_context = nullptr);
+  ~client_impl();
   void connect(const std::string& uri);
   void close();
   void sync_close();
@@ -70,6 +72,12 @@ class client_impl : public std::enable_shared_from_this<client_impl>
   void send_packet(const packet& packet);
 
  private:
+  friend class sioxx::socket;
+  void send_packet(const packet& packet,
+                   const std::shared_ptr<engineio_client>& engineio,
+                   const std::function<bool()>& ready = {});
+  void post_retry(std::function<void()> send);
+  void stop_retry_worker();
   std::vector<std::shared_ptr<sioxx::socket>> sockets_snapshot();
   std::shared_ptr<engineio_client> ensure_engineio();
   void bind_engineio_callbacks(
@@ -112,6 +120,8 @@ class client_impl : public std::enable_shared_from_this<client_impl>
   std::shared_ptr<engineio_client> engineio_;
   std::string base_uri_;
   std::mutex send_mutex_;
+  std::mutex retry_mutex_;
+  std::unique_ptr<boost::asio::thread_pool> retry_worker_;
   std::mutex sockets_mutex_;
   std::map<std::string, std::shared_ptr<sioxx::socket>> sockets_;
   mutable std::mutex handler_mutex_;
@@ -124,6 +134,7 @@ class client_impl : public std::enable_shared_from_this<client_impl>
   int reconnect_attempts_used_{0};
   std::atomic<bool> intentional_close_{false};
   std::mutex reconnect_mutex_;
+  std::mutex reconnect_wait_mutex_;
   std::condition_variable reconnect_condition_;
   std::thread reconnect_thread_;
   std::atomic<bool> using_polling_{false};

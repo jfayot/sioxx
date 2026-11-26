@@ -33,6 +33,9 @@ A C++ implementation of `socket.io`'s client functionality with the following st
   - [CMake options](#cmake-options)
 - [Usage guide](#usage-guide)
   - [Parser selection](#parser-selection)
+  - [Event buffers](#event-buffers)
+  - [Acknowledgement deadlines](#acknowledgement-deadlines)
+  - [Acknowledgement retries](#acknowledgement-retries)
   - [Threading model](#threading-model)
   - [Example test server](#example-test-server)
 - [Known limitations](#known-limitations)
@@ -278,6 +281,41 @@ and attachment frames. `msgpack_parser` is implemented on top of
 `nlohmann::json::to_msgpack` / `from_msgpack`, so it needs no extra MessagePack
 library and carries the same values natively in one binary frame.
 
+### Event buffers
+
+Each namespace has an in-memory FIFO buffer for events emitted while that
+namespace is disconnected. All `emit()` overloads share the buffer;
+it flushes when the server acknowledges the namespace CONNECT.
+
+| Lifecycle event | Buffered events and pending acknowledgements |
+| --- | --- |
+| Before the first connection | Queue events for the namespace CONNECT. |
+| Namespace disconnect, including `socket->disconnect()` | Preserve the buffer and ACK callbacks; resume on the next namespace CONNECT. |
+| Transport failure or automatic reconnect | Preserve unsent events and ACK callbacks; timed deadlines keep running. |
+| Reconnect attempts exhausted | Retain unsent events for a later `client.connect()`; timed events still expire. |
+| `client.close()`, `sync_close()`, or client destruction | Discard all buffered events and pending ACK callbacks silently. |
+| Socket destruction | Discard its buffer and pending ACK callbacks silently. |
+
+After explicit client shutdown, every `emit()` overload throws
+`std::logic_error` until `client.connect()` is called again. This also applies
+to retained sockets and sockets obtained after shutdown. Reconnecting starts
+with an empty buffer; listeners and namespace authentication are retained.
+
+Packets already handed to a transport, including an emission in progress
+when shutdown begins, cannot be recalled. They are only automatically retried
+when the retry overload described below is used.
+Successful transport handoff does not guarantee server delivery. ACK callbacks
+without a deadline can remain pending indefinitely until an ACK or shutdown.
+The buffer has no size limit; use timed emissions to expire stale work.
+FIFO order applies within each namespace's buffer, with concurrent calls ordered
+by acquisition of the socket mutex; no order is promised between namespaces.
+
+```cpp
+client.close();                    // Discard work from the previous session.
+client.connect("ws://localhost:3000");
+sock->emit("save", sioxx::json::array({"fresh draft"}));
+```
+
 ### Acknowledgement deadlines
 
 Use the timeout overload to bound how long an emission waits for a reply:
@@ -300,11 +338,50 @@ the socket buffer are discarded. Namespace/transport disconnects and automatic
 reconnection do not reset deadlines. Explicit client shutdown and socket
 destruction cancel pending timed acknowledgements and their buffered events
 without notification. After
-client shutdown, timed emissions throw `std::logic_error` until `client.connect()`
+client shutdown, all emissions throw `std::logic_error` until `client.connect()`
 is called again. A timeout returns null reply
 data and does not prove that the server did not process an already-sent event.
-Late acknowledgements are ignored and no automatic retry occurs. The existing
-three-argument acknowledgement overload remains unchanged.
+Late acknowledgements are ignored; this overload does not retry. The
+three-argument acknowledgement overload has no automatic deadline.
+
+### Acknowledgement retries
+
+Opt in for an individual event by passing the number of additional attempts:
+
+```cpp
+sock->emit("save", sioxx::json::array({{{"operation_id", "save-42"}, {"text", "draft"}}}),
+    std::chrono::seconds(5), 2,
+    [](sioxx::socket::ack_status status, sioxx::message reply) {
+        // One callback: acknowledged, or timeout after at most three attempts.
+    });
+```
+
+Here `2` means at most two retries after the initial attempt. Each attempt gets
+five seconds, including preparation, buffering, and disconnected time. Expiry
+consumes an attempt even if it was never sent; an offline operation therefore
+still exhausts its budget. Zero retries behaves like the timeout-only overload.
+There is no extra back-off delay, and existing overloads do not opt in to retries.
+Connected retries use a separate send worker so encoding and send contention
+do not hold up other acknowledgement deadlines. An encoding error during a
+buffered send or background retry leaves that attempt to expire normally.
+If encoding fails synchronously while the acknowledgement is pending and
+within its deadline, `emit()` throws and cancels that acknowledgement. After
+the deadline passes, the normal timeout and retry rules apply.
+
+Every attempt reuses the payload and gets a fresh ACK ID. Replies to older
+attempts are ignored. The callback runs once, on success or final timeout with
+null reply data. It runs outside socket locks on the ACK delivery thread or the
+existing deadline worker, including with a caller-owned `io_context`.
+Callbacks must not throw. Shutdown and socket destruction cancel remaining
+attempts silently; `sync_close()` drains running retry operations and timed
+callbacks. A new `client.connect()` does not revive cancelled retries.
+
+A retry joins the end of the namespace buffer. Other events can pass an event
+waiting for its ACK; there is no ordering guarantee between different retry
+operations. Retries can repeat an operation the server already processed.
+Include a stable application operation ID, as above, and deduplicate it on the
+server when effects must only happen once. Transport reconnection remains
+separately configured through `client_options`.
 
 ### Threading model
 
@@ -468,9 +545,10 @@ downstream integration projects.
 
 Linux CI runs the unit and E2E suites in separate ThreadSanitizer and
 AddressSanitizer/UBSan builds. AddressSanitizer also checks for leaks. Sanitizer
-findings fail the job; no suppression lists are applied. The acknowledgement
-concurrency tests and immediate heartbeat shutdown regression run another 20
-times per build to exercise callback delivery and shutdown.
+findings fail the job; no suppression lists are applied. Acknowledgement
+retries and concurrency, heartbeat shutdown, buffer lifecycle, and callback-triggered
+shutdown and reconnect regressions run another 20 times per build to exercise
+callback delivery, reconnect cancellation, and shutdown.
 
 To reproduce a Linux build with Clang, install the E2E server dependencies as
 above and run:

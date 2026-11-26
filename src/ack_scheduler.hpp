@@ -80,24 +80,14 @@ class ack_scheduler
     state_->condition.notify_one();
   }
 
-  bool expired(int id)
+  void remove(int id)
   {
     std::lock_guard<std::mutex> lock(state_->mutex);
     auto it = state_->deadlines.find(id);
-    return it == state_->deadlines.end() || it->second <= clock::now();
-  }
-
-  // Missing deadlines have already been claimed by the expiry worker.
-  bool remove(int id)
-  {
-    std::lock_guard<std::mutex> lock(state_->mutex);
-    auto it = state_->deadlines.find(id);
-    if (it == state_->deadlines.end()) return true;
-    const bool expired = it->second <= clock::now();
+    if (it == state_->deadlines.end()) return;
     state_->ordered.erase({it->second, id});
     state_->deadlines.erase(it);
     state_->condition.notify_one();
-    return expired;
   }
 
   void clear()

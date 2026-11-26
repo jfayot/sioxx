@@ -2,9 +2,11 @@
 
 #include <atomic>
 #include <boost/asio/io_context.hpp>
+#include <boost/asio/ip/tcp.hpp>
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <sioxx/sioxx.hpp>
@@ -113,6 +115,56 @@ void configure_failure_reporting(
   client.set_error_listener([error](const std::string& message)
                             { error->set(message); });
   client.set_fail_listener([error] { error->set("connection failed"); });
+}
+
+std::shared_ptr<event_counter> buffer_event_sequence(
+  const std::shared_ptr<sioxx::socket>& socket, const std::string& prefix)
+{
+  auto acknowledgements = std::make_shared<event_counter>();
+  socket->emit("buffer_probe", sioxx::json::array({prefix + "plain"}));
+  socket->emit("buffer_probe", sioxx::json::array({prefix + "ack"}),
+               [prefix, acknowledgements](sioxx::message reply)
+               {
+                 EXPECT_EQ(reply, sioxx::json::array({prefix + "ack"}));
+                 acknowledgements->increment();
+               });
+  socket->emit("buffer_probe", sioxx::json::array({prefix + "timed"}), 1h,
+               [prefix, acknowledgements](sioxx::socket::ack_status status,
+                                          sioxx::message reply)
+               {
+                 EXPECT_EQ(status, sioxx::socket::ack_status::acknowledged);
+                 EXPECT_EQ(reply, sioxx::json::array({prefix + "timed"}));
+                 acknowledgements->increment();
+               });
+  return acknowledgements;
+}
+
+void expect_buffer_log(const std::shared_ptr<sioxx::socket>& socket,
+                       const sioxx::json& expected)
+{
+  auto log = std::make_shared<async_value<sioxx::message>>();
+  socket->emit("buffer_probe_log", sioxx::json::array(), 5s,
+               [log](sioxx::socket::ack_status status, sioxx::message reply)
+               {
+                 EXPECT_EQ(status, sioxx::socket::ack_status::acknowledged);
+                 log->set(std::move(reply));
+               });
+  ASSERT_TRUE(log->wait_for(5s));
+  EXPECT_EQ(log->value(), sioxx::json::array({expected}));
+}
+
+void expect_retry_count(const std::shared_ptr<sioxx::socket>& socket,
+                        const std::string& id, unsigned expected)
+{
+  auto count = std::make_shared<async_value<sioxx::message>>();
+  socket->emit("retry_attempt_count", sioxx::json::array({id}), 5s,
+               [count](sioxx::socket::ack_status status, sioxx::message reply)
+               {
+                 EXPECT_EQ(status, sioxx::socket::ack_status::acknowledged);
+                 count->set(std::move(reply));
+               });
+  ASSERT_TRUE(count->wait_for(5s));
+  EXPECT_EQ(count->value(), sioxx::json::array({expected}));
 }
 
 }  // namespace
@@ -251,6 +303,172 @@ TEST(E2E, TimedAcknowledgementsSucceedAndExpireAcrossTransports)
   }
 }
 
+TEST(E2E, AcknowledgementRetriesSucceedAcrossTransportsAndParsers)
+{
+  for (auto parser : {sioxx::parser_kind::json, sioxx::parser_kind::msgpack})
+  {
+    for (bool polling : {false, true})
+    {
+      SCOPED_TRACE(polling ? "polling" : "websocket");
+      SCOPED_TRACE(parser == sioxx::parser_kind::json ? "json" : "msgpack");
+      sioxx::client_options options;
+      options.parser = parser;
+      options.force_http_polling = polling;
+      sioxx::client client(options);
+      auto socket = client.socket("/e2e");
+      auto reply = std::make_shared<async_value<sioxx::message>>();
+      auto calls = std::make_shared<std::atomic<int>>(0);
+      const std::string id = polling ? "success-polling" : "success-websocket";
+      const sioxx::json payload = {
+        {"nested", sioxx::binary_message({0x00, 0x7f, 0xff})}};
+      const sioxx::json request = {
+        {"id", id}, {"ackAfter", 2}, {"payload", payload}};
+      // Include the initial namespace connection in the first attempt's budget.
+      socket->emit(
+        "retry_with_ack", sioxx::json::array({request}), 500ms, 2,
+        [reply, calls](sioxx::socket::ack_status status, sioxx::message data)
+        {
+          EXPECT_EQ(status, sioxx::socket::ack_status::acknowledged);
+          ++*calls;
+          reply->set(std::move(data));
+        });
+      client.connect(server_url(parser == sioxx::parser_kind::msgpack
+                                  ? "SIOXX_E2E_MSGPACK_URL"
+                                  : "SIOXX_E2E_URL"));
+      ASSERT_TRUE(reply->wait_for(5s));
+      EXPECT_EQ(reply->value(),
+                sioxx::json::array({{{"attempt", 2}, {"payload", payload}}}));
+      expect_retry_count(socket, id, 2);
+      client.sync_close();
+      EXPECT_EQ(calls->load(), 1);
+    }
+  }
+}
+
+TEST(E2E, AcknowledgementRetriesStopAtConfiguredLimit)
+{
+  for (bool polling : {false, true})
+  {
+    for (unsigned retries : {0U, 2U})
+    {
+      SCOPED_TRACE(polling ? "polling" : "websocket");
+      SCOPED_TRACE(retries);
+      sioxx::client_options options;
+      options.force_http_polling = polling;
+      sioxx::client client(options);
+      auto socket = client.socket("/e2e");
+      auto connected = std::make_shared<completion_signal>();
+      auto completed = std::make_shared<completion_signal>();
+      auto calls = std::make_shared<std::atomic<int>>(0);
+      socket->on_connect([connected] { connected->set(); });
+      client.connect(server_url());
+      ASSERT_TRUE(connected->wait_for(5s));
+      const auto id =
+        std::string(polling ? "limit-polling-" : "limit-websocket-") +
+        std::to_string(retries);
+      const sioxx::json request = {{"id", id}, {"ackAfter", 0}};
+      socket->emit("retry_with_ack", sioxx::json::array({request}), 100ms,
+                   retries,
+                   [completed, calls](sioxx::socket::ack_status status,
+                                      sioxx::message data)
+                   {
+                     EXPECT_EQ(status, sioxx::socket::ack_status::timeout);
+                     EXPECT_TRUE(data.is_null());
+                     ++*calls;
+                     completed->set();
+                   });
+      ASSERT_TRUE(completed->wait_for(5s));
+      expect_retry_count(socket, id, retries + 1);
+      client.sync_close();
+      EXPECT_EQ(calls->load(), 1);
+    }
+  }
+}
+
+TEST(E2E, AcknowledgementRetriesSurviveTransportReconnect)
+{
+  for (bool polling : {false, true})
+  {
+    SCOPED_TRACE(polling ? "polling" : "websocket");
+    sioxx::client_options options;
+    options.force_http_polling = polling;
+    options.reconnect_attempts = 5;
+    options.reconnect_delay = 10ms;
+    options.reconnect_delay_max = 10ms;
+    options.reconnect_randomization_factor = 0.0;
+    sioxx::client client(options);
+    auto socket = client.socket("/e2e");
+    auto connections = std::make_shared<event_counter>();
+    auto reply = std::make_shared<async_value<sioxx::message>>();
+    socket->on_connect([connections] { connections->increment(); });
+    client.connect(server_url());
+    ASSERT_TRUE(connections->wait_for(1, 5s));
+    const std::string id =
+      polling ? "reconnect-polling" : "reconnect-websocket";
+    const sioxx::json request = {
+      {"id", id}, {"ackAfter", 2}, {"dropFirst", true}, {"payload", 42}};
+    socket->emit("retry_with_ack", sioxx::json::array({request}), 500ms, 2,
+                 [reply](sioxx::socket::ack_status status, sioxx::message data)
+                 {
+                   EXPECT_EQ(status, sioxx::socket::ack_status::acknowledged);
+                   reply->set(std::move(data));
+                 });
+    ASSERT_TRUE(connections->wait_for(2, 5s));
+    ASSERT_TRUE(reply->wait_for(5s));
+    EXPECT_EQ(reply->value(),
+              sioxx::json::array({{{"attempt", 2}, {"payload", 42}}}));
+    expect_retry_count(socket, id, 2);
+    client.sync_close();
+  }
+}
+
+TEST(E2E, AcknowledgementRetryShutdownCancelsRemainingAttempts)
+{
+  for (bool polling : {false, true})
+  {
+    SCOPED_TRACE(polling ? "polling" : "websocket");
+    sioxx::client_options options;
+    options.force_http_polling = polling;
+    sioxx::client client(options);
+    auto socket = client.socket("/e2e");
+    auto connections = std::make_shared<event_counter>();
+    auto attempted = std::make_shared<completion_signal>();
+    auto calls = std::make_shared<std::atomic<int>>(0);
+    socket->on_connect([connections] { connections->increment(); });
+    const std::string id = polling ? "cancel-polling" : "cancel-websocket";
+    socket->on("retry_attempt",
+               [attempted, id](const std::string&, sioxx::message data)
+               {
+                 if (data[0] == id) attempted->set();
+               });
+    client.connect(server_url());
+    ASSERT_TRUE(connections->wait_for(1, 5s));
+    const sioxx::json request = {{"id", id}, {"ackAfter", 0}};
+    auto capture = std::make_shared<int>(42);
+    std::weak_ptr<int> retained = capture;
+    socket->emit("retry_with_ack", sioxx::json::array({request}), 1h, 100,
+                 [capture, calls](sioxx::socket::ack_status, sioxx::message)
+                 { ++*calls; });
+    capture.reset();
+    ASSERT_TRUE(attempted->wait_for(5s));
+    client.sync_close();
+    EXPECT_TRUE(retained.expired());
+    client.connect(server_url());
+    ASSERT_TRUE(connections->wait_for(2, 5s));
+    expect_retry_count(socket, id, 1);
+    auto resumed = std::make_shared<completion_signal>();
+    socket->emit("echo_with_ack", sioxx::json::array({42}), 5s, 1,
+                 [resumed](sioxx::socket::ack_status status, sioxx::message)
+                 {
+                   EXPECT_EQ(status, sioxx::socket::ack_status::acknowledged);
+                   resumed->set();
+                 });
+    ASSERT_TRUE(resumed->wait_for(5s));
+    client.sync_close();
+    EXPECT_EQ(calls->load(), 0);
+  }
+}
+
 TEST(E2E, ReconnectingAfterExplicitShutdownResumesTimedEmissions)
 {
   auto calls = std::make_shared<std::atomic<int>>(0);
@@ -327,6 +545,172 @@ TEST(E2E, BuffersOutgoingEventUntilNamespaceConnects)
               {{{"received", sioxx::json::array({"before-connect"})}}}));
 
   client.close();
+}
+
+TEST(E2E, BufferSurvivesNamespaceDisconnectAcrossTransports)
+{
+  for (bool polling : {false, true})
+  {
+    for (bool server_disconnect : {false, true})
+    {
+      SCOPED_TRACE(polling ? "polling" : "websocket");
+      SCOPED_TRACE(server_disconnect ? "server disconnect"
+                                     : "client disconnect");
+      sioxx::client_options options;
+      options.force_http_polling = polling;
+      sioxx::client client(options);
+      auto socket = client.socket("/e2e");
+      auto control = client.socket("/e2e-a");
+      auto control_connected = std::make_shared<completion_signal>();
+      control->on_connect([control_connected] { control_connected->set(); });
+      auto connections = std::make_shared<event_counter>();
+      auto disconnected = std::make_shared<completion_signal>();
+      socket->on_connect([connections] { connections->increment(); });
+      socket->on_disconnect([disconnected](const std::string&)
+                            { disconnected->set(); });
+      client.connect(server_url());
+      ASSERT_TRUE(connections->wait_for(1, 5s));
+      ASSERT_TRUE(control_connected->wait_for(5s));
+      if (server_disconnect)
+      {
+        socket->emit("disconnect_namespace");
+        ASSERT_TRUE(disconnected->wait_for(5s));
+      }
+      else
+      {
+        socket->disconnect();
+        // The server dispatches DISCONNECT on its next tick. A reply on a
+        // second namespace confirms it processed that packet before CONNECT.
+        auto processed = std::make_shared<completion_signal>();
+        control->emit("namespace_with_ack", sioxx::json::array(),
+                      [processed](sioxx::message) { processed->set(); });
+        ASSERT_TRUE(processed->wait_for(5s));
+      }
+      auto acknowledgements = buffer_event_sequence(socket, "");
+      socket->connect();
+      ASSERT_TRUE(connections->wait_for(2, 5s));
+      expect_buffer_log(socket, sioxx::json::array({"plain", "ack", "timed"}));
+      EXPECT_TRUE(acknowledgements->wait_for(2, 5s));
+      client.sync_close();
+    }
+  }
+}
+
+TEST(E2E, BufferSurvivesTransportFailureAcrossTransports)
+{
+  for (bool polling : {false, true})
+  {
+    SCOPED_TRACE(polling ? "polling" : "websocket");
+    sioxx::client_options options;
+    options.force_http_polling = polling;
+    options.reconnect_attempts = 10;
+    options.reconnect_delay = 100ms;
+    options.reconnect_delay_max = 100ms;
+    options.reconnect_randomization_factor = 0.0;
+    sioxx::client client(options);
+    auto socket = client.socket("/e2e");
+    auto sibling = client.socket("/e2e-a");
+    auto sibling_connected = std::make_shared<completion_signal>();
+    auto sibling_acknowledged = std::make_shared<completion_signal>();
+    sibling->on_connect([sibling_connected] { sibling_connected->set(); });
+    auto connections = std::make_shared<event_counter>();
+    auto buffered_acks =
+      std::make_shared<async_value<std::shared_ptr<event_counter>>>();
+    socket->on_connect([connections] { connections->increment(); });
+    const std::weak_ptr<sioxx::socket> weak = socket;
+    socket->on_disconnect(
+      [weak, buffered_acks, sibling, sibling_acknowledged](const std::string&)
+      {
+        if (auto instance = weak.lock())
+          buffered_acks->set(buffer_event_sequence(instance, ""));
+        EXPECT_FALSE(sibling->connected());
+        sibling->emit("namespace_with_ack", sioxx::json::array(),
+                      [sibling_acknowledged](sioxx::message reply)
+                      {
+                        EXPECT_EQ(reply, sioxx::json::array({"/e2e-a"}));
+                        sibling_acknowledged->set();
+                      });
+      });
+    client.connect(server_url());
+    ASSERT_TRUE(connections->wait_for(1, 5s));
+    ASSERT_TRUE(sibling_connected->wait_for(5s));
+    // This event has left the buffer and must not be replayed on reconnection.
+    socket->emit("buffer_probe", sioxx::json::array({"already-sent"}));
+    socket->emit("drop_transport", sioxx::json::array(), [](sioxx::message) {});
+    ASSERT_TRUE(connections->wait_for(2, 5s));
+    expect_buffer_log(socket, sioxx::json::array({"plain", "ack", "timed"}));
+    ASSERT_TRUE(buffered_acks->wait_for(5s));
+    EXPECT_TRUE(buffered_acks->value()->wait_for(2, 5s));
+    EXPECT_TRUE(sibling_acknowledged->wait_for(5s));
+    socket->on_disconnect(nullptr);
+    client.sync_close();
+  }
+}
+
+TEST(E2E, BufferSurvivesReconnectExhaustionUntilManualConnect)
+{
+  for (bool polling : {false, true})
+  {
+    SCOPED_TRACE(polling ? "polling" : "websocket");
+    boost::asio::io_context context;
+    boost::asio::ip::tcp::acceptor acceptor(context,
+                                            {boost::asio::ip::tcp::v4(), 0});
+    const auto port = acceptor.local_endpoint().port();
+    acceptor.close();
+    sioxx::client_options options;
+    options.force_http_polling = polling;
+    options.reconnect_attempts = 1;
+    options.reconnect_delay = 1ms;
+    options.reconnect_delay_max = 1ms;
+    options.reconnect_randomization_factor = 0.0;
+    sioxx::client client(options);
+    auto socket = client.socket("/e2e");
+    auto failed = std::make_shared<completion_signal>();
+    auto connected = std::make_shared<completion_signal>();
+    client.set_fail_listener([failed] { failed->set(); });
+    socket->on_connect([connected] { connected->set(); });
+    auto acknowledgements = buffer_event_sequence(socket, "");
+    client.connect("ws://127.0.0.1:" + std::to_string(port));
+    ASSERT_TRUE(failed->wait_for(5s));
+    auto expired = std::make_shared<completion_signal>();
+    socket->emit("buffer_probe", sioxx::json::array({"expired"}), 1ms,
+                 [expired](sioxx::socket::ack_status status, sioxx::message)
+                 {
+                   EXPECT_EQ(status, sioxx::socket::ack_status::timeout);
+                   expired->set();
+                 });
+    socket->emit("buffer_probe", sioxx::json::array({"after-exhaustion"}));
+    ASSERT_TRUE(expired->wait_for(5s));
+    client.connect(server_url());
+    ASSERT_TRUE(connected->wait_for(5s));
+    expect_buffer_log(socket, sioxx::json::array(
+                                {"plain", "ack", "timed", "after-exhaustion"}));
+    EXPECT_TRUE(acknowledgements->wait_for(2, 5s));
+    client.sync_close();
+  }
+}
+
+TEST(E2E, ShutdownDiscardsEveryBufferedEmissionAcrossTransports)
+{
+  for (bool polling : {false, true})
+  {
+    SCOPED_TRACE(polling ? "polling" : "websocket");
+    sioxx::client_options options;
+    options.force_http_polling = polling;
+    sioxx::client client(options);
+    auto socket = client.socket("/e2e");
+    buffer_event_sequence(socket, "old-");
+    client.sync_close();
+    auto connected = std::make_shared<completion_signal>();
+    socket->on_connect([connected] { connected->set(); });
+    client.connect(server_url());
+    auto acknowledgements = buffer_event_sequence(socket, "new-");
+    ASSERT_TRUE(connected->wait_for(5s));
+    expect_buffer_log(
+      socket, sioxx::json::array({"new-plain", "new-ack", "new-timed"}));
+    EXPECT_TRUE(acknowledgements->wait_for(2, 5s));
+    client.sync_close();
+  }
 }
 
 TEST(E2E, RepliesToServerEventThatRequestsAcknowledgement)
@@ -949,6 +1333,167 @@ TEST(E2E, DestructionCancelsPendingReconnect)
   }
 
   EXPECT_FALSE(connections->wait_for(2, 2s));
+}
+
+namespace
+{
+
+void expect_close_from_disconnect_callback(bool polling)
+{
+  sioxx::client_options options;
+  options.force_http_polling = polling;
+  options.reconnect_attempts = 1;
+  auto connected = std::make_shared<completion_signal>();
+  auto close_returned = std::make_shared<completion_signal>();
+  auto reconnects = std::make_shared<std::atomic<int>>(0);
+  sioxx::client client(options);
+  auto socket = client.socket("/e2e");
+  socket->on_connect([connected] { connected->set(); });
+  socket->on_disconnect(
+    [&client, close_returned](const std::string&)
+    {
+      client.close();
+      close_returned->set();
+    });
+  client.set_reconnect_listener([reconnects](unsigned, unsigned)
+                                { ++*reconnects; });
+  client.connect(server_url());
+  ASSERT_TRUE(connected->wait_for(5s));
+  socket->emit("drop_transport", sioxx::json::array(), [](sioxx::message) {});
+  EXPECT_TRUE(close_returned->wait_for(5s));
+  client.sync_close();
+  EXPECT_FALSE(client.opened());
+  EXPECT_EQ(reconnects->load(), 0);
+}
+
+void expect_close_from_reconnect_callback(bool starting)
+{
+  sioxx::client_options options;
+  options.reconnect_attempts = 1;
+  options.reconnect_delay = starting ? 1ms : 1h;
+  options.reconnect_delay_max = options.reconnect_delay;
+  options.reconnect_randomization_factor = 0.0;
+  auto connected = std::make_shared<completion_signal>();
+  auto close_returned = std::make_shared<completion_signal>();
+  auto attempts = std::make_shared<std::atomic<int>>(0);
+  sioxx::client client(options);
+  auto socket = client.socket("/e2e");
+  socket->on_connect([connected] { connected->set(); });
+  auto close = [&client, close_returned]
+  {
+    client.close();
+    close_returned->set();
+  };
+  client.set_reconnect_listener(
+    [starting, close](unsigned, unsigned)
+    {
+      if (!starting) close();
+    });
+  client.set_reconnecting_listener(
+    [starting, attempts, close]
+    {
+      ++*attempts;
+      if (starting) close();
+    });
+  client.connect(server_url());
+  ASSERT_TRUE(connected->wait_for(5s));
+  socket->emit("drop_transport", sioxx::json::array(), [](sioxx::message) {});
+  EXPECT_TRUE(close_returned->wait_for(5s));
+  client.sync_close();
+  EXPECT_FALSE(client.opened());
+  EXPECT_EQ(attempts->load(), starting ? 1 : 0);
+}
+
+}  // namespace
+
+TEST(E2E, CloseFromWebsocketDisconnectCallbackDoesNotDeadlock)
+{
+  expect_close_from_disconnect_callback(false);
+}
+
+TEST(E2E, CloseFromPollingDisconnectCallbackDoesNotDeadlock)
+{
+  expect_close_from_disconnect_callback(true);
+}
+
+TEST(E2E, CloseFromReconnectScheduledCallbackCancelsAttempt)
+{
+  expect_close_from_reconnect_callback(false);
+}
+
+TEST(E2E, CloseFromReconnectingCallbackCancelsAttempt)
+{
+  expect_close_from_reconnect_callback(true);
+}
+
+TEST(E2E, SyncCloseWaitsForRunningReconnectCallback)
+{
+  sioxx::client_options options;
+  options.reconnect_attempts = 1;
+  options.reconnect_delay = 1ms;
+  options.reconnect_delay_max = 1ms;
+  options.reconnect_randomization_factor = 0.0;
+  auto connected = std::make_shared<completion_signal>();
+  auto entered = std::make_shared<completion_signal>();
+  auto release = std::make_shared<completion_signal>();
+  auto returned = std::make_shared<std::atomic<bool>>(false);
+  sioxx::client client(options);
+  auto socket = client.socket("/e2e");
+  socket->on_connect([connected] { connected->set(); });
+  client.set_reconnecting_listener(
+    [&client, entered, release, returned]
+    {
+      entered->set();
+      EXPECT_TRUE(release->wait_for(5s));
+      client.close();
+      *returned = true;
+    });
+  client.connect(server_url());
+  ASSERT_TRUE(connected->wait_for(5s));
+  socket->emit("drop_transport", sioxx::json::array(), [](sioxx::message) {});
+  ASSERT_TRUE(entered->wait_for(5s));
+  std::promise<void> shutdown_started;
+  auto started = shutdown_started.get_future();
+  auto shutdown = std::async(std::launch::async,
+                             [&client, &shutdown_started]
+                             {
+                               shutdown_started.set_value();
+                               client.sync_close();
+                             });
+  EXPECT_EQ(started.wait_for(5s), std::future_status::ready);
+  EXPECT_EQ(shutdown.wait_for(50ms), std::future_status::timeout);
+  release->set();
+  EXPECT_EQ(shutdown.wait_for(5s), std::future_status::ready);
+  shutdown.get();
+  EXPECT_TRUE(returned->load());
+  EXPECT_FALSE(client.opened());
+}
+
+TEST(E2E, SyncCloseCancelsLongReconnectDelay)
+{
+  sioxx::client_options options;
+  options.reconnect_attempts = 1;
+  options.reconnect_delay = 1h;
+  options.reconnect_delay_max = 1h;
+  options.reconnect_randomization_factor = 0.0;
+  auto connected = std::make_shared<completion_signal>();
+  auto scheduled = std::make_shared<completion_signal>();
+  auto attempts = std::make_shared<std::atomic<int>>(0);
+  sioxx::client client(options);
+  auto socket = client.socket("/e2e");
+  socket->on_connect([connected] { connected->set(); });
+  client.set_reconnect_listener([scheduled](unsigned, unsigned)
+                                { scheduled->set(); });
+  client.set_reconnecting_listener([attempts] { ++*attempts; });
+  client.connect(server_url());
+  ASSERT_TRUE(connected->wait_for(5s));
+  socket->emit("drop_transport", sioxx::json::array(), [](sioxx::message) {});
+  ASSERT_TRUE(scheduled->wait_for(5s));
+  const auto start = std::chrono::steady_clock::now();
+  client.sync_close();
+  EXPECT_LT(std::chrono::steady_clock::now() - start, 1s);
+  EXPECT_EQ(attempts->load(), 0);
+  EXPECT_FALSE(client.opened());
 }
 
 TEST(E2E, ExchangesMessagePackEventsAcknowledgementsAndBinary)

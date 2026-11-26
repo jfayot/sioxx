@@ -80,6 +80,6 @@ jobs:
       - name: Repeat concurrency regressions
         run: >
           ctest --test-dir build-sanitizers
-          -R '^(AckConcurrency\.|EngineioClientFixture\.UnexpectedTransportCloseStopsHeartbeatAndNotifiesImmediately$)'
+          -R '^(AckConcurrency\.|AckRetries\.|EngineioClientFixture\.(UnexpectedTransportCloseStopsHeartbeatAndNotifiesImmediately|HeartbeatTimeoutCallbackCanCloseClient)$|E2E\.(AcknowledgementRetr.*|CloseFrom.*|SyncClose.*|BufferSurvives.*|ShutdownDiscardsEveryBufferedEmissionAcrossTransports|ReconnectsAfterUnexpectedWebsocketClose|DestructionCancelsPendingReconnect)$)'
           --repeat until-fail:20
           --output-on-failure --timeout 30

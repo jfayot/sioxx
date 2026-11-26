@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Additions :tada:
 
+- Added opt-in per-emission acknowledgement retries with per-attempt timeouts,
+  fresh ACK IDs, one final outcome callback, and silent shutdown cancellation.
+  Retry budgets continue to expire while disconnected; retries append to the
+  namespace buffer and may duplicate effects already processed by the server.
 - Added per-emission acknowledgement deadlines with success/timeout outcomes,
   expiry of buffered events, and suppression of late acknowledgements.
   Explicit shutdown cancels pending deadlines, and `sync_close()` drains
@@ -14,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changes :construction:
 
+- Defined per-namespace FIFO buffer behavior across disconnects, transport
+  failures, and reconnect exhaustion. Explicit client shutdown now discards
+  every buffered event and pending ACK callback, and all `emit()` overloads
+  reject calls until `client.connect()` is called again.
 - Added Linux ThreadSanitizer and AddressSanitizer/UBSan CI jobs covering unit
   and E2E tests, with repeated synchronized acknowledgement concurrency tests.
 - Set Codecov's overall coverage target to 95% and disable the patch coverage
@@ -21,6 +29,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes :wrench:
 
+- Marked all namespaces disconnected before invoking their callbacks outside
+  the client socket registry lock. Callbacks can buffer work on other
+  namespaces or request shutdown after a transport failure.
+- Isolated retry sends from deadline processing and bound attempts to their
+  connection. Expired or cancelled attempts are discarded before handoff.
+- Cancelled timed emissions when synchronous encoding fails. Failed buffered
+  and background sends expire normally within the configured retry budget.
+- Synchronized reconnect cancellation with the worker's wait mutex to prevent
+  missed wake-ups and shutdown delays of a full reconnect interval.
 - Synchronized heartbeat stop notification with the worker's wait mutex to
   prevent missed wake-ups and shutdown delays of a full heartbeat interval.
 - Discard timed emissions whose deadline elapsed while preparing the packet

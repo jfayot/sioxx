@@ -74,6 +74,8 @@ if (mode === "custom-options") {
   });
 }
 
+const retryAttempts = new Map();
+
 e2e.on("connection", (socket) => {
   socket.emit("server_arguments", 1, "two", { three: 3 });
 
@@ -84,6 +86,28 @@ e2e.on("connection", (socket) => {
   let timeoutProbeCount = 0;
   socket.on("timeout_probe", () => { ++timeoutProbeCount; });
   socket.on("timeout_probe_count", (acknowledge) => { acknowledge(timeoutProbeCount); });
+
+  const bufferedEvents = [];
+  socket.on("buffer_probe", (value, acknowledge) => {
+    bufferedEvents.push(value);
+    if (typeof acknowledge === "function") acknowledge(value);
+  });
+  socket.on("buffer_probe_log", (acknowledge) => { acknowledge(bufferedEvents); });
+  socket.on("disconnect_namespace", () => { socket.disconnect(); });
+
+  socket.on("retry_with_ack", (request, acknowledge) => {
+    const attempt = (retryAttempts.get(request.id) || 0) + 1;
+    retryAttempts.set(request.id, attempt);
+    socket.emit("retry_attempt", request.id, attempt);
+    if (request.dropFirst && attempt === 1) {
+      socket.conn.close();
+    } else if (request.ackAfter > 0 && attempt >= request.ackAfter) {
+      acknowledge({ attempt, payload: request.payload });
+    }
+  });
+  socket.on("retry_attempt_count", (id, acknowledge) => {
+    acknowledge(retryAttempts.get(id) || 0);
+  });
 
   socket.on("echo_with_ack", (...args) => {
     const acknowledgement = args.pop();

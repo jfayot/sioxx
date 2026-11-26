@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 
 #include "message.hpp"
@@ -27,6 +28,7 @@ namespace sioxx
 
 class client_impl;
 class ack_scheduler;
+class engineio_client;
 
 /**
  * @class socket
@@ -35,6 +37,15 @@ class ack_scheduler;
  * The class mirrors the API of the original `socket.io-client-cpp` socket.
  * Listeners are stored per‑event name; registering a listener for an existing
  * name overwrites the previous one (consistent with the reference client).
+ *
+ * Each namespace buffers outgoing events in FIFO order while disconnected.
+ * Namespace/transport disconnects and reconnect exhaustion preserve this
+ * buffer. A later namespace CONNECT flushes it; timed entries retain their
+ * original deadlines. Events handed to a transport are only retried when
+ * explicitly requested through the retry overload of emit().
+ * Explicit client shutdown discards the buffer and all pending ACK callbacks
+ * without notification. All emit() overloads then throw std::logic_error
+ * until client::connect() is called again. The buffer has no size limit.
  *
  * All public methods are thread‑safe; internal state is protected by a mutex.
  */
@@ -79,7 +90,7 @@ class socket : public std::enable_shared_from_this<socket>
   socket(std::weak_ptr<client_impl> client, std::string nsp,
          message auth = json());
 
-  /** @brief Cancel outstanding deadlines without invoking their callbacks. */
+  /** @brief Discard buffered events and pending ACKs without notification. */
   ~socket();
 
   /** @brief Return the namespace this socket belongs to. */
@@ -172,6 +183,7 @@ class socket : public std::enable_shared_from_this<socket>
    *
    * @param event   Event name.
    * @param data    Payload (default empty JSON array).  May be any JSON value.
+   * @throws std::logic_error If the client has explicitly shut down.
    */
   void emit(const std::string& event, const message& data = json::array());
 
@@ -184,6 +196,9 @@ class socket : public std::enable_shared_from_this<socket>
    * @param event    Event name.
    * @param data     Payload.
    * @param callback Function called when the server ACK arrives.
+   * Pending callbacks have no deadline and survive disconnects, including
+   * reconnect exhaustion. Client shutdown cancels them without notification.
+   * @throws std::logic_error If the client has explicitly shut down.
    */
   void emit(const std::string& event, const message& data,
             ack_callback callback);
@@ -195,6 +210,9 @@ class socket : public std::enable_shared_from_this<socket>
    * and time disconnected. Disconnects do not reset the deadline. An expired
    * buffered event is discarded; an event already handed to the transport
    * cannot be recalled. Late acknowledgements are ignored. No retry occurs.
+   * A synchronous encoding error before expiry cancels a pending
+   * acknowledgement and propagates to the caller. A buffered send that fails
+   * to encode expires normally.
    * The callback runs at most once, outside socket locks, on the ACK delivery
    * thread or a socket-owned deadline worker (also with a caller-owned
    * io_context). Callbacks must not throw. Destroying the socket cancels
@@ -215,6 +233,40 @@ class socket : public std::enable_shared_from_this<socket>
    */
   void emit(const std::string& event, const message& data,
             std::chrono::milliseconds timeout, timed_ack_callback callback);
+
+  /**
+   * @brief Emit with a bounded number of acknowledgement retries.
+   *
+   * The timeout applies to each attempt, including packet preparation,
+   * buffering, and disconnected time. On timeout, at most retries additional
+   * attempts are made with fresh ACK IDs. Replies to older attempts are
+   * ignored. A retry joins the end of the namespace buffer; later events may
+   * be delivered before it. Zero retries behaves like the timeout overload.
+   * Connected retries are sent on a separate worker. An encoding error during
+   * a buffered or background send consumes an attempt when its deadline
+   * expires. A synchronous encoding error before expiry cancels a pending
+   * acknowledgement and propagates to the caller.
+   *
+   * The callback runs once on acknowledgement or final timeout, on the ACK
+   * delivery thread or deadline worker, outside socket locks. It must not
+   * throw. Explicit client shutdown and socket destruction silently cancel
+   * remaining attempts. sync_close() waits for running retry operations and
+   * timed callbacks. Retries may cause duplicate server-side effects; include
+   * an application operation ID when deduplication is needed.
+   *
+   * @param event Event name.
+   * @param data Payload, reused unchanged on each attempt.
+   * @param timeout Positive timeout for each attempt.
+   * @param retries Maximum additional attempts after the initial attempt.
+   * @param callback Receives acknowledged with reply data, or timeout with
+   * null.
+   * @throws std::invalid_argument If timeout is not positive or callback is
+   * empty.
+   * @throws std::logic_error If the client has explicitly shut down.
+   */
+  void emit(const std::string& event, const message& data,
+            std::chrono::milliseconds timeout, unsigned retries,
+            timed_ack_callback callback);
   /** @} */
 
   /** @name Namespace control */
@@ -222,7 +274,12 @@ class socket : public std::enable_shared_from_this<socket>
   /** @brief Send a CONNECT packet for this namespace. */
   void connect();
 
-  /** @brief Send a DISCONNECT packet for this namespace. */
+  /**
+   * @brief Send a DISCONNECT packet for this namespace.
+   *
+   * Buffered events and pending ACKs are preserved. Subsequent emissions are
+   * buffered until this namespace connects again; timed deadlines continue.
+   */
   void disconnect();
   /** @} */
 
@@ -249,19 +306,39 @@ class socket : public std::enable_shared_from_this<socket>
 
  private:
   friend class client_impl;
-  void cancel_timed_acks();
+  struct retry_emission;
+  struct timed_ack
+  {
+    std::chrono::steady_clock::time_point deadline;
+    timed_ack_callback callback;
+    std::optional<packet> queued;
+  };
+  void emit_retry(const std::shared_ptr<retry_emission>& emission,
+                  std::chrono::steady_clock::time_point deadline,
+                  bool background);
+  void send_timed(packet packet, std::chrono::steady_clock::time_point deadline,
+                  timed_ack_callback callback,
+                  const std::shared_ptr<bool>& cancelled,
+                  bool background = false);
+  void send_timed_attempt(client_impl& client,
+                          const std::shared_ptr<engineio_client>& engineio,
+                          const packet& packet, bool initial_send);
+  void send_queued_retry(int id);
+  void cancel_pending_emissions();
   void wait_for_timed_acks();
-  void resume_timed_acks();
+  void resume_emissions();
   void invoke_timed_ack(timed_ack_callback callback, ack_status status,
                         message data);
   void finish_timed_ack();
   // Requires mutex_ to be held by the caller.
+  void require_emissions_open() const;
   int register_timed_ack(std::chrono::steady_clock::time_point deadline,
                          timed_ack_callback callback);
   void expire_ack(int id);
   void send_or_buffer(packet packet);
   void flush_send_buffer();
   void send_ack(int id, message data);
+  disconnect_listener mark_disconnected();
 
   std::weak_ptr<client_impl> client_;
   std::string nsp_;
@@ -274,10 +351,11 @@ class socket : public std::enable_shared_from_this<socket>
   event_listener any_listener_;
   ack_event_listener any_ack_listener_;
   std::map<int, ack_callback> pending_acks_;
-  std::map<int, timed_ack_callback> timed_acks_;
+  std::map<int, timed_ack> timed_acks_;
   std::condition_variable ack_condition_;
   std::size_t active_timed_acks_{0};
-  bool timed_acks_closed_{false};
+  bool emissions_closed_{false};
+  std::shared_ptr<bool> retries_cancelled_;
   std::deque<packet> send_buffer_;
   int next_ack_id_{0};
   bool flushing_send_buffer_{false};

@@ -331,11 +331,30 @@ The remaining namespace method translations are direct:
    * - ``client.sync_close()``
      - unchanged
 
-``client.close()`` requests shutdown without waiting, whereas
-``client.sync_close()`` waits for all library workers to stop. Call only the
-non-blocking form from a library callback. Callbacks run on sioxx's connection
-background thread; continue dispatching to the UI or application executor
-before accessing thread-affine state.
+``client.close()`` requests shutdown without waiting. ``client.sync_close()``
+also waits for library-owned network workers and active timed acknowledgement
+operations. Use ``client.close()`` from library callbacks. Transport callbacks
+can run on a sioxx worker or an application-supplied I/O context. Continue
+dispatching to the UI or application executor before accessing thread-affine
+state.
+
+Namespace disconnect listeners and reconnect listeners may call
+``client.close()`` to cancel further reconnect attempts. From another thread,
+``client.sync_close()`` wakes a reconnect worker waiting on its back-off delay
+and waits for the worker to finish, including any callback registered with
+``set_reconnecting_listener()``.
+
+Client shutdown now discards all buffered events and pending acknowledgement
+callbacks, including emissions without a timeout. Previously only timed
+emissions were cancelled. Every ``emit()`` overload now throws
+``std::logic_error`` after shutdown until ``client.connect()`` is called again.
+Move emissions for the next session after that call. Namespace disconnects,
+transport failures, and reconnect exhaustion preserve unsent events; timed
+deadlines continue to run. Events already handed to the transport are not
+automatically replayed unless the new per-emission retry overload is used.
+Pass ``emit(event, data, timeout, retries, callback)`` to allow that many
+additional attempts. The timeout applies to each attempt, including offline
+time. Existing overloads retain their timeout and delivery behavior.
 
 Applications that passed an ``asio::io_context`` to socket.io-client-cpp can
 retain the same ownership model:
@@ -345,9 +364,11 @@ retain the same ownership model:
    boost::asio::io_context io_context;
    sioxx::client client(io_context, options);
 
-The supplied context must outlive the client. The application runs it; sioxx
-does not run or stop it. WebSocket and HTTP polling networking and callbacks
-use that context.
+The supplied context must outlive the client. The application runs and stops
+it. WebSocket and HTTP polling networking and callbacks use it. A transport
+callback on that context, such as one registered with
+``set_reconnect_listener()``, may still be running when ``client.sync_close()``
+returns.
 
 The connection-state and session accessors translate directly:
 
