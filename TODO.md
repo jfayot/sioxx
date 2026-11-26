@@ -29,8 +29,8 @@ items listed here should either be completed or explicitly resolved before the
 ## Reliability
 
 - [x] Add configurable acknowledgement timeouts.
-- [ ] Add bounded retries for events that are not acknowledged.
-- [ ] Define event-buffer behavior across namespace disconnects, transport
+- [x] Add bounded retries for events that are not acknowledged.
+- [x] Define event-buffer behavior across namespace disconnects, transport
       failures, reconnection exhaustion, and explicit client shutdown.
 - [ ] Review shutdown, reconnection, heartbeat, and callback dispatch for race
       conditions under ThreadSanitizer or an equivalent concurrency check.

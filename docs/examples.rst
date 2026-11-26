@@ -76,6 +76,41 @@ namespace connects are buffered and sent in order after connection:
            std::cout << "server replied: " << reply.dump() << '\n';
        });
 
+Event buffer lifecycle
+----------------------
+
+Each namespace has an in-memory FIFO buffer shared by all ``emit()`` overloads.
+The server's namespace CONNECT acknowledgement triggers its flush. Namespace
+disconnects (including ``socket->disconnect()``), transport failures, and
+automatic reconnects preserve unsent events and pending ACK callbacks.
+Exhausting reconnect attempts also preserves them: a later ``client.connect()``
+can deliver buffered work. Timed emissions keep their original deadlines
+through all these states; expired entries are removed.
+
+Explicit ``client.close()``, ``client.sync_close()``, and client destruction
+discard every buffered event and pending ACK callback without notification.
+Socket destruction discards its own buffer and pending ACK callbacks.
+Already running callbacks may finish. After client shutdown, every ``emit()``
+overload throws ``std::logic_error`` until ``client.connect()`` is called again,
+including on retained sockets or sockets obtained after shutdown. Listeners and
+namespace authentication remain installed; the next connection starts with an
+empty buffer.
+
+.. code-block:: cpp
+
+   client.close();
+   client.connect("ws://localhost:3000");
+   chat->emit("hello", sioxx::json::array({"new session"}));
+
+Events already handed to a transport, including an emission in progress during
+shutdown, cannot be recalled. They are only retried when the retry overload
+described below is used. Transport
+handoff does not guarantee server delivery. Pending ACK callbacks without a
+deadline can remain allocated until an ACK or shutdown. The buffer has no size
+limit; use timed emissions to expire stale work. FIFO ordering is per namespace,
+with concurrent calls ordered by acquisition of the socket mutex. There is no
+ordering guarantee between namespaces.
+
 Reply to a server acknowledgement request
 -----------------------------------------
 
@@ -118,9 +153,9 @@ retried. Timeout reply data is null. Existing acknowledgement callbacks without
 a duration keep their original behavior.
 
 Namespace/transport disconnects and automatic reconnection preserve deadlines.
-Explicit client ``close()`` cancels pending timed acknowledgements and their
-buffered events without notification. ``sync_close()`` also waits for callbacks
-already running; call it outside library callbacks. New timed emissions throw
+Explicit client ``close()`` cancels all pending acknowledgements and buffered
+events without notification. ``sync_close()`` also waits for timed callbacks
+already running; call it outside library callbacks. New emissions throw
 ``std::logic_error`` after shutdown until ``client.connect()`` is called again.
 Destroying the socket also cancels outstanding deadlines without notification.
 Idle deadline workers may remain allocated until their sockets are destroyed.
@@ -128,6 +163,50 @@ Each socket lazily starts one deadline worker, even with a caller-owned
 ``io_context``. The callback runs at most once, outside socket locks, on that
 worker or the ACK delivery thread. Callbacks must not throw; dispatch UI work
 to the application's UI thread.
+
+Retry an unacknowledged event
+-----------------------------
+
+Pass a retry count after the timeout to opt in for one emission. Other
+``emit()`` overloads keep their existing behavior:
+
+.. code-block:: cpp
+
+   chat->emit(
+       "save",
+       sioxx::json::array({{{"operation_id", "save-42"}, {"text", "draft"}}}),
+       std::chrono::seconds(5),
+       2,
+       [](sioxx::socket::ack_status status, sioxx::message reply) {
+           // Called once on success, or after the third attempt times out.
+       });
+
+The retry count is the maximum number of additional attempts. Each attempt has
+its own timeout, including preparation, buffering, and disconnected time. A
+timeout consumes an attempt even if nothing was transmitted. Zero retries is
+equivalent to the timeout-only overload. There is no extra back-off delay.
+Ordinary disconnects and exhausted transport reconnection attempts do not stop
+these deadlines. Each retry joins the end of the namespace buffer; events
+emitted later can pass an operation waiting for its ACK.
+
+Connected retries use a separate send worker. Encoding errors from buffered
+sends and background retries leave the attempt to expire normally. If
+encoding fails synchronously before the pending acknowledgement expires,
+``emit()`` throws and cancels that acknowledgement.
+
+Attempts reuse the same payload and receive fresh ACK IDs. ACKs for previous
+attempts are ignored, so the application receives one callback: acknowledged
+with reply data, or timeout with null after the last attempt. Callbacks run on
+the ACK delivery thread or the existing deadline worker, outside socket locks,
+also with a caller-owned ``io_context``. They must not throw. Explicit shutdown
+and socket destruction silently cancel remaining attempts. ``sync_close()``
+drains running retry operations and timed callbacks; a later connection cannot
+revive cancelled retries.
+
+An earlier attempt may have reached the server even when its ACK was lost.
+Use a stable application operation ID and server-side deduplication if effects
+must only happen once. Different retry operations are not serialized behind
+each other's ACKs. Transport reconnection is configured independently.
 
 Send and receive binary attachments
 -----------------------------------

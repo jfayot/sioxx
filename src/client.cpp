@@ -1,6 +1,8 @@
 #include "sioxx/client.hpp"
 
 #include <algorithm>
+#include <boost/asio/post.hpp>
+#include <boost/asio/thread_pool.hpp>
 #include <exception>
 #include <limits>
 #include <random>
@@ -71,6 +73,8 @@ client_impl::client_impl(client_options&& options,
   }
 }
 
+client_impl::~client_impl() = default;
+
 void client_impl::connect(const std::string& uri)
 {
   if (intentional_close_.load()) stop_reconnect_thread();
@@ -78,7 +82,7 @@ void client_impl::connect(const std::string& uri)
   {
     std::lock_guard<std::mutex> lock(sockets_mutex_);
     intentional_close_ = false;
-    for (auto& entry : sockets_) entry.second->resume_timed_acks();
+    for (auto& entry : sockets_) entry.second->resume_emissions();
   }
   using_polling_ = options_.force_http_polling;
   reconnect_attempts_used_ = 0;
@@ -215,10 +219,16 @@ void client_impl::on_engineio_open()
 
 void client_impl::on_engineio_close(const std::string& reason)
 {
+  // A disconnect callback can emit on another namespace.
+  const auto sockets = sockets_snapshot();
+  std::vector<sioxx::socket::disconnect_listener> listeners;
+  listeners.reserve(sockets.size());
+  for (const auto& sock : sockets)
   {
-    std::lock_guard<std::mutex> lock(sockets_mutex_);
-    for (auto& [nsp, sock] : sockets_) sock->mark_connected(false);
+    if (auto listener = sock->mark_disconnected())
+      listeners.push_back(std::move(listener));
   }
+  for (const auto& listener : listeners) listener("");
   if (auto handler = current_handler(on_close_)) handler(reason);
 
   if (!intentional_close_.load() && options_.reconnect_attempts > 0)
@@ -249,15 +259,15 @@ void client_impl::schedule_reconnect()
   {
     std::lock_guard<std::mutex> lock(reconnect_mutex_);
     if (intentional_close_.load()) return;
-    // Acquiring reconnect_mutex_ means the previous worker has finished all
-    // accesses to client state, so it is safe to reap before replacing it.
+    // Reap the previous worker before replacing it. Callbacks can request
+    // close() without acquiring this thread ownership mutex.
     if (reconnect_thread_.joinable()) reconnect_thread_.join();
     auto self = shared_from_this();
     reconnect_thread_ = std::thread(
       [self = std::move(self), delay, uri = std::move(uri)]
       {
         {
-          std::unique_lock<std::mutex> lock(self->reconnect_mutex_);
+          std::unique_lock<std::mutex> lock(self->reconnect_wait_mutex_);
           if (self->reconnect_condition_.wait_for(
                 lock, delay,
                 [&self] { return self->intentional_close_.load(); }))
@@ -369,7 +379,7 @@ std::shared_ptr<sioxx::socket> client_impl::socket(const std::string& nsp,
 
   auto sock = std::make_shared<sioxx::socket>(weak_from_this(), norm_nsp,
                                               std::move(auth));
-  if (intentional_close_.load()) sock->cancel_timed_acks();
+  if (intentional_close_.load()) sock->cancel_pending_emissions();
   sockets_[norm_nsp] = sock;
   auto engineio = current_engineio();
   if (engineio && engineio->is_open()) sock->connect();
@@ -378,12 +388,66 @@ std::shared_ptr<sioxx::socket> client_impl::socket(const std::string& nsp,
 
 void client_impl::send_packet(const packet& packet)
 {
-  std::lock_guard<std::mutex> lock(send_mutex_);
-  auto engineio = current_engineio();
+  send_packet(packet, current_engineio());
+}
+
+void client_impl::send_packet(const packet& packet,
+                              const std::shared_ptr<engineio_client>& engineio,
+                              const std::function<bool()>& ready)
+{
   if (!engineio) return;
-  parser_->encode(packet, [engineio = std::move(engineio)](
-                            const std::string& payload, bool is_binary)
-                  { engineio->send(payload, is_binary); });
+  std::lock_guard<std::mutex> lock(send_mutex_);
+  if (!ready)
+  {
+    parser_->encode(packet,
+                    [engineio](const std::string& payload, bool is_binary)
+                    { engineio->send(payload, is_binary); });
+    return;
+  }
+  if (!ready()) return;
+
+  // Encoding may fail or use up the deadline. Commit all encoded frames
+  // together so a failed encode cannot leave partial binary attachments.
+  std::vector<std::pair<std::string, bool>> frames;
+  parser_->encode(packet, [&frames](const std::string& payload, bool is_binary)
+                  { frames.emplace_back(payload, is_binary); });
+  if (!ready()) return;
+  for (const auto& [payload, is_binary] : frames)
+    engineio->send(payload, is_binary);
+}
+
+void client_impl::post_retry(std::weak_ptr<sioxx::socket> target,
+                             int id) noexcept
+{
+  try
+  {
+    std::lock_guard<std::mutex> lock(retry_mutex_);
+    if (intentional_close_.load()) return;
+    if (!retry_worker_)
+      retry_worker_ = std::make_unique<boost::asio::thread_pool>(1);
+    boost::asio::post(*retry_worker_,
+                      [target = std::move(target), id]
+                      {
+                        if (auto sock = target.lock())
+                          sock->send_queued_retry(id);
+                      });
+  }
+  catch (...)
+  {
+    // If the worker cannot accept the job, the armed attempt still expires.
+  }
+}
+
+void client_impl::stop_retry_worker()
+{
+  std::unique_ptr<boost::asio::thread_pool> worker;
+  {
+    std::lock_guard<std::mutex> lock(retry_mutex_);
+    worker = std::move(retry_worker_);
+  }
+  if (!worker) return;
+  worker->stop();
+  worker->join();
 }
 
 std::vector<std::shared_ptr<sioxx::socket>> client_impl::sockets_snapshot()
@@ -397,12 +461,16 @@ std::vector<std::shared_ptr<sioxx::socket>> client_impl::sockets_snapshot()
 
 void client_impl::close()
 {
-  intentional_close_ = true;
+  {
+    // Serialize cancellation with the reconnect worker's transition to wait.
+    std::lock_guard<std::mutex> lock(reconnect_wait_mutex_);
+    intentional_close_ = true;
+  }
   reconnect_condition_.notify_all();
   std::exception_ptr first_error;
   for (const auto& sock : sockets_snapshot())
   {
-    sock->cancel_timed_acks();
+    sock->cancel_pending_emissions();
     capture_shutdown_error(first_error,
                            [&sock]
                            {
@@ -423,6 +491,7 @@ void client_impl::sync_close()
   std::exception_ptr first_error;
   capture_shutdown_error(first_error, [this] { close(); });
   capture_shutdown_error(first_error, [this] { stop_reconnect_thread(); });
+  capture_shutdown_error(first_error, [this] { stop_retry_worker(); });
   capture_shutdown_error(first_error,
                          [this]
                          {

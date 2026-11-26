@@ -493,6 +493,9 @@ TEST(ClientSocket, ShutdownCancelsTimedAcknowledgementsOnRetainedSocket)
     EXPECT_THROW(sock->emit("closed", json(), std::chrono::seconds(1),
                             [](socket::ack_status, message) {}),
                  std::logic_error);
+    EXPECT_THROW(sock->emit("closed", json(), std::chrono::seconds(1), 2,
+                            [](socket::ack_status, message) {}),
+                 std::logic_error);
     auto another = client.socket("/after-close");
     EXPECT_THROW(another->emit("closed", json(), std::chrono::seconds(1),
                                [](socket::ack_status, message) {}),
@@ -500,6 +503,68 @@ TEST(ClientSocket, ShutdownCancelsTimedAcknowledgementsOnRetainedSocket)
   }
   std::this_thread::sleep_for(std::chrono::milliseconds(60));
   EXPECT_EQ(calls->load(), 0);
+}
+
+TEST(ClientSocket, ShutdownCancelsUntimedAcknowledgementsAndReleasesCaptures)
+{
+  client instance;
+  auto sock = instance.socket();
+  auto capture = std::make_shared<int>(0);
+  std::weak_ptr<int> retained = capture;
+  int calls = 0;
+  sock->emit("pending", json(), [capture, &calls](message) { ++calls; });
+  capture.reset();
+  instance.close();
+  EXPECT_TRUE(retained.expired());
+  sock->dispatch_ack(0, json::array({42}));
+  EXPECT_EQ(calls, 0);
+}
+
+TEST(ClientSocket, ShutdownRejectsEveryEmissionOverload)
+{
+  client instance;
+  auto existing = instance.socket();
+  instance.sync_close();
+  for (const auto& sock : {existing, instance.socket("/after-close")})
+  {
+    EXPECT_THROW(sock->emit("closed"), std::logic_error);
+    EXPECT_THROW(sock->emit("closed", json(), [](message) {}),
+                 std::logic_error);
+    EXPECT_THROW(sock->emit("closed", json(), std::chrono::seconds(1),
+                            [](socket::ack_status, message) {}),
+                 std::logic_error);
+  }
+}
+
+TEST(ClientSocket, ShutdownReleasesUntimedCallbackCapturesOutsideSocketLock)
+{
+  client instance;
+  auto sock = instance.socket();
+  bool released = false;
+  auto capture = std::shared_ptr<void>(nullptr,
+                                       [sock, &released](void*)
+                                       {
+                                         EXPECT_FALSE(sock->connected());
+                                         released = true;
+                                       });
+  sock->emit("pending", json(), [capture](message) {});
+  capture.reset();
+  instance.close();
+  EXPECT_TRUE(released);
+}
+
+TEST(ClientSocket, DestructionCancelsUntimedAcknowledgementsOnRetainedSocket)
+{
+  std::shared_ptr<socket> sock;
+  int calls = 0;
+  {
+    client instance;
+    sock = instance.socket();
+    sock->emit("pending", json(), [&calls](message) { ++calls; });
+  }
+  sock->dispatch_ack(0, json());
+  EXPECT_EQ(calls, 0);
+  EXPECT_THROW(sock->emit("closed"), std::logic_error);
 }
 
 TEST(ClientSocket, SyncCloseWaitsForRunningTimeoutCallback)

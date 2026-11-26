@@ -131,3 +131,43 @@ TEST(AckConcurrency, CloseCancelsQueuedTimeoutsWhileCallbackRuns)
   socket->dispatch_ack(1, json());
   EXPECT_EQ(calls->load(), 0);
 }
+
+TEST(AckConcurrency, CloseRacingUntimedEmissionCancelsCallback)
+{
+  for (int iteration = 0; iteration < 25; ++iteration)
+  {
+    client instance;
+    auto socket = instance.socket();
+    std::atomic<int> calls{0};
+    std::promise<void> start;
+    auto ready = start.get_future().share();
+    auto emitting = std::async(
+      std::launch::async,
+      [&]
+      {
+        EXPECT_EQ(ready.wait_for(5s), std::future_status::ready);
+        try
+        {
+          socket->emit("request", json(), [&calls](message) { ++calls; });
+        }
+        catch (const std::logic_error&)
+        {
+          // Shutdown won the race before registration.
+        }
+      });
+    auto closing =
+      std::async(std::launch::async,
+                 [&]
+                 {
+                   EXPECT_EQ(ready.wait_for(5s), std::future_status::ready);
+                   instance.close();
+                 });
+    start.set_value();
+    emitting.get();
+    closing.get();
+    socket->dispatch_ack(0, json());
+    EXPECT_EQ(calls.load(), 0);
+    EXPECT_THROW(socket->emit("after-close"), std::logic_error);
+    instance.sync_close();
+  }
+}
