@@ -16,6 +16,8 @@ if (mode === "polling-only") {
   options.parser = require("socket.io-msgpack-parser");
 } else if (mode === "custom-options") {
   options.path = "/realtime/";
+} else if (mode === "reject-handshake") {
+  options.allowRequest = (_request, accept) => accept(null, false);
 }
 
 const tlsFixture = {
@@ -130,7 +132,6 @@ e2e.on("connection", (socket) => {
         process.send(
           {
             type: "restart",
-            mode,
             port: httpServer.address().port,
           },
           () => process.exit(0)

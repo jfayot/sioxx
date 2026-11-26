@@ -2,7 +2,6 @@
 
 #include <atomic>
 #include <boost/asio/io_context.hpp>
-#include <boost/asio/ip/tcp.hpp>
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
@@ -652,11 +651,6 @@ TEST(E2E, BufferSurvivesReconnectExhaustionUntilManualConnect)
   for (bool polling : {false, true})
   {
     SCOPED_TRACE(polling ? "polling" : "websocket");
-    boost::asio::io_context context;
-    boost::asio::ip::tcp::acceptor acceptor(context,
-                                            {boost::asio::ip::tcp::v4(), 0});
-    const auto port = acceptor.local_endpoint().port();
-    acceptor.close();
     sioxx::client_options options;
     options.force_http_polling = polling;
     options.reconnect_attempts = 1;
@@ -667,11 +661,17 @@ TEST(E2E, BufferSurvivesReconnectExhaustionUntilManualConnect)
     auto socket = client.socket("/e2e");
     auto failed = std::make_shared<completion_signal>();
     auto connected = std::make_shared<completion_signal>();
+    auto last_error = std::make_shared<async_value<std::string>>();
+    auto attempts = std::make_shared<std::atomic<unsigned>>(0);
+    client.set_error_listener([last_error](const std::string& error)
+                              { last_error->set(error); });
     client.set_fail_listener([failed] { failed->set(); });
+    client.set_reconnecting_listener([attempts] { ++*attempts; });
     socket->on_connect([connected] { connected->set(); });
     auto acknowledgements = buffer_event_sequence(socket, "");
-    client.connect("ws://127.0.0.1:" + std::to_string(port));
-    ASSERT_TRUE(failed->wait_for(5s));
+    client.connect(server_url("SIOXX_E2E_REJECT_HANDSHAKE_URL"));
+    ASSERT_TRUE(failed->wait_for(5s)) << last_error->value();
+    EXPECT_EQ(attempts->load(), 1U);
     auto expired = std::make_shared<completion_signal>();
     socket->emit("buffer_probe", sioxx::json::array({"expired"}), 1ms,
                  [expired](sioxx::socket::ack_status status, sioxx::message)
