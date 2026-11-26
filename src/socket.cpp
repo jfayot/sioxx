@@ -296,24 +296,10 @@ void socket::send_timed(packet packet,
     }
   }
   if (!client) return;
-  if (!background)
-  {
+  if (background)
+    client->post_retry(weak_from_this(), id);
+  else
     send_timed_attempt(*client, engineio, packet, true);
-    return;
-  }
-
-  try
-  {
-    client->post_retry(
-      [weak = weak_from_this(), id]
-      {
-        if (auto self = weak.lock()) self->send_queued_retry(id);
-      });
-  }
-  catch (...)
-  {
-    // If the worker cannot accept the job, the armed attempt still expires.
-  }
 }
 
 void socket::send_queued_retry(int id)

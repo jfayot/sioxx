@@ -416,13 +416,26 @@ void client_impl::send_packet(const packet& packet,
     engineio->send(payload, is_binary);
 }
 
-void client_impl::post_retry(std::function<void()> send)
+void client_impl::post_retry(std::weak_ptr<sioxx::socket> target,
+                             int id) noexcept
 {
-  std::lock_guard<std::mutex> lock(retry_mutex_);
-  if (intentional_close_.load()) return;
-  if (!retry_worker_)
-    retry_worker_ = std::make_unique<boost::asio::thread_pool>(1);
-  boost::asio::post(*retry_worker_, std::move(send));
+  try
+  {
+    std::lock_guard<std::mutex> lock(retry_mutex_);
+    if (intentional_close_.load()) return;
+    if (!retry_worker_)
+      retry_worker_ = std::make_unique<boost::asio::thread_pool>(1);
+    boost::asio::post(*retry_worker_,
+                      [target = std::move(target), id]
+                      {
+                        if (auto sock = target.lock())
+                          sock->send_queued_retry(id);
+                      });
+  }
+  catch (...)
+  {
+    // If the worker cannot accept the job, the armed attempt still expires.
+  }
 }
 
 void client_impl::stop_retry_worker()

@@ -76,7 +76,7 @@ class client_impl : public std::enable_shared_from_this<client_impl>
   void send_packet(const packet& packet,
                    const std::shared_ptr<engineio_client>& engineio,
                    const std::function<bool()>& ready = {});
-  void post_retry(std::function<void()> send);
+  void post_retry(std::weak_ptr<sioxx::socket> target, int id) noexcept;
   void stop_retry_worker();
   std::vector<std::shared_ptr<sioxx::socket>> sockets_snapshot();
   std::shared_ptr<engineio_client> ensure_engineio();
