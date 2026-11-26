@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changes :construction:
 
+- Made the Socket.IO 4.8.1 end-to-end suite part of the release build on Linux,
+  macOS, and Windows and documented the v1.0 compatibility matrix.
 - Defined per-namespace FIFO buffer behavior across disconnects, transport
   failures, and reconnect exhaustion. Explicit client shutdown now discards
   every buffered event and pending ACK callback, and all `emit()` overloads
