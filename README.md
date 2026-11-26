@@ -407,38 +407,51 @@ intentional close can notify on the thread calling `close()`. If you're
 updating UI state or anything not thread-safe, hop back to your own thread or
 queue from inside the callback.
 
-`client.close()` requests shutdown and returns immediately, so it is safe to
-call from a library callback. `client.sync_close()` requests shutdown and
-blocks until pending reconnect, transport, and heartbeat workers have stopped;
-call it only from outside library callbacks. Destroying a client performs the
-synchronous form automatically and should likewise happen outside callbacks.
+`client.close()` requests shutdown and is safe to call from a library
+callback. `client.sync_close()` also waits for library-owned transport,
+reconnect, retry, and heartbeat workers and active timed acknowledgement
+callbacks. Call `sync_close()` and destroy the client outside library callbacks.
 
 To integrate transport networking with an existing Asio event loop, pass its
 `io_context` when constructing the client:
 
 ```cpp
+#include <boost/asio/executor_work_guard.hpp>
 #include <boost/asio/io_context.hpp>
 #include <sioxx/sioxx.hpp>
+#include <thread>
 
 boost::asio::io_context io_context;
-sioxx::client client(io_context);  // options may be passed as a second argument
+auto work = boost::asio::make_work_guard(io_context);
+sioxx::client client(io_context);
 client.connect("wss://example.com");
-io_context.run();
+std::thread io_thread([&] { io_context.run(); });
+
+// From the application thread when ready to shut down.
+client.sync_close();
+work.reset();
+io_thread.join();
 ```
 
 In this mode, WebSocket and HTTP polling operations and their callbacks run on
-the supplied context. The caller must keep it alive longer than the client and
-is responsible for running it; sioxx never runs or stops it. Operations are
-serialized on an internal strand, so the context may be run by multiple
-threads. Reconnection delays and Engine.IO heartbeat monitoring remain managed
-by sioxx workers. Acknowledgement deadlines also use a lazily started worker
+the supplied context and are serialized by an internal strand. The application
+owns running and stopping the context and keeps it alive longer than the
+client. `sync_close()` and client destruction request transport shutdown on
+that context. Pending I/O and ordinary transport callbacks can outlive the
+call. Keep the context running and keep callback state alive until the
+application has drained the client's work. If the context is stopped, restart
+it and resume dispatch to complete shutdown. The example uses a dedicated
+context and joins its thread after releasing the work guard.
+
+Reconnection delays and Engine.IO heartbeat monitoring use sioxx workers.
+Acknowledgement deadlines also use a lazily started worker
 per socket, including with a caller-owned context. Timeout callbacks run on
 that worker, or on the ACK delivery thread if it observes an expired deadline.
-Callbacks run outside socket locks and must not throw. `close()` cancels pending
-deadlines without waiting for callbacks already running. `sync_close()` also
-waits for those callbacks, so none remain in flight when it returns. Call it
-outside library callbacks. Idle deadline workers may remain allocated until
-their sockets are destroyed.
+Callbacks run outside socket locks and must not throw. `close()` cancels
+pending acknowledgements. `sync_close()` also waits for active timed
+acknowledgement callbacks, including callbacks running on the supplied
+context. Idle deadline workers may remain allocated until their sockets are
+destroyed.
 
 ### Example test server
 

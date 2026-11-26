@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <boost/asio/io_context.hpp>
+#include <boost/asio/post.hpp>
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
@@ -846,6 +847,116 @@ TEST(E2E, HttpPollingUsesCallerOwnedIoContext)
   ASSERT_TRUE(did_connect) << "connection error: " << error->value();
   ASSERT_TRUE(did_acknowledge);
   EXPECT_EQ(acknowledgement->value()[0], "polling");
+}
+
+TEST(E2E, SyncCloseLeavesStoppedCallerOwnedContextForCallerToDrain)
+{
+  for (bool polling : {false, true})
+  {
+    SCOPED_TRACE(polling ? "polling" : "websocket");
+    boost::asio::io_context io_context;
+    io_context.stop();
+    bool application_work_ran = false;
+    boost::asio::post(io_context, [&] { application_work_ran = true; });
+    sioxx::client_options options;
+    options.force_http_polling = polling;
+    sioxx::client client(io_context, options);
+    client.connect(server_url());
+
+    client.sync_close();
+    EXPECT_TRUE(io_context.stopped());
+    EXPECT_FALSE(application_work_ran);
+
+    io_context.restart();
+    io_context.run();
+    EXPECT_TRUE(application_work_ran);
+    EXPECT_FALSE(client.opened());
+  }
+}
+
+TEST(E2E, SyncCloseReturnsWhileCallerOwnedEventCallbackIsActive)
+{
+  for (bool polling : {false, true})
+  {
+    SCOPED_TRACE(polling ? "polling" : "websocket");
+    boost::asio::io_context io_context;
+    completion_signal entered;
+    completion_signal release;
+    std::atomic<bool> callback_returned{false};
+    sioxx::client_options options;
+    options.force_http_polling = polling;
+    sioxx::client client(io_context, options);
+    auto socket = client.socket("/e2e");
+    socket->on("server_arguments",
+               [&](const std::string&, sioxx::message)
+               {
+                 entered.set();
+                 EXPECT_TRUE(release.wait_for(5s));
+                 callback_returned = true;
+               });
+    client.connect(server_url());
+    std::thread io_thread([&] { io_context.run(); });
+
+    const bool did_enter = entered.wait_for(5s);
+    client.sync_close();
+    EXPECT_FALSE(callback_returned.load());
+    EXPECT_FALSE(client.opened());
+    bool application_work_ran = false;
+    boost::asio::post(io_context, [&] { application_work_ran = true; });
+    release.set();
+    io_thread.join();
+
+    ASSERT_TRUE(did_enter);
+    EXPECT_TRUE(callback_returned.load());
+    EXPECT_TRUE(application_work_ran);
+  }
+}
+
+TEST(E2E, SyncCloseWaitsForTimedAckOnCallerOwnedContext)
+{
+  for (bool polling : {false, true})
+  {
+    SCOPED_TRACE(polling ? "polling" : "websocket");
+    boost::asio::io_context io_context;
+    completion_signal connected;
+    completion_signal entered;
+    completion_signal release;
+    std::atomic<bool> callback_returned{false};
+    sioxx::client_options options;
+    options.force_http_polling = polling;
+    sioxx::client client(io_context, options);
+    auto socket = client.socket("/e2e");
+    socket->on_connect([&connected] { connected.set(); });
+    client.connect(server_url());
+    std::thread io_thread([&] { io_context.run(); });
+
+    if (connected.wait_for(5s))
+      socket->emit("echo_with_ack", sioxx::json::array(), 1h,
+                   [&](sioxx::socket::ack_status status, sioxx::message)
+                   {
+                     EXPECT_EQ(status, sioxx::socket::ack_status::acknowledged);
+                     entered.set();
+                     EXPECT_TRUE(release.wait_for(5s));
+                     callback_returned = true;
+                   });
+    const bool did_enter = entered.wait_for(5s);
+    completion_signal shutdown_started;
+    auto shutdown = std::async(std::launch::async,
+                               [&]
+                               {
+                                 shutdown_started.set();
+                                 client.sync_close();
+                                 return callback_returned.load();
+                               });
+    EXPECT_TRUE(shutdown_started.wait_for(5s));
+    EXPECT_EQ(shutdown.wait_for(50ms), std::future_status::timeout);
+    release.set();
+    const bool callback_finished_at_shutdown = shutdown.get();
+    io_thread.join();
+
+    ASSERT_TRUE(did_enter);
+    EXPECT_TRUE(callback_finished_at_shutdown);
+  }
 }
 
 TEST(E2E, CloseFromPollingCallbackDoesNotDeadlock)

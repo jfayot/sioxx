@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changes :construction:
 
+- Documented and tested the `sync_close()` shutdown guarantees for clients
+  using a caller-owned Asio context.
 - Made the Socket.IO 4.8.1 end-to-end suite part of the release build on Linux,
   macOS, and Windows and documented the v1.0 compatibility matrix.
 - Defined per-namespace FIFO buffer behavior across disconnects, transport
