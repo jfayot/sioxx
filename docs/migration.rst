@@ -365,10 +365,12 @@ retain the same ownership model:
    sioxx::client client(io_context, options);
 
 The supplied context must outlive the client. The application runs and stops
-it. WebSocket and HTTP polling networking and callbacks use it. A transport
-callback on that context, such as one registered with
-``set_reconnect_listener()``, may still be running when ``client.sync_close()``
-returns.
+it. ``client.sync_close()`` requests WebSocket or HTTP polling shutdown on
+that context and waits for sioxx-owned workers and active timed
+acknowledgement callbacks. Pending I/O and ordinary transport callbacks can
+outlive the call. Keep callback state alive until the application has drained
+the client's work on the context. If the context has stopped, restart it and
+resume dispatch to complete transport shutdown.
 
 The connection-state and session accessors translate directly:
 

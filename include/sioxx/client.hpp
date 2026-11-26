@@ -93,9 +93,8 @@ class client
   /**
    * @brief Destructor that requests shutdown and waits for background workers.
    *
-   * As with sync_close(), destroy the client outside library callbacks. A
-   * worker executing the destructor cannot wait for itself and finishes after
-   * the callback returns.
+   * Follows the shutdown rules of sync_close(), including for a caller-owned
+   * context. Destroy the client outside library callbacks.
    */
   ~client();
 
@@ -113,7 +112,7 @@ class client
    * @brief Start closing the connection and return without waiting.
    *
    * This operation is safe to call from library callbacks. Use sync_close()
-   * when the caller must wait for network workers and active timed ACK
+   * when the caller must wait for library-owned workers and active timed ACK
    * callbacks to finish. All buffered events and pending ACK callbacks are
    * cancelled silently. Every emit() overload throws std::logic_error until
    * another connect() call. Already running callbacks may finish, and packets
@@ -123,13 +122,21 @@ class client
   void close();
 
   /**
-   * @brief Close the connection and wait for networking and timed ACK
-   * callbacks.
+   * @brief Request shutdown and wait for library-owned work and active timed
+   * ACKs.
    *
-   * Do not call this operation from a library callback: a worker cannot wait
-   * for itself to finish. Use close() in callbacks instead. Repeated calls are
-   * safe. No timed ACK callback remains in flight when this returns. An idle
-   * deadline worker may remain allocated until its socket is destroyed.
+   * Waits for library-owned transport, reconnect, retry, and heartbeat workers
+   * and for active timed ACK callbacks, even when they run on a supplied
+   * context. Idle deadline workers can remain allocated until socket
+   * destruction.
+   *
+   * For a caller-owned io_context, transport shutdown runs on that context.
+   * I/O and ordinary transport callbacks may still be pending or active when
+   * sync_close() returns. The caller owns running and draining the context and
+   * must keep it alive longer than the client.
+   *
+   * Call from outside library callbacks. Use close() from callbacks. Repeated
+   * calls are safe.
    */
   void sync_close();
 

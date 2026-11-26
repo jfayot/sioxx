@@ -44,19 +44,32 @@ HTTP polling networking run on an application's existing event loop:
 
 .. code-block:: cpp
 
+   #include <boost/asio/executor_work_guard.hpp>
    #include <boost/asio/io_context.hpp>
    #include <sioxx/sioxx.hpp>
+   #include <thread>
 
    boost::asio::io_context io_context;
+   auto work = boost::asio::make_work_guard(io_context);
    sioxx::client_options options;
    sioxx::client client(io_context, options);
 
    client.connect("wss://example.com");
-   io_context.run();
+   std::thread io_thread([&] { io_context.run(); });
 
-The context must outlive the client. The application is responsible for
-running it; sioxx does not run or stop a supplied context. Transport callbacks
-run through the supplied context and are serialized by an internal strand.
+   // From the application thread when ready to shut down.
+   client.sync_close();
+   work.reset();
+   io_thread.join();
+
+The context must outlive the client. The application runs and stops it.
+Transport callbacks are serialized on an internal strand. ``sync_close()``
+waits for library-owned workers and active timed acknowledgement callbacks.
+Transport shutdown completes on the supplied context, where I/O and ordinary
+transport callbacks may still be pending or active when ``sync_close()``
+returns. Keep callback state alive while the application drains the client's
+work. In this example the context is dedicated to the client, so releasing the
+work guard and joining the I/O thread lets pending work finish.
 
 Emit an event and receive an acknowledgement
 ---------------------------------------------
