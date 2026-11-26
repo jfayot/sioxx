@@ -377,8 +377,8 @@ std::shared_ptr<sioxx::socket> client_impl::socket(const std::string& nsp,
     return it->second;
   }
 
-  auto sock = std::make_shared<sioxx::socket>(weak_from_this(), norm_nsp,
-                                              std::move(auth));
+  auto sock = std::shared_ptr<sioxx::socket>(
+    new sioxx::socket(weak_from_this(), norm_nsp, std::move(auth)));
   if (intentional_close_.load()) sock->cancel_pending_emissions();
   sockets_[norm_nsp] = sock;
   auto engineio = current_engineio();

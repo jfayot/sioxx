@@ -5,6 +5,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking changes :mega:
+
+- Made the `socket` constructor and the `dispatch_event()`, `dispatch_ack()`,
+  and `mark_connected()` methods private. Obtain namespace sockets through
+  `client.socket()`.
+
 ### Additions :tada:
 
 - Added opt-in per-emission acknowledgement retries with per-attempt timeouts,

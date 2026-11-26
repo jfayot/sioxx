@@ -38,7 +38,7 @@ Socket
 
 A :cpp:class:`sioxx::socket` represents a single Socket.IO namespace. It
 provides event listeners, event emission, acknowledgements and namespace
-connection lifecycle callbacks.
+connection lifecycle callbacks. Obtain it with :cpp:func:`sioxx::client::socket`.
 
 .. doxygenclass:: sioxx::socket
    :project: sioxx

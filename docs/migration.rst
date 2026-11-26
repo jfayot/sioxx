@@ -383,6 +383,15 @@ The connection-state and session accessors translate directly:
 ``get_sessionid()`` returns a value rather than a reference so callers can
 safely retain the result while a connection transition replaces the session.
 
+Obtain namespace sockets from the client
+----------------------------------------
+
+Replace direct construction of ``sioxx::socket`` with
+``client.socket("/chat")``. The constructor and the packet-delivery hooks
+``dispatch_event()``, ``dispatch_ack()``, and ``mark_connected()`` are now
+private. Register listeners and acknowledgement callbacks to receive server
+events and observe connection state.
+
 Check unsupported or different features
 ---------------------------------------
 

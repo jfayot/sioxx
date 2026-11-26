@@ -7,7 +7,10 @@
 #include <thread>
 #include <type_traits>
 
+#include "socket_test_access.hpp"
+
 using namespace sioxx;
+using sioxx::detail::socket_test_access;
 
 namespace
 {
@@ -17,13 +20,9 @@ static_assert(!std::is_copy_constructible<client>::value,
 static_assert(!std::is_copy_assignable<client>::value,
               "client owns a single connection and must not be copied");
 
-// A default-constructed weak_ptr<client_impl> is enough to build a
-// socket for these tests: emit()/connect()/disconnect() will just
-// find client_.lock() == nullptr and skip the network send, while still
-// exercising the local listener/ack bookkeeping we care about here.
 std::shared_ptr<socket> make_socket(std::string nsp = "/")
 {
-  return std::make_shared<socket>(std::weak_ptr<client_impl>{}, std::move(nsp));
+  return socket_test_access::make_socket(std::move(nsp));
 }
 
 }  // namespace
@@ -36,8 +35,8 @@ TEST(Socket, NspAccessorReturnsConstructedNamespace)
 
 TEST(Socket, StoresAndUpdatesNamespaceAuth)
 {
-  auto sock = std::make_shared<socket>(std::weak_ptr<client_impl>{}, "/private",
-                                       json{{"token", "initial-token"}});
+  auto sock = socket_test_access::make_socket("/private",
+                                              json{{"token", "initial-token"}});
 
   EXPECT_EQ(sock->auth(), json({{"token", "initial-token"}}));
 
@@ -69,9 +68,9 @@ TEST(Socket, StartsDisconnected)
 TEST(Socket, MarkConnectedUpdatesState)
 {
   auto sock = make_socket();
-  sock->mark_connected(true);
+  socket_test_access::mark_connected(*sock, true);
   EXPECT_TRUE(sock->connected());
-  sock->mark_connected(false);
+  socket_test_access::mark_connected(*sock, false);
   EXPECT_FALSE(sock->connected());
 }
 
@@ -90,7 +89,7 @@ TEST(Socket, OnDispatchesMatchingEventWithData)
              seen_data = std::move(data);
            });
 
-  sock->dispatch_event("greet", json::array({"hi", 42}));
+  socket_test_access::dispatch_event(*sock, "greet", json::array({"hi", 42}));
 
   EXPECT_TRUE(called);
   EXPECT_EQ(seen_event, "greet");
@@ -116,7 +115,8 @@ TEST(Socket, AckEventListenerReceivesReplyFunction)
              acknowledge(json::array({42}));
            });
 
-  sock->dispatch_event("question", json::array({"answer?"}), 7);
+  socket_test_access::dispatch_event(*sock, "question",
+                                     json::array({"answer?"}), 7);
 
   EXPECT_TRUE(called);
   EXPECT_TRUE(can_acknowledge);
@@ -134,7 +134,7 @@ TEST(Socket, AckEventListenerCannotReplyWhenEventHasNoAckId)
              EXPECT_FALSE(acknowledge);
            });
 
-  sock->dispatch_event("notification", json::array());
+  socket_test_access::dispatch_event(*sock, "notification", json::array());
 
   EXPECT_TRUE(called);
 }
@@ -148,13 +148,13 @@ TEST(Socket, RegisteringListenerReplacesOtherListenerKind)
   sock->on("event", [&](const std::string&, message) { ++regular_calls; });
   sock->on("event", [&](const std::string&, message, socket::ack_callback)
            { ++ack_calls; });
-  sock->dispatch_event("event", json::array(), 1);
+  socket_test_access::dispatch_event(*sock, "event", json::array(), 1);
 
   EXPECT_EQ(regular_calls, 0);
   EXPECT_EQ(ack_calls, 1);
 
   sock->on("event", [&](const std::string&, message) { ++regular_calls; });
-  sock->dispatch_event("event", json::array(), 2);
+  socket_test_access::dispatch_event(*sock, "event", json::array(), 2);
 
   EXPECT_EQ(regular_calls, 1);
   EXPECT_EQ(ack_calls, 1);
@@ -166,7 +166,8 @@ TEST(Socket, DispatchIgnoresUnregisteredEvent)
   int call_count = 0;
   sock->on("known", [&](const std::string&, const message&) { ++call_count; });
 
-  EXPECT_NO_THROW(sock->dispatch_event("unknown", json::array()));
+  EXPECT_NO_THROW(
+    socket_test_access::dispatch_event(*sock, "unknown", json::array()));
   EXPECT_EQ(call_count, 0);
 }
 
@@ -185,8 +186,8 @@ TEST(Socket, OnAnyDispatchesEveryEventAfterNamedListener)
       seen_data = std::move(data);
     });
 
-  sock->dispatch_event("known", json::array({1}));
-  sock->dispatch_event("unknown", json::array({2}));
+  socket_test_access::dispatch_event(*sock, "known", json::array({1}));
+  socket_test_access::dispatch_event(*sock, "unknown", json::array({2}));
 
   EXPECT_EQ(calls, (std::vector<std::string>{"named", "known", "unknown"}));
   EXPECT_EQ(seen_data, json::array({2}));
@@ -207,7 +208,8 @@ TEST(Socket, OnAnyAckListenerReceivesReplyFunction)
       EXPECT_TRUE(acknowledge);
     });
 
-  sock->dispatch_event("question", json::array({"answer?"}), 7);
+  socket_test_access::dispatch_event(*sock, "question",
+                                     json::array({"answer?"}), 7);
 
   EXPECT_TRUE(called);
 }
@@ -221,7 +223,7 @@ TEST(Socket, RegisteringOnAnyReplacesPreviousListenerKind)
   sock->on_any([&](const std::string&, message) { ++regular_calls; });
   sock->on_any([&](const std::string&, message, socket::ack_callback)
                { ++ack_calls; });
-  sock->dispatch_event("event", json::array(), 1);
+  socket_test_access::dispatch_event(*sock, "event", json::array(), 1);
 
   EXPECT_EQ(regular_calls, 0);
   EXPECT_EQ(ack_calls, 1);
@@ -234,7 +236,7 @@ TEST(Socket, OnOverwritesPreviousListenerForSameEvent)
   sock->on("x", [&](const std::string&, const message&) { ++first_calls; });
   sock->on("x", [&](const std::string&, const message&) { ++second_calls; });
 
-  sock->dispatch_event("x", json::array());
+  socket_test_access::dispatch_event(*sock, "x", json::array());
 
   EXPECT_EQ(first_calls, 0);
   EXPECT_EQ(second_calls, 1);
@@ -248,8 +250,8 @@ TEST(Socket, OffRemovesOnlyTheNamedListener)
   sock->on("b", [&](const std::string&, const message&) { ++b_calls; });
 
   sock->off("a");
-  sock->dispatch_event("a", json::array());
-  sock->dispatch_event("b", json::array());
+  socket_test_access::dispatch_event(*sock, "a", json::array());
+  socket_test_access::dispatch_event(*sock, "b", json::array());
 
   EXPECT_EQ(a_calls, 0);
   EXPECT_EQ(b_calls, 1);
@@ -264,8 +266,8 @@ TEST(Socket, OffAllRemovesEveryListener)
   sock->on_any([&](const std::string&, const message&) { ++calls; });
 
   sock->off_all();
-  sock->dispatch_event("a", json::array());
-  sock->dispatch_event("b", json::array());
+  socket_test_access::dispatch_event(*sock, "a", json::array());
+  socket_test_access::dispatch_event(*sock, "b", json::array());
 
   EXPECT_EQ(calls, 0);
 }
@@ -286,7 +288,7 @@ TEST(Socket, EmitWithAckRegistersCallbackInvokedByDispatchAck)
                reply = std::move(data);
              });
 
-  sock->dispatch_ack(0, json::array({"pong"}));
+  socket_test_access::dispatch_ack(*sock, 0, json::array({"pong"}));
 
   EXPECT_TRUE(called);
   ASSERT_TRUE(reply.is_array());
@@ -303,8 +305,8 @@ TEST(Socket, AckIdsIncrementPerCall)
   sock->emit("b", json::array(),
              [&](const message&) { received_ids.push_back(1); });
 
-  sock->dispatch_ack(1, json::array());
-  sock->dispatch_ack(0, json::array());
+  socket_test_access::dispatch_ack(*sock, 1, json::array());
+  socket_test_access::dispatch_ack(*sock, 0, json::array());
 
   ASSERT_EQ(received_ids.size(), 2u);
   EXPECT_EQ(received_ids[0], 1);  // second emit's ack (id 1) fired first
@@ -314,7 +316,7 @@ TEST(Socket, AckIdsIncrementPerCall)
 TEST(Socket, DispatchAckWithUnknownIdIsIgnored)
 {
   auto sock = make_socket();
-  EXPECT_NO_THROW(sock->dispatch_ack(999, json::array()));
+  EXPECT_NO_THROW(socket_test_access::dispatch_ack(*sock, 999, json::array()));
 }
 
 TEST(Socket, DispatchAckIsConsumedOnce)
@@ -323,8 +325,9 @@ TEST(Socket, DispatchAckIsConsumedOnce)
   int calls = 0;
   sock->emit("once", json::array(), [&](const message&) { ++calls; });
 
-  sock->dispatch_ack(0, json::array());
-  sock->dispatch_ack(0, json::array());  // second delivery for same id: no-op
+  socket_test_access::dispatch_ack(*sock, 0, json::array());
+  socket_test_access::dispatch_ack(
+    *sock, 0, json::array());  // second delivery for same id: no-op
 
   EXPECT_EQ(calls, 1);
 }
@@ -339,7 +342,7 @@ TEST(Socket, ConnectAndDisconnectDoNotThrowWithNoClientAttached)
 {
   auto sock = make_socket();
   EXPECT_NO_THROW(sock->connect());
-  sock->mark_connected(true);
+  socket_test_access::mark_connected(*sock, true);
   EXPECT_NO_THROW(sock->disconnect());
   EXPECT_FALSE(sock->connected());
 }
@@ -355,8 +358,8 @@ TEST(Socket, TimedAcknowledgementSucceedsOnceAndCancelsDeadline)
                EXPECT_EQ(status, socket::ack_status::acknowledged);
                EXPECT_EQ(data, json::array({42}));
              });
-  sock->dispatch_ack(0, json::array({42}));
-  sock->dispatch_ack(0, json::array({43}));
+  socket_test_access::dispatch_ack(*sock, 0, json::array({42}));
+  socket_test_access::dispatch_ack(*sock, 0, json::array({43}));
   std::this_thread::sleep_for(std::chrono::milliseconds(60));
   EXPECT_EQ(calls->load(), 1);
 }
@@ -379,8 +382,8 @@ TEST(Socket, TimedAcknowledgementExpiresWhileBufferedAndIgnoresLateAck)
              });
   ASSERT_EQ(result.wait_for(std::chrono::seconds(2)),
             std::future_status::ready);
-  sock->mark_connected(true);
-  sock->dispatch_ack(0, json::array({42}));
+  socket_test_access::mark_connected(*sock, true);
+  socket_test_access::dispatch_ack(*sock, 0, json::array({42}));
   EXPECT_EQ(calls->load(), 1);
 }
 
@@ -389,7 +392,7 @@ TEST(Socket, TimedAcknowledgementDeadlineSurvivesDisconnect)
   auto sock = make_socket();
   auto completed = std::make_shared<std::promise<socket::ack_status>>();
   auto result = completed->get_future();
-  sock->mark_connected(true);
+  socket_test_access::mark_connected(*sock, true);
   sock->emit("request", json::array(), std::chrono::milliseconds(20),
              [completed](socket::ack_status status, message)
              { completed->set_value(status); });
@@ -473,8 +476,8 @@ TEST(Socket, LateAckTimesOutEvenWhenDeadlineWorkerIsBusy)
                EXPECT_TRUE(data.is_null());
              });
   std::this_thread::sleep_for(std::chrono::milliseconds(30));
-  sock->dispatch_ack(1, json::array({42}));
-  sock->dispatch_ack(1, json::array({43}));
+  socket_test_access::dispatch_ack(*sock, 1, json::array({42}));
+  socket_test_access::dispatch_ack(*sock, 1, json::array({43}));
   release->set_value();
   EXPECT_EQ(calls->load(), 1);
 }
@@ -489,7 +492,7 @@ TEST(ClientSocket, ShutdownCancelsTimedAcknowledgementsOnRetainedSocket)
     sock->emit("pending", json(), std::chrono::milliseconds(30),
                [calls](socket::ack_status, message) { ++*calls; });
     client.sync_close();
-    sock->dispatch_ack(0, json::array({42}));
+    socket_test_access::dispatch_ack(*sock, 0, json::array({42}));
     EXPECT_THROW(sock->emit("closed", json(), std::chrono::seconds(1),
                             [](socket::ack_status, message) {}),
                  std::logic_error);
@@ -516,7 +519,7 @@ TEST(ClientSocket, ShutdownCancelsUntimedAcknowledgementsAndReleasesCaptures)
   capture.reset();
   instance.close();
   EXPECT_TRUE(retained.expired());
-  sock->dispatch_ack(0, json::array({42}));
+  socket_test_access::dispatch_ack(*sock, 0, json::array({42}));
   EXPECT_EQ(calls, 0);
 }
 
@@ -562,7 +565,7 @@ TEST(ClientSocket, DestructionCancelsUntimedAcknowledgementsOnRetainedSocket)
     sock = instance.socket();
     sock->emit("pending", json(), [&calls](message) { ++calls; });
   }
-  sock->dispatch_ack(0, json());
+  socket_test_access::dispatch_ack(*sock, 0, json());
   EXPECT_EQ(calls, 0);
   EXPECT_THROW(sock->emit("closed"), std::logic_error);
 }
@@ -626,7 +629,8 @@ TEST(ClientSocket, SyncCloseWaitsForRunningTimedAckSuccess)
                gate.wait();
              });
   auto delivery =
-    std::async(std::launch::async, [sock] { sock->dispatch_ack(0, json()); });
+    std::async(std::launch::async,
+               [sock] { socket_test_access::dispatch_ack(*sock, 0, json()); });
   if (started.wait_for(std::chrono::seconds(2)) != std::future_status::ready)
   {
     release->set_value();
@@ -648,6 +652,7 @@ TEST(ClientSocket, ThrowingTimedAckCallbackDoesNotPreventShutdown)
   sock->emit("pending", json(), std::chrono::hours(1),
              [](socket::ack_status, message)
              { throw std::runtime_error("callback"); });
-  EXPECT_THROW(sock->dispatch_ack(0, json()), std::runtime_error);
+  EXPECT_THROW(socket_test_access::dispatch_ack(*sock, 0, json()),
+               std::runtime_error);
   client.sync_close();
 }

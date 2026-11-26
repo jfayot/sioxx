@@ -33,8 +33,10 @@ the server accepts the namespace:
 
    client.connect("wss://example.com");
 
-Callbacks run on the connection's background thread. Dispatch back to your
-application thread before modifying thread-affine state such as a UI.
+The client creates and manages the namespace socket returned by
+``client.socket("/chat")``. Callbacks run on the connection's background thread.
+Dispatch back to your application thread before modifying thread-affine state
+such as a UI.
 
 Use an existing Asio event loop
 -------------------------------

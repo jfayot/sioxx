@@ -122,6 +122,10 @@ sock->emit("ping_ack", sioxx::json::array({1, 2, 3}), [](sioxx::message reply) {
 client.sync_close();
 ```
 
+Obtain namespace sockets with `client.socket()`. The client constructs the
+socket, manages its connection state, and delivers events and acknowledgements
+from the server to registered callbacks.
+
 ## Installation and configuration
 
 ### FetchContent
