@@ -298,8 +298,14 @@ networks or transport-specific testing:
 Configure TLS and request headers
 ---------------------------------
 
-Add authentication or application headers to the handshake with
-``extra_headers``. Keep certificate verification enabled in production:
+Secure WebSocket and HTTPS polling connections verify both the certificate
+chain and the DNS name or IP address in the connection URL by default. For a
+private CA, include it in a trusted CA bundle and point ``SSL_CERT_FILE`` at
+the bundle. Setting ``verify_tls`` to ``false`` disables both checks and is
+intended for controlled development only.
+
+Use ``extra_headers`` to add authentication or application headers to the
+handshake.
 
 .. code-block:: cpp
 
@@ -308,9 +314,6 @@ Add authentication or application headers to the handshake with
        {"Authorization", "Bearer example-token"},
        {"X-Client-Version", "1.0"},
    };
-
-   // Development with a self-signed certificate only:
-   // options.verify_tls = false;
 
 Connect through an HTTP proxy
 -----------------------------
@@ -330,6 +333,7 @@ Socket.IO server:
 
 Only HTTP proxy endpoints are supported. Secure origin connections are
 tunnelled through the proxy before TLS is established with the origin.
+Certificate verification uses the host in the Socket.IO server URL.
 
 Authenticate a namespace and customize the endpoint
 ---------------------------------------------------

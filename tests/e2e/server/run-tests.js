@@ -45,7 +45,7 @@ function startServer(mode, port = 0) {
       if (!message) return;
       if (message.type === "ready") {
         resolve({
-          url: `${mode === "tls" ? "wss" : "ws"}://127.0.0.1:${message.port}`,
+          url: `${mode.startsWith("tls") ? "wss" : "ws"}://127.0.0.1:${message.port}`,
         });
       } else if (message.type === "restart") {
         if (process.env.SIOXX_E2E_DEBUG) {
@@ -107,12 +107,26 @@ async function run() {
     return;
   }
 
+  // CTest runs one case at a time. Start the extra TLS fixtures only for
+  // cases that use them, or when GoogleTest may select multiple cases.
+  const selectedTest = testArguments
+    .find((arg) => arg.startsWith("--gtest_filter="))
+    ?.match(/^--gtest_filter=(E2E\.\w+)$/)?.[1];
+  const extraTlsMode = {
+    "E2E.RejectsTlsCertificateForWrongHostname": "tls-wrong-host",
+    "E2E.RejectsTlsCertificateForWrongIpAddress": "tls-wrong-host",
+    "E2E.RejectsUntrustedTlsCertificate": "tls-untrusted",
+    "E2E.ConnectsWithUntrustedCertificateWhenVerificationIsDisabled": "tls-untrusted",
+  }[selectedTest];
+
   const [
     defaultServer,
     pollingServer,
     msgpackServer,
     customOptionsServer,
     tlsServer,
+    wrongHostTlsServer,
+    untrustedTlsServer,
     proxyServer,
   ] = await Promise.all([
     startServer("default"),
@@ -120,16 +134,29 @@ async function run() {
     startServer("msgpack"),
     startServer("custom-options"),
     startServer("tls"),
+    !selectedTest || extraTlsMode === "tls-wrong-host"
+      ? startServer("tls-wrong-host")
+      : undefined,
+    !selectedTest || extraTlsMode === "tls-untrusted"
+      ? startServer("tls-untrusted")
+      : undefined,
     startProxy(),
   ]);
 
   runGoogleTest({
     ...process.env,
+    SSL_CERT_FILE: path.join(__dirname, "fixtures", "localhost-test-cert.pem"),
     SIOXX_E2E_URL: defaultServer.url,
     SIOXX_E2E_POLLING_ONLY_URL: pollingServer.url,
     SIOXX_E2E_MSGPACK_URL: msgpackServer.url,
     SIOXX_E2E_CUSTOM_OPTIONS_URL: customOptionsServer.url,
     SIOXX_E2E_TLS_URL: tlsServer.url,
+    SIOXX_E2E_TLS_HOSTNAME_URL: tlsServer.url.replace("127.0.0.1", "localhost"),
+    SIOXX_E2E_TLS_WRONG_HOSTNAME_URL: wrongHostTlsServer?.url.replace(
+      "127.0.0.1", "localhost"
+    ),
+    SIOXX_E2E_TLS_WRONG_IP_URL: wrongHostTlsServer?.url,
+    SIOXX_E2E_TLS_UNTRUSTED_URL: untrustedTlsServer?.url,
     SIOXX_E2E_PROXY_URL: proxyServer.url,
   });
 }

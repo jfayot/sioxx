@@ -18,11 +18,16 @@ if (mode === "polling-only") {
   options.path = "/realtime/";
 }
 
+const tlsFixture = {
+  tls: "localhost",
+  "tls-wrong-host": "wrong-host",
+  "tls-untrusted": "untrusted",
+}[mode];
 const httpServer =
-  mode === "tls"
+  tlsFixture
     ? https.createServer({
         cert: fs.readFileSync(
-          path.join(__dirname, "fixtures", "localhost-test-cert.pem")
+          path.join(__dirname, "fixtures", `${tlsFixture}-test-cert.pem`)
         ),
         key: fs.readFileSync(
           path.join(__dirname, "fixtures", "localhost-test-key.pem")

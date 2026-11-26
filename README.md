@@ -32,6 +32,7 @@ A C++ implementation of `socket.io`'s client functionality with the following st
   - [Shared libraries](#shared-libraries)
   - [CMake options](#cmake-options)
 - [Usage guide](#usage-guide)
+  - [TLS server verification](#tls-server-verification)
   - [Parser selection](#parser-selection)
   - [Event buffers](#event-buffers)
   - [Acknowledgement deadlines](#acknowledgement-deadlines)
@@ -242,6 +243,18 @@ shared library.
 **Note:** `SIOXX_BUILD_EXAMPLES`, `SIOXX_BUILD_TESTS` and `SIOXX_INSTALL` default to `OFF` when sioxx is included as a subproject.
 
 ## Usage guide
+
+### TLS server verification
+
+With `client_options::verify_tls` enabled by default, secure WebSocket and
+HTTPS polling connections require a trusted certificate chain and a certificate
+that matches the DNS name or IP address in the connection URL. This also
+applies to the Socket.IO server reached through an HTTP proxy tunnel.
+
+sioxx loads CA certificates from OpenSSL's default trust paths. For a private
+CA, include it in a trusted CA bundle and point `SSL_CERT_FILE` at that bundle.
+Use `verify_tls = false` only for controlled development. It disables both
+certificate chain and server identity verification.
 
 ### Parser selection
 
