@@ -34,7 +34,7 @@ jobs:
             cmake_arguments: -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
           - name: macOS / Clang
             runner: macos-latest
-            architecture: x64
+            architecture: arm64
             compiler: clang
             cmake_arguments: -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
           - name: Windows / x64
@@ -44,12 +44,26 @@ jobs:
             cmake_arguments: -A x64
           - name: Windows / ARM64
             runner: windows-11-arm
-            architecture: ARM64
+            architecture: arm64
             compiler: msvc
             cmake_arguments: -A ARM64
 
     steps:
       - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          architecture: ${{ matrix.architecture }}
+          cache: pnpm
+          cache-dependency-path: tests/e2e/server/pnpm-lock.yaml
+
+      - name: Install E2E dependencies
+        run: pnpm --dir tests/e2e/server install --frozen-lockfile
 
       - name: Cache fetched dependencies
         uses: actions/cache@v4
@@ -61,11 +75,16 @@ jobs:
         run: >
           cmake -S . -B build
           -DCMAKE_BUILD_TYPE=Release
+          -DSIOXX_BUILD_TESTS=ON
+          -DSIOXX_BUILD_E2E_TESTS=ON
           "-DFETCHCONTENT_BASE_DIR=${{ github.workspace }}/.cache/fetchcontent"
           ${{ matrix.cmake_arguments }}
 
       - name: Build
         run: cmake --build build --config Release --parallel
 
-      - name: Test
-        run: ctest --test-dir build --build-config Release --output-on-failure
+      - name: Run unit tests
+        run: ctest --test-dir build -C Release -LE e2e --no-tests=error --output-on-failure
+
+      - name: Run E2E tests
+        run: ctest --test-dir build -C Release -L e2e --no-tests=error --output-on-failure --parallel 1

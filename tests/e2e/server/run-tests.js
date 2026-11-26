@@ -26,14 +26,22 @@ function startServer(mode, port = 0) {
     });
     servers.push(child);
 
+    let restartPort;
     child.once("error", reject);
-    child.once("exit", (code, signal) => {
+    // A restart message can arrive after exit, before IPC closes.
+    child.once("close", (code, signal) => {
       if (process.env.SIOXX_E2E_DEBUG) {
         console.error(
-          `[e2e] ${mode} server exited (code=${code}, signal=${signal}, restart=${Boolean(child.expectedRestart)})`,
+          `[e2e] ${mode} server exited (code=${code}, signal=${signal}, restart=${restartPort !== undefined})`,
         );
       }
-      if (!finishing && !child.expectedRestart) {
+      if (finishing) return;
+      if (restartPort !== undefined) {
+        startServer(mode, restartPort).catch((error) => {
+          console.error(`failed to restart ${mode} server: ${error.message}`);
+          finish(1);
+        });
+      } else {
         reject(
           new Error(
             `${mode} server exited early (code=${code}, signal=${signal})`
@@ -48,16 +56,10 @@ function startServer(mode, port = 0) {
           url: `${mode.startsWith("tls") ? "wss" : "ws"}://127.0.0.1:${message.port}`,
         });
       } else if (message.type === "restart") {
+        restartPort = message.port;
         if (process.env.SIOXX_E2E_DEBUG) {
-          console.error(`[e2e] restart requested for ${message.mode}:${message.port}`);
+          console.error(`[e2e] restart requested for ${mode}:${restartPort}`);
         }
-        child.expectedRestart = true;
-        child.once("exit", () => {
-          startServer(message.mode, message.port).catch((error) => {
-            console.error(`failed to restart ${message.mode} server: ${error.message}`);
-            finish(1);
-          });
-        });
       }
     });
   });
@@ -127,6 +129,7 @@ async function run() {
     tlsServer,
     wrongHostTlsServer,
     untrustedTlsServer,
+    rejectingServer,
     proxyServer,
   ] = await Promise.all([
     startServer("default"),
@@ -139,6 +142,9 @@ async function run() {
       : undefined,
     !selectedTest || extraTlsMode === "tls-untrusted"
       ? startServer("tls-untrusted")
+      : undefined,
+    !selectedTest || selectedTest === "E2E.BufferSurvivesReconnectExhaustionUntilManualConnect"
+      ? startServer("reject-handshake")
       : undefined,
     startProxy(),
   ]);
@@ -157,6 +163,7 @@ async function run() {
     ),
     SIOXX_E2E_TLS_WRONG_IP_URL: wrongHostTlsServer?.url,
     SIOXX_E2E_TLS_UNTRUSTED_URL: untrustedTlsServer?.url,
+    SIOXX_E2E_REJECT_HANDSHAKE_URL: rejectingServer?.url,
     SIOXX_E2E_PROXY_URL: proxyServer.url,
   });
 }

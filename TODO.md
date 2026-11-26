@@ -7,8 +7,8 @@ items listed here should either be completed or explicitly resolved before the
 
 ## Release criteria
 
-- [ ] Define and document the supported Socket.IO and Engine.IO compatibility
-      matrix for 1.0.0.
+- [x] Define and document the [v1.0 compatibility matrix](README.md#compatibility)
+      for Socket.IO 4.8.1 and Engine.IO v4.
 - [ ] Freeze the public API after completing the API review below.
 - [ ] Confirm supported compiler, Boost, OpenSSL, and nlohmann-json versions.
 - [ ] Pass the full Linux, macOS, and Windows CI matrices with unit, E2E,
@@ -18,13 +18,10 @@ items listed here should either be completed or explicitly resolved before the
 
 ## Protocol and transports
 
-- [ ] Upgrade established HTTP long-polling connections to WebSocket when the
-      server offers that upgrade.
-- [ ] Add explicit transport selection and ordering rather than only
-      WebSocket-first fallback and polling-only modes.
-- [ ] Verify WebSocket, secure WebSocket, HTTP polling, and HTTPS polling
-      interoperability against every supported server version.
-- [ ] Verify authenticated HTTP proxy behavior on every supported platform.
+- [ ] Verify WebSocket-first fallback and polling-only modes, including WS,
+      WSS, HTTP polling, and HTTPS polling, in every release Build matrix job.
+- [ ] Verify TLS server identity checks and authenticated HTTP proxy behavior in
+      every release Build matrix job.
 
 ## Reliability
 
@@ -85,6 +82,8 @@ items listed here should either be completed or explicitly resolved before the
 
 ## Explicitly post-1.0
 
+- Upgrade established HTTP long-polling connections to WebSocket.
+- Explicit transport selection and ordering.
 - WebTransport support, pending demand and suitable C++ library support.
 - A native C++ Socket.IO server and its rooms, adapters, middleware, and
   distributed deployment features.

@@ -52,6 +52,19 @@ Features
 * Configurable reconnection with capped exponential back-off and jitter.
 * Modern CMake targets, installation, and downstream ``find_package(sioxx)``.
 
+Compatibility
+-------------
+
+The v1.0 release requires the end-to-end suite to pass against Socket.IO
+4.8.1 over Engine.IO v4. The suite covers WebSocket and HTTP long-polling,
+including TLS and HTTP proxies with Basic authentication. The client defaults
+to WebSocket-first with polling fallback. Set
+``client_options::force_http_polling`` for polling-only connections.
+
+See the `release platform matrix
+<https://github.com/jfayot/sioxx/blob/main/README.md#compatibility>`_ for the
+architectures and compilers covered by this check.
+
 Architecture
 ------------
 
@@ -72,11 +85,11 @@ following roadmap outlines possible extensions inspired by features available
 in the JavaScript implementation. It is indicative rather than a commitment to
 specific releases or delivery dates.
 
-Client protocol completeness
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Post-1.0 protocol and transport work
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * Upgrade an established HTTP long-polling connection to WebSocket.
-* Try alternative transports when the preferred transport cannot connect.
+* Allow applications to select and order transports explicitly.
 * Investigate WebTransport support once there is sufficient demand and suitable
   support in the underlying C++ libraries.
 

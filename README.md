@@ -39,6 +39,7 @@ A C++ implementation of `socket.io`'s client functionality with the following st
   - [Acknowledgement retries](#acknowledgement-retries)
   - [Threading model](#threading-model)
   - [Example test server](#example-test-server)
+- [Compatibility](#compatibility)
 - [Known limitations](#known-limitations)
 - [Documentation](#documentation)
 - [Development](#development)
@@ -482,6 +483,23 @@ background-thread callback dispatch, transport selection, and MessagePack
 binary payloads. It is built with the other examples when Qt 5 or Qt 6 Widgets
 is available; otherwise CMake skips it without making Qt a required dependency.
 
+## Compatibility
+
+The v1.0 release requires the end-to-end suite to pass against the
+[pinned Socket.IO 4.8.1 server](tests/e2e/server/package.json) over Engine.IO v4
+in each [Build matrix job](.github/workflows/build.yml).
+
+| Platform | Architecture | Compiler |
+| --- | --- | --- |
+| Linux | x64 | GCC and Clang |
+| macOS | ARM64 | Apple Clang |
+| Windows | x64 and ARM64 | MSVC |
+
+The suite covers WS, WSS, HTTP and HTTPS long-polling, HTTP proxies with
+Basic authentication, and TLS server verification. It exercises WebSocket-first
+connections with automatic polling fallback and the polling-only mode set by
+`client_options::force_http_polling`.
+
 ## Known limitations
 
 - Reconnection uses capped exponential backoff with symmetric jitter. Configure
@@ -529,8 +547,8 @@ cmake -S . -B build-e2e \
   -DCMAKE_BUILD_TYPE=Release \
   -DSIOXX_BUILD_TESTS=ON \
   -DSIOXX_BUILD_E2E_TESTS=ON
-cmake --build build-e2e -j
-ctest --test-dir build-e2e -L e2e --output-on-failure
+cmake --build build-e2e --config Release --parallel
+ctest --test-dir build-e2e -C Release -L e2e --no-tests=error --output-on-failure --parallel 1
 ```
 
 The regular unit-test build does not require Node.js.
