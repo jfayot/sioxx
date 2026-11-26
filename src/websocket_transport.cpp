@@ -386,23 +386,24 @@ void websocket_transport::send(const std::string& payload, bool is_binary)
 
 void websocket_transport::queue_write(std::string payload, bool is_binary)
 {
-  auto self = shared_from_this();
-  net::post(strand_,
-            [this, self = std::move(self), payload = std::move(payload),
-             is_binary]() mutable
-            {
-              if (closing_) return;
-              write_queue_.emplace_back(std::move(payload), is_binary);
-              const bool should_start = !write_in_progress_;
-              write_in_progress_ = true;
-              if (should_start)
-              {
-                if (url_.tls)
-                  pump_write_queue_tls();
-                else
-                  pump_write_queue_plain();
-              }
-            });
+  // A queued write can outlive the worker that would have dispatched it.
+  net::post(
+    strand_,
+    [weak = weak_from_this(), payload = std::move(payload), is_binary]() mutable
+    {
+      auto self = weak.lock();
+      if (!self || self->closing_) return;
+      self->write_queue_.emplace_back(std::move(payload), is_binary);
+      const bool should_start = !self->write_in_progress_;
+      self->write_in_progress_ = true;
+      if (should_start)
+      {
+        if (self->url_.tls)
+          self->pump_write_queue_tls();
+        else
+          self->pump_write_queue_plain();
+      }
+    });
 }
 
 void websocket_transport::pump_write_queue_plain()
@@ -488,7 +489,9 @@ void websocket_transport::close()
                  {
                    closing_ = true;
                    state_ = transport_state::closing;
-                   if (on_io_thread)
+                   // Reconnect cancellation can close a transport before
+                   // connect() starts its private I/O worker.
+                   if (on_io_thread || (owned_ioc_ && !io_thread_.joinable()))
                      shutdown_on_io_thread();
                    else
                      net::post(strand_, [self = shared_from_this()]

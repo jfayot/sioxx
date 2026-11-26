@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes :wrench:
 
+- Released unopened WebSocket transports when reconnect is cancelled before
+  their I/O worker starts.
 - Marked all namespaces disconnected before invoking their callbacks outside
   the client socket registry lock. Callbacks can buffer work on other
   namespaces or request shutdown after a transport failure.

@@ -116,6 +116,27 @@ TEST(WebSocketTransport, DiscardsQueuedSendBeforeStreamCreation)
   expect_queued_send_before_connect_is_discarded("wss");
 }
 
+TEST(WebSocketTransport, ClosingBeforeConnectReleasesTransport)
+{
+  auto transport = std::make_shared<sioxx::websocket_transport>();
+  std::weak_ptr<sioxx::websocket_transport> weak_transport = transport;
+  transport->close();
+  EXPECT_EQ(transport->state(), sioxx::transport_state::closed);
+  transport->sync_close();
+  transport.reset();
+  EXPECT_TRUE(weak_transport.expired());
+}
+
+TEST(WebSocketTransport, SendBeforeConnectDoesNotRetainTransport)
+{
+  auto transport = std::make_shared<sioxx::websocket_transport>();
+  std::weak_ptr<sioxx::websocket_transport> weak_transport = transport;
+  transport->send("before connect", false);
+  transport->sync_close();
+  transport.reset();
+  EXPECT_TRUE(weak_transport.expired());
+}
+
 TEST(WebSocketTransport, UsesCallerOwnedIoContext)
 {
   boost::asio::io_context server_context;
