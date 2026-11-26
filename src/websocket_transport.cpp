@@ -9,6 +9,8 @@
 #include <memory>
 #include <string>
 
+#include "tls_server_identity.hpp"
+
 namespace sioxx
 {
 
@@ -63,11 +65,7 @@ void websocket_transport::set_extra_headers(
   extra_headers_ = std::move(headers);
 }
 
-void websocket_transport::set_verify_tls(bool verify)
-{
-  verify_tls_ = verify;
-  ssl_ctx_.set_verify_mode(verify ? ssl::verify_peer : ssl::verify_none);
-}
+void websocket_transport::set_verify_tls(bool verify) { verify_tls_ = verify; }
 
 void websocket_transport::set_proxy(const std::string& uri,
                                     const std::string& username,
@@ -187,7 +185,7 @@ void websocket_transport::run_tls()
 void websocket_transport::start_tls()
 {
   auto self = shared_from_this();
-  if (!verify_tls_) ssl_ctx_.set_verify_mode(ssl::verify_none);
+  ssl_ctx_.set_verify_mode(verify_tls_ ? ssl::verify_peer : ssl::verify_none);
 
   const auto& endpoint = proxy_ ? proxy_->endpoint : url_;
   resolver_.async_resolve(
@@ -201,6 +199,10 @@ void websocket_transport::start_tls()
       ws_tls_ = std::make_unique<
         websocket::stream<beast::ssl_stream<beast::tcp_stream>>>(strand_,
                                                                  ssl_ctx_);
+
+      if (verify_tls_ && !detail::set_tls_server_identity(
+                           ws_tls_->next_layer().native_handle(), url_.host))
+        return fail("unable to set TLS server identity");
 
       if (!SSL_set_tlsext_host_name(ws_tls_->next_layer().native_handle(),
                                     url_.host.c_str()))

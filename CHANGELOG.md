@@ -29,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes :wrench:
 
+- Secure WebSocket and HTTPS polling now reject certificates that do not match
+  the destination DNS name or IP address when TLS verification is enabled,
+  including for connections through an HTTP proxy.
 - Released unopened WebSocket transports when reconnect is cancelled before
   their I/O worker starts.
 - Marked all namespaces disconnected before invoking their callbacks outside

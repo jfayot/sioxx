@@ -13,6 +13,7 @@
 #include <stdexcept>
 
 #include "polling_protocol.hpp"
+#include "tls_server_identity.hpp"
 
 namespace sioxx
 {
@@ -189,6 +190,11 @@ struct http_polling_transport::async_request_operation
                                                          : ssl::verify_none);
       tls_stream = std::make_unique<beast::ssl_stream<beast::tcp_stream>>(
         *transport->strand_, ssl_context);
+      if (transport->verify_tls_ &&
+          !detail::set_tls_server_identity(tls_stream->native_handle(),
+                                           transport->url_.host))
+        return finish(make_error_code(boost::system::errc::invalid_argument));
+
       if (!SSL_set_tlsext_host_name(tls_stream->native_handle(),
                                     transport->url_.host.c_str()))
       {
@@ -516,6 +522,10 @@ http_polling_transport::response http_polling_transport::request(
     ctx.set_default_verify_paths();
     ctx.set_verify_mode(verify_tls_ ? ssl::verify_peer : ssl::verify_none);
     beast::ssl_stream<beast::tcp_stream> stream(ioc, ctx);
+    if (verify_tls_ &&
+        !detail::set_tls_server_identity(stream.native_handle(), url_.host))
+      throw std::runtime_error("unable to set TLS server identity");
+
     if (!SSL_set_tlsext_host_name(stream.native_handle(), url_.host.c_str()))
       throw std::runtime_error("unable to set TLS server name");
     beast::get_lowest_layer(stream).connect(endpoints);

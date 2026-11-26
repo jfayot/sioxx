@@ -74,7 +74,12 @@ struct client_options
    */
   std::function<std::unique_ptr<parser_base>()> parser_factory;
 
-  /** @brief Verify TLS certificates (default: true). */
+  /** @brief Verify the TLS certificate chain and server identity.
+   *
+   * Enabled by default for secure WebSocket and HTTPS polling. The certificate
+   * must match the DNS name or IP address in the connection URL, including
+   * through a proxy tunnel. Setting this to false disables both checks.
+   */
   bool verify_tls{true};
 
   /** @brief Force Engine.IO HTTP long‑polling instead of WebSocket.

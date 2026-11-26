@@ -780,7 +780,6 @@ TEST(E2E, ConnectsUsingCallerOwnedIoContext)
 {
   boost::asio::io_context io_context;
   sioxx::client_options options;
-  options.verify_tls = false;
   options.proxy = sioxx::proxy_options{server_url("SIOXX_E2E_PROXY_URL"),
                                        "sioxx", "proxy-password"};
   auto connected = std::make_shared<completion_signal>();
@@ -816,7 +815,6 @@ TEST(E2E, HttpPollingUsesCallerOwnedIoContext)
 {
   boost::asio::io_context io_context;
   sioxx::client_options options;
-  options.verify_tls = false;
   options.force_http_polling = true;
   options.extra_headers = {{"X-Sioxx-Test", "external-polling-header"}};
   options.proxy = sioxx::proxy_options{server_url("SIOXX_E2E_PROXY_URL"),
@@ -931,7 +929,6 @@ TEST(E2E, ConnectsWithHttpPollingThroughAuthenticatedProxy)
 TEST(E2E, ConnectsWithSecureWebsocketThroughAuthenticatedProxy)
 {
   sioxx::client_options options;
-  options.verify_tls = false;
   options.proxy = sioxx::proxy_options{server_url("SIOXX_E2E_PROXY_URL"),
                                        "sioxx", "proxy-password"};
 
@@ -961,7 +958,6 @@ TEST(E2E, ConnectsWithSecureWebsocketThroughAuthenticatedProxy)
 TEST(E2E, ConnectsWithSecureHttpPollingThroughAuthenticatedProxy)
 {
   sioxx::client_options options;
-  options.verify_tls = false;
   options.force_http_polling = true;
   options.proxy = sioxx::proxy_options{server_url("SIOXX_E2E_PROXY_URL"),
                                        "sioxx", "proxy-password"};
@@ -1051,7 +1047,6 @@ TEST(E2E, SendsExtraHeadersWithHttpPolling)
 TEST(E2E, ConnectsWithWebsocketOverTls)
 {
   sioxx::client_options options;
-  options.verify_tls = false;
 
   auto connected = std::make_shared<completion_signal>();
   auto acknowledgement = std::make_shared<async_value<sioxx::message>>();
@@ -1061,7 +1056,7 @@ TEST(E2E, ConnectsWithWebsocketOverTls)
 
   configure_failure_reporting(client, error);
   socket->on_connect([connected] { connected->set(); });
-  client.connect(server_url("SIOXX_E2E_TLS_URL"));
+  client.connect(server_url("SIOXX_E2E_TLS_HOSTNAME_URL"));
 
   ASSERT_TRUE(connected->wait_for(5s))
     << "connection error: " << error->value();
@@ -1079,7 +1074,6 @@ TEST(E2E, ConnectsWithWebsocketOverTls)
 TEST(E2E, ConnectsWithHttpPollingOverTls)
 {
   sioxx::client_options options;
-  options.verify_tls = false;
   options.force_http_polling = true;
 
   auto connected = std::make_shared<completion_signal>();
@@ -1090,7 +1084,7 @@ TEST(E2E, ConnectsWithHttpPollingOverTls)
 
   configure_failure_reporting(client, error);
   socket->on_connect([connected] { connected->set(); });
-  client.connect(server_url("SIOXX_E2E_TLS_URL"));
+  client.connect(server_url("SIOXX_E2E_TLS_HOSTNAME_URL"));
 
   ASSERT_TRUE(connected->wait_for(5s))
     << "connection error: " << error->value();
@@ -1103,6 +1097,103 @@ TEST(E2E, ConnectsWithHttpPollingOverTls)
   EXPECT_EQ(acknowledgement->value()[0], "polling");
 
   client.close();
+}
+
+namespace
+{
+
+void expect_tls_identity_rejected(const std::string& url)
+{
+  for (const bool force_polling : {false, true})
+  {
+    for (const bool caller_owned_context : {false, true})
+    {
+      for (const bool use_proxy : {false, true})
+      {
+        SCOPED_TRACE(::testing::Message()
+                     << "polling only: " << force_polling
+                     << ", caller-owned I/O: " << caller_owned_context
+                     << ", proxy: " << use_proxy);
+        sioxx::client_options options;
+        options.force_http_polling = force_polling;
+        if (use_proxy)
+          options.proxy = sioxx::proxy_options{
+            server_url("SIOXX_E2E_PROXY_URL"), "sioxx", "proxy-password"};
+
+        boost::asio::io_context io_context;
+        auto client = caller_owned_context
+                        ? std::make_unique<sioxx::client>(io_context, options)
+                        : std::make_unique<sioxx::client>(options);
+        auto websocket_error = std::make_shared<async_value<std::string>>();
+        auto result = std::make_shared<async_value<std::string>>();
+        client->set_error_listener(
+          [websocket_error, result](const std::string& message)
+          {
+            if (message.find("ssl_handshake: ") == 0)
+              websocket_error->set(message);
+            if (message.find("polling transport: ") == 0) result->set(message);
+          });
+        client->set_open_listener([result]
+                                  { result->set("connection opened"); });
+        client->connect(url);
+        std::thread io_thread;
+        if (caller_owned_context)
+          io_thread = std::thread([&io_context] { io_context.run(); });
+
+        constexpr auto certificate_error = "certificate verify failed";
+        const bool finished = result->wait_for(5s);
+        const auto outcome = result->value();
+        const bool rejected =
+          outcome.find(certificate_error) != std::string::npos;
+        const bool websocket_finished =
+          force_polling || (rejected && websocket_error->wait_for(5s));
+        client->close();
+        if (io_thread.joinable()) io_thread.join();
+
+        ASSERT_TRUE(finished)
+          << "WebSocket error: " << websocket_error->value();
+        ASSERT_TRUE(rejected) << outcome;
+        ASSERT_TRUE(websocket_finished);
+        if (!force_polling)
+          EXPECT_NE(websocket_error->value().find(certificate_error),
+                    std::string::npos)
+            << websocket_error->value();
+      }
+    }
+  }
+}
+
+}  // namespace
+
+TEST(E2E, RejectsTlsCertificateForWrongHostname)
+{
+  expect_tls_identity_rejected(server_url("SIOXX_E2E_TLS_WRONG_HOSTNAME_URL"));
+}
+
+TEST(E2E, RejectsTlsCertificateForWrongIpAddress)
+{
+  expect_tls_identity_rejected(server_url("SIOXX_E2E_TLS_WRONG_IP_URL"));
+}
+
+TEST(E2E, RejectsUntrustedTlsCertificate)
+{
+  expect_tls_identity_rejected(server_url("SIOXX_E2E_TLS_UNTRUSTED_URL"));
+}
+
+TEST(E2E, ConnectsWithUntrustedCertificateWhenVerificationIsDisabled)
+{
+  sioxx::client_options options;
+  options.verify_tls = false;
+
+  auto opened = std::make_shared<completion_signal>();
+  auto error = std::make_shared<async_value<std::string>>();
+  sioxx::client client(options);
+  configure_failure_reporting(client, error);
+  client.set_open_listener([opened] { opened->set(); });
+  client.connect(server_url("SIOXX_E2E_TLS_UNTRUSTED_URL"));
+
+  EXPECT_TRUE(opened->wait_for(5s)) << "connection error: " << error->value();
+  client.sync_close();
 }
 
 TEST(E2E, UsesCustomPathQueryAndRefreshedNamespaceAuth)
