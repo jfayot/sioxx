@@ -571,6 +571,8 @@ void socket::dispatch_ack(int id, message data)
 
 void socket::cancel_pending_emissions()
 {
+  // Release packet storage and callback captures after unlocking. Capture
+  // destructors can call back into the socket.
   std::map<int, ack_callback> cancelled_acks;
   decltype(timed_acks_) cancelled;
   std::deque<packet> discarded;
@@ -584,7 +586,6 @@ void socket::cancel_pending_emissions()
     cancelled_acks.swap(pending_acks_);
     cancelled.swap(timed_acks_);
   }
-  // Destroy captures outside locks: they may release application-owned objects.
   cancelled.clear();
 }
 
