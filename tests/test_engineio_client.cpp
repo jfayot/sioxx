@@ -216,6 +216,20 @@ TEST_F(EngineioClientFixture, RejectsIncompleteOpenHandshake)
   EXPECT_FALSE(open_fired);
 }
 
+TEST_F(EngineioClientFixture, RejectsFractionalHeartbeatTimeout)
+{
+  std::string received_error;
+  client->on_error([&](const std::string& error) { received_error = error; });
+  client->open("ws://localhost/socket.io/");
+
+  transport->simulate_message(
+    R"(0{"sid":"test-sid","pingInterval":25000,"pingTimeout":1.5})");
+
+  EXPECT_EQ(received_error, "invalid Engine.IO handshake");
+  EXPECT_EQ(transport->close_calls, 1);
+  EXPECT_FALSE(client->is_open());
+}
+
 TEST_F(EngineioClientFixture, IncompleteOpenFramePreservesEstablishedSession)
 {
   transport->simulate_message(make_open_payload());
