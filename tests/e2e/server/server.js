@@ -125,6 +125,11 @@ e2e.on("connection", (socket) => {
     acknowledgement(socket.conn.transport.name);
   });
 
+  socket.on("drop_websocket", () => {
+    // Drop this connection while keeping the listener available for reconnect.
+    socket.request.socket.destroy();
+  });
+
   socket.on("drop_transport", (acknowledgement) => {
     acknowledgement("dropping");
     setTimeout(() => {

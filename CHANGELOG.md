@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Stabilized reconnect E2E tests across platforms by explicitly rejecting
   handshakes and preventing server fixture restarts after test shutdown.
+- Made the WebSocket reconnect test independent of server restart timing.
 - Secure WebSocket and HTTPS polling now reject certificates that do not match
   the destination DNS name or IP address when TLS verification is enabled,
   including for connections through an HTTP proxy.

@@ -573,7 +573,7 @@ The regular unit-test build does not require Node.js.
 The E2E suite covers WebSocket and polling connections, automatic polling
 fallback, JSON and MessagePack interoperability, acknowledgements, binary
 payloads with both built-in parsers, routing across multiple namespaces, and
-WebSocket reconnection after an unexpected server shutdown. CI combines unit
+reconnection after dropped WebSockets and server restarts. CI combines unit
 and E2E coverage in the report published to Codecov. Codecov requires at least
 95% overall coverage; the patch coverage check is disabled.
 
