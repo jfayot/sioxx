@@ -5,6 +5,7 @@
 #include <boost/asio/ssl/error.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
+#include <cstddef>
 #include <future>
 #include <memory>
 #include <string>
@@ -16,8 +17,9 @@ namespace sioxx
 
 namespace
 {
+constexpr std::size_t max_websocket_message_size = 16 * 1024 * 1024;
 thread_local websocket_transport* active_websocket_transport = nullptr;
-}
+}  // namespace
 
 websocket_transport::websocket_transport()
     : owned_ioc_(std::make_unique<net::io_context>()),
@@ -149,6 +151,7 @@ void websocket_transport::start_plain()
 
       ws_plain_ =
         std::make_unique<websocket::stream<beast::tcp_stream>>(strand_);
+      ws_plain_->read_message_max(max_websocket_message_size);
       beast::get_lowest_layer(*ws_plain_)
         .expires_after(std::chrono::seconds(15));
       beast::get_lowest_layer(*ws_plain_)
@@ -199,6 +202,7 @@ void websocket_transport::start_tls()
       ws_tls_ = std::make_unique<
         websocket::stream<beast::ssl_stream<beast::tcp_stream>>>(strand_,
                                                                  ssl_ctx_);
+      ws_tls_->read_message_max(max_websocket_message_size);
 
       if (verify_tls_ && !detail::set_tls_server_identity(
                            ws_tls_->next_layer().native_handle(), url_.host))

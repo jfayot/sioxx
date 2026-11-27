@@ -125,6 +125,20 @@ e2e.on("connection", (socket) => {
     acknowledgement(socket.conn.transport.name);
   });
 
+  socket.on("request_websocket_limit_probe", () => {
+    const transport = socket.conn.transport;
+    if (transport.name !== "websocket") return;
+
+    const limit = 16 * 1024 * 1024;
+    const prefix = `42${socket.nsp.name},["websocket_limit_probe","`;
+    const suffix = '"]';
+    const body = prefix + "x".repeat(limit - prefix.length - suffix.length);
+    // Send one complete message at the limit and one fragmented message over it.
+    transport.socket.send(body + suffix);
+    transport.socket.send(body, { fin: false });
+    transport.socket.send("x" + suffix, { fin: true });
+  });
+
   socket.on("drop_websocket", () => {
     // Drop this connection while keeping the listener available for reconnect.
     socket.request.socket.destroy();
