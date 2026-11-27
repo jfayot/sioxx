@@ -95,13 +95,16 @@ version=0.2.0
 ```
 
 The script updates the CMake project, Conan package, README, and documentation
-versions. It also turns the current `[Unreleased]` entries into a dated release
-section, creates a fresh `[Unreleased]` section, and updates the changelog
-comparison links. Review the result before committing it:
+versions. It keeps the installed CMake consumer on the current minor for 0.x
+and on the first minor of each stable major, such as `1.0` for v1.x. It also
+turns the current `[Unreleased]` entries into a dated release section, creates
+a fresh `[Unreleased]` section, and updates the changelog comparison links.
+Review the result before committing it:
 
 ```bash
 git diff
-git add CMakeLists.txt CHANGELOG.md conanfile.py README.md docs/_static/versions.json
+git add CMakeLists.txt CHANGELOG.md conanfile.py README.md docs/_static/versions.json \
+  tests/integration/consumer/CMakeLists.txt
 git commit -m "chore: prepare release v$version"
 git tag -a "v$version" -m "sioxx v$version"
 git push origin main "v$version"

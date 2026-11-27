@@ -517,6 +517,19 @@ Basic authentication, and TLS server verification. It exercises WebSocket-first
 connections with automatic polling fallback and the polling-only mode set by
 `client_options::force_http_polling`.
 
+### v1.x source and binary compatibility
+
+Code using the documented public API can be rebuilt against newer v1.x
+releases. Installed CMake packages use `SameMajorVersion` starting at v1.0.
+For example, an installed v1.1 package satisfies
+`find_package(sioxx 1.0 CONFIG REQUIRED)`.
+
+Rebuild and relink applications and libraries that use sioxx when upgrading
+the shared library. `sioxx::message` exposes `nlohmann::json`, so use the same
+JSON version and ABI-affecting settings as the library. Starting at v1.0,
+shared libraries use the full release version as `SOVERSION` on platforms
+that support versioned shared-library names.
+
 ## Known limitations
 
 - Reconnection uses capped exponential backoff with symmetric jitter. Configure

@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changes :construction:
 
+- Defined the v1.x source compatibility and shared-library rebuild policy.
+  From v1.0, installed CMake packages match within the same major version and
+  shared-library `SOVERSION` uses the full release version.
 - Documented and tested the `sync_close()` shutdown guarantees for clients
   using a caller-owned Asio context.
 - Made the Socket.IO 4.8.1 end-to-end suite part of the release build on Linux,

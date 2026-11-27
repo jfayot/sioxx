@@ -44,8 +44,7 @@ items listed here should either be completed or explicitly resolved before the
       release.
 - [ ] Decide whether outgoing catch-all listeners and richer connection and
       transport diagnostics are required for 1.0.0.
-- [ ] Document API and ABI compatibility expectations for releases after
-      1.0.0.
+- [x] Document the [v1.x source compatibility and rebuild policy](README.md#v1x-source-and-binary-compatibility).
 
 ## Security and limits
 
@@ -69,10 +68,11 @@ items listed here should either be completed or explicitly resolved before the
 
 ## Packaging and release engineering
 
-- [ ] Change the CMake package compatibility policy from `SameMinorVersion` to
-      `SameMajorVersion`.
-- [ ] Change the library `SOVERSION` to the project major version and verify
-      shared-library naming on all platforms.
+- [x] Use `SameMinorVersion` for 0.x and `SameMajorVersion` from 1.0 onward.
+      Keep the installed consumer's request at the first minor of its stable
+      major version.
+- [x] Use the full release version as `SOVERSION` from 1.0 onward.
+- [ ] Verify shared-library naming and version metadata on the release platforms.
 - [ ] Validate installed-package, FetchContent, subproject, Conan, and shared
       library consumers against the release candidate.
 - [ ] Confirm exported CMake targets do not leak private dependencies or build
