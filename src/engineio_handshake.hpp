@@ -17,6 +17,18 @@ struct engineio_handshake
   int ping_timeout_ms = 20000;
 };
 
+inline bool read_handshake_duration(const json& handshake, const char* field,
+                                    int& duration)
+{
+  const auto value = handshake.find(field);
+  if (value == handshake.end()) return true;
+  if (!value->is_number_integer()) return false;
+  const auto milliseconds = value->get<std::uint64_t>();
+  if (milliseconds > (std::numeric_limits<int>::max)()) return false;
+  duration = static_cast<int>(milliseconds);
+  return true;
+}
+
 inline std::optional<engineio_handshake> parse_engineio_handshake(
   const std::string& payload)
 {
@@ -30,19 +42,11 @@ inline std::optional<engineio_handshake> parse_engineio_handshake(
   result.sid = sid->get<std::string>();
   if (result.sid.empty()) return std::nullopt;
 
-  const auto read_duration = [&](const char* field, int& duration)
-  {
-    const auto value = handshake.find(field);
-    if (value == handshake.end()) return true;
-    if (!value->is_number_integer()) return false;
-    const auto milliseconds = value->get<std::uint64_t>();
-    if (milliseconds > (std::numeric_limits<int>::max)()) return false;
-    duration = static_cast<int>(milliseconds);
-    return true;
-  };
-  if (!read_duration("pingInterval", result.ping_interval_ms) ||
+  if (!read_handshake_duration(handshake, "pingInterval",
+                               result.ping_interval_ms) ||
       result.ping_interval_ms == 0 ||
-      !read_duration("pingTimeout", result.ping_timeout_ms))
+      !read_handshake_duration(handshake, "pingTimeout",
+                               result.ping_timeout_ms))
     return std::nullopt;
   return result;
 }

@@ -1,5 +1,7 @@
 #include "polling_protocol.hpp"
 
+#include <algorithm>
+
 #include "proxy.hpp"
 
 namespace sioxx
@@ -25,7 +27,7 @@ bool base64_decode(const std::string& input, std::string& out)
     int a = base64_value(input[i]), b = base64_value(input[i + 1]);
     int c = input[i + 2] == '=' ? 0 : base64_value(input[i + 2]);
     int d = input[i + 3] == '=' ? 0 : base64_value(input[i + 3]);
-    if (a < 0 || b < 0 || c < 0 || d < 0) return false;
+    if (std::min({a, b, c, d}) < 0) return false;
     const auto value =
       (static_cast<unsigned>(a) << 18) | (static_cast<unsigned>(b) << 12) |
       (static_cast<unsigned>(c) << 6) | static_cast<unsigned>(d);
