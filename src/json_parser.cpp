@@ -5,7 +5,10 @@
 #include <limits>
 #include <set>
 #include <stdexcept>
+#include <string_view>
 #include <vector>
+
+#include "bounded_json.hpp"
 
 namespace sioxx
 {
@@ -268,13 +271,9 @@ bool json_parser::decode(const std::string& payload, bool is_binary,
 
   if (i < payload.size())
   {
-    json parsed = json::parse(payload.substr(i), nullptr, false);
-    if (parsed.is_discarded()) return false;
-    decoded.data = std::move(parsed);
-  }
-  else
-  {
-    decoded.data = json();
+    decoded.data =
+      detail::parse_bounded_json(std::string_view(payload).substr(i));
+    if (decoded.data.is_discarded()) return false;
   }
 
   if (has_attachments)

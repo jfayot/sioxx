@@ -303,9 +303,10 @@ to 64 attachments and 8 MiB, counting the Socket.IO header and decoded
 attachment bytes together. It discards packets that exceed either limit and
 resumes at the next text packet.
 
-The built-in MessagePack decoder accepts up to 128 levels of nested arrays
-and objects, counting the outer packet object as level one. It discards
-packets that exceed the limit and continues decoding subsequent packets.
+The built-in JSON and MessagePack decoders accept up to 128 levels of arrays
+and objects, counting the outermost container as level one. sioxx discards
+Socket.IO packets that exceed the limit and continues decoding subsequent
+packets. An over-limit Engine.IO handshake is rejected.
 
 ### Event buffers
 
