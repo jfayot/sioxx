@@ -100,11 +100,18 @@ endif()
 
 target_compile_features(sioxx PUBLIC cxx_std_17)
 
+if(PROJECT_VERSION_MAJOR EQUAL 0)
+  set(SIOXX_PACKAGE_COMPATIBILITY SameMinorVersion)
+  set(SIOXX_SOVERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
+else()
+  set(SIOXX_PACKAGE_COMPATIBILITY SameMajorVersion)
+  set(SIOXX_SOVERSION "${PROJECT_VERSION}")
+endif()
+
 set_target_properties(
   sioxx
   PROPERTIES VERSION ${PROJECT_VERSION}
-             #TODO change to "${PROJECT_VERSION_MAJOR}" when releasing 1.0.0
-             SOVERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}"
+             SOVERSION "${SIOXX_SOVERSION}"
              EXPORT_NAME sioxx
              CXX_EXTENSIONS OFF
              POSITION_INDEPENDENT_CODE ON
@@ -217,8 +224,7 @@ if(SIOXX_INSTALL)
   write_basic_package_version_file(
     "${CMAKE_CURRENT_BINARY_DIR}/sioxxConfigVersion.cmake"
     VERSION ${PROJECT_VERSION}
-    #TODO change to SameMajorVersion when releasing 1.0.0
-    COMPATIBILITY SameMinorVersion
+    COMPATIBILITY ${SIOXX_PACKAGE_COMPATIBILITY}
   )
 
   install(FILES "${CMAKE_CURRENT_BINARY_DIR}/sioxxConfig.cmake"

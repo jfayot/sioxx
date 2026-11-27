@@ -87,8 +87,18 @@ if ! grep -Fxq "$expected_unreleased" "$changelog_file"; then
   exit 1
 fi
 
-current_compat_version="${current_version%.*}"
-new_compat_version="${version%.*}"
+integration_consumer_version() {
+  local major="${1%%.*}"
+  if [[ "$major" == 0 ]]; then
+    local rest="${1#*.}"
+    printf '%s.%s\n' "$major" "${rest%%.*}"
+  else
+    printf '%s.0\n' "$major"
+  fi
+}
+
+current_compat_version="$(integration_consumer_version "$current_version")"
+new_compat_version="$(integration_consumer_version "$version")"
 if ! grep -Fxq "find_package(sioxx $current_compat_version CONFIG REQUIRED)" \
   "$consumer_cmake_file"; then
   echo "Unexpected integration consumer version; expected $current_compat_version" >&2

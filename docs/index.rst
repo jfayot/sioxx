@@ -65,6 +65,20 @@ See the `release platform matrix
 <https://github.com/jfayot/sioxx/blob/main/README.md#compatibility>`_ for the
 architectures and compilers covered by this check.
 
+Source and binary compatibility
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Code using the documented public API can be rebuilt against newer v1.x
+releases. From v1.0 onward, an installed CMake package can satisfy a request
+for the same or an earlier version within its major version. For example,
+``find_package(sioxx 1.0 CONFIG REQUIRED)`` accepts an installed v1.1 package.
+
+Rebuild and relink consumers when upgrading the shared library. Use matching
+``nlohmann::json`` versions and ABI-affecting settings when exchanging
+``sioxx::message`` values with the library. On platforms with versioned
+shared-library names, ``SOVERSION`` uses the full release version from v1.0
+onward.
+
 Architecture
 ------------
 

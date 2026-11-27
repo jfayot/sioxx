@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.28)
 
 project(sioxx_consumer LANGUAGES CXX)
 
+# Release preparation requests the current 0.x minor or the stable major's .0.
 find_package(sioxx 0.3 CONFIG REQUIRED)
 
 add_executable(sioxx_consumer main.cpp)
