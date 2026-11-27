@@ -18,6 +18,7 @@ set(SIOXX_MINIMUM_JSON_VERSION 3.8.0)
 option(SIOXX_BUILD_EXAMPLES "Build example programs" ${PROJECT_IS_TOP_LEVEL})
 option(SIOXX_BUILD_TESTS "Build unit tests" ${PROJECT_IS_TOP_LEVEL})
 option(SIOXX_BUILD_E2E_TESTS "Build end-to-end tests requiring Node.js" OFF)
+option(SIOXX_BUILD_FUZZ_TESTS "Build parser fuzz tests with Clang and libFuzzer" OFF)
 option(SIOXX_INSTALL "Generate sioxx installation rules" ${PROJECT_IS_TOP_LEVEL})
 option(SIOXX_BUILD_DOCS "Build documentation" OFF)
 option(SIOXX_USE_SYSTEM_BOOST "Use system-installed boost instead of fetching it" OFF)
@@ -148,14 +149,16 @@ endif()
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
-if(SIOXX_BUILD_TESTS)
+if(SIOXX_BUILD_TESTS OR SIOXX_BUILD_FUZZ_TESTS)
   if(PROJECT_IS_TOP_LEVEL)
     set(BUILD_TESTING ON)
     include(CTest)
   elseif(NOT BUILD_TESTING)
-    message(FATAL_ERROR "The parent project must enable CTest before enabling SIOXX_BUILD_TESTS")
+    message(FATAL_ERROR "The parent project must enable CTest before enabling sioxx tests")
   endif()
+endif()
 
+if(SIOXX_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
 
@@ -164,6 +167,10 @@ if(SIOXX_BUILD_E2E_TESTS)
     message(FATAL_ERROR "SIOXX_BUILD_E2E_TESTS requires SIOXX_BUILD_TESTS=ON")
   endif()
   add_subdirectory(tests/e2e)
+endif()
+
+if(SIOXX_BUILD_FUZZ_TESTS)
+  add_subdirectory(tests/fuzz)
 endif()
 
 # ---------------------------------------------------------------------------

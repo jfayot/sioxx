@@ -5,6 +5,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changes :construction:
+
+- Added bounded JSON and MessagePack decoder fuzzing to Linux ASan/UBSan CI.
+
 ### Fixes :wrench:
 
 - Bound incoming JSON binary events and acknowledgements to 64 attachments

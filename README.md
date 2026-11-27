@@ -644,6 +644,30 @@ For ThreadSanitizer, use a separate build directory, replace
 `TSAN_OPTIONS=halt_on_error=1`. On Linux with LLVM 18, the CI runner sets
 `vm.mmap_rnd_bits=28` to make room for ThreadSanitizer's shadow memory.
 
+### Parser fuzz tests
+
+The Linux ASan/UBSan job runs separate 10-second libFuzzer tests for the
+built-in JSON and MessagePack decoders. The JSON test feeds sequences of text
+and binary frames through one parser and checks that it can still decode a
+valid event afterwards. CI preserves any failing inputs as an artifact.
+
+With Clang and its libFuzzer runtime installed, run the same tests locally.
+
+```bash
+cmake -S . -B /tmp/sioxx-fuzz \
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DCMAKE_CXX_COMPILER=clang++ \
+  -DSIOXX_BUILD_TESTS=OFF \
+  -DSIOXX_BUILD_EXAMPLES=OFF \
+  -DSIOXX_BUILD_FUZZ_TESTS=ON
+cmake --build /tmp/sioxx-fuzz --target sioxx_fuzz_json sioxx_fuzz_msgpack --parallel
+ctest --test-dir /tmp/sioxx-fuzz -L fuzz --no-tests=error --output-on-failure
+```
+
+Each fuzzer reads seeds from `tests/fuzz/corpus` and writes new inputs and
+failure artifacts under the build directory. Pass a saved input file directly
+to the matching executable to replay it.
+
 ### Static analysis
 
 Install `clang-tidy`, then enable it when configuring:
