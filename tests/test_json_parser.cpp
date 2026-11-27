@@ -247,6 +247,69 @@ TEST(JsonParser, RejectsUnexpectedBinaryFrames)
   EXPECT_FALSE(parser.decode("irrelevant", true, decoded));
 }
 
+TEST(JsonParser, EnforcesBinaryAttachmentCountAndRecovers)
+{
+  json_parser parser;
+  packet decoded;
+  packet event;
+  event.data = json::array({"binary"});
+  for (int i = 0; i < 65; ++i) event.data.push_back(json::binary({}));
+
+  const auto oversized = encode_frames(parser, event);
+  EXPECT_FALSE(parser.decode(oversized.front().payload, false, decoded));
+  for (size_t i = 1; i < oversized.size(); ++i)
+    EXPECT_FALSE(parser.decode(oversized[i].payload, true, decoded));
+
+  event.data.erase(event.data.size() - 1);
+  const auto accepted = encode_frames(parser, event);
+  EXPECT_FALSE(parser.decode(accepted.front().payload, false, decoded));
+  for (size_t i = 1; i + 1 < accepted.size(); ++i)
+    EXPECT_FALSE(parser.decode(accepted[i].payload, true, decoded));
+  ASSERT_TRUE(parser.decode(accepted.back().payload, true, decoded));
+  EXPECT_EQ(decoded.attachments, 64);
+  EXPECT_EQ(decoded.data, event.data);
+}
+
+TEST(JsonParser, EnforcesCombinedBinaryPacketSizeAndRecovers)
+{
+  constexpr size_t max_packet_size = 8 * 1024 * 1024;
+  const std::string header =
+    R"(62-12[{"_placeholder":true,"num":0},{"_placeholder":true,"num":1}])";
+  const std::string first(max_packet_size / 2, 'a');
+  const std::string second(max_packet_size - header.size() - first.size(), 'b');
+  json_parser parser;
+  packet decoded;
+
+  EXPECT_FALSE(parser.decode(header, false, decoded));
+  EXPECT_FALSE(parser.decode(first, true, decoded));
+  EXPECT_FALSE(parser.decode(second + 'b', true, decoded));
+  EXPECT_FALSE(parser.decode("stray attachment", true, decoded));
+
+  EXPECT_FALSE(parser.decode(header, false, decoded));
+  EXPECT_FALSE(parser.decode(first, true, decoded));
+  ASSERT_TRUE(parser.decode(second, true, decoded));
+  EXPECT_EQ(decoded.type, packet_type::binary_ack);
+  EXPECT_EQ(decoded.id, 12);
+  ASSERT_TRUE(decoded.data[0].is_binary());
+  ASSERT_TRUE(decoded.data[1].is_binary());
+  EXPECT_EQ(decoded.data[0].get_binary().size(), first.size());
+  EXPECT_EQ(decoded.data[1].get_binary().size(), second.size());
+}
+
+TEST(JsonParser, RejectsOversizedBinaryHeaderAndRecovers)
+{
+  constexpr size_t max_packet_size = 8 * 1024 * 1024;
+  std::string header = R"(51-["binary",{"_placeholder":true,"num":0}])";
+  header.resize(max_packet_size + 1, ' ');
+  json_parser parser;
+  packet decoded;
+
+  EXPECT_FALSE(parser.decode(header, false, decoded));
+  EXPECT_FALSE(parser.decode("", true, decoded));
+  ASSERT_TRUE(parser.decode(R"(2["recovered"])", false, decoded));
+  EXPECT_EQ(decoded.data, json::array({"recovered"}));
+}
+
 TEST(JsonParser, RejectsMalformedBinaryHeadersAndRecovers)
 {
   json_parser parser;

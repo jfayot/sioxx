@@ -226,6 +226,11 @@ each other's ACKs. Transport reconnection is configured independently.
 Send and receive binary attachments
 -----------------------------------
 
+With the default JSON parser, each incoming binary event or acknowledgement
+can contain up to 64 attachments and 8 MiB of combined Socket.IO header and
+decoded attachment bytes. The parser discards packets over either limit and
+resumes at the next text packet.
+
 Create binary values with ``sioxx::binary_message()`` and place them at any
 depth in an event payload. The default JSON parser automatically emits the
 Socket.IO placeholder header followed by the binary attachment frames; the

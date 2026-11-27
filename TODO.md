@@ -55,6 +55,8 @@ items listed here should either be completed or explicitly resolved before the
 
 ## Security and limits
 
+- [x] Bound incoming JSON binary packet assembly by attachment count and
+      combined packet size.
 - [ ] Document trust boundaries for TLS verification, origin headers,
       namespace authentication, and proxy credentials.
 - [ ] Review protocol parsers and transport response limits for memory and CPU

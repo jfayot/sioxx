@@ -5,6 +5,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixes :wrench:
+
+- Bound incoming JSON binary events and acknowledgements to 64 attachments
+  and 8 MiB for the Socket.IO header and attachments combined. The parser
+  discards packets that exceed either limit and resumes at the next text
+  packet.
+
 ## [0.4.0] - 2026-11-27
 
 ### Breaking changes :mega:

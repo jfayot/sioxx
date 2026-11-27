@@ -299,6 +299,11 @@ and attachment frames. `msgpack_parser` is implemented on top of
 `nlohmann::json::to_msgpack` / `from_msgpack`, so it needs no extra MessagePack
 library and carries the same values natively in one binary frame.
 
+The default JSON parser limits each incoming binary event or acknowledgement
+to 64 attachments and 8 MiB, counting the Socket.IO header and decoded
+attachment bytes together. It discards packets that exceed either limit and
+resumes at the next text packet.
+
 ### Event buffers
 
 Each namespace has an in-memory FIFO buffer for events emitted while that
