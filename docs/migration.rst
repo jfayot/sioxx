@@ -1,11 +1,12 @@
-Migrating from socket.io-client-cpp
-===================================
+Migration and upgrade guide
+===========================
 
 .. default-domain:: cpp
 
-This guide is for applications moving from the official
+The following sections cover applications moving from the official
 `socket.io-client-cpp <https://github.com/socketio/socket.io-client-cpp>`_
-library to ``sioxx``. The client/socket split and most method names are
+library to ``sioxx``. See :ref:`upgrade-to-sioxx-1-0` for upgrades from an
+earlier sioxx release. The client/socket split and most method names are
 deliberately familiar. The main source change is replacing the
 ``sio::message`` class hierarchy with ``nlohmann::json`` values.
 
@@ -278,7 +279,7 @@ Client-level listener names are similar, but close and error details differ:
 .. code-block:: cpp
 
    client.set_open_listener([] {
-       // Engine.IO and the root namespace are connected.
+       // Engine.IO is connected. Use socket->on_connect() for a namespace.
    });
    client.set_close_listener([](const std::string& reason) {
        std::cerr << "closed: " << reason << '\n';
@@ -423,3 +424,27 @@ Migration checklist
 
 See :doc:`examples` for more sioxx patterns and :doc:`api` for the complete
 public API.
+
+.. _upgrade-to-sioxx-1-0:
+
+Upgrade from sioxx 0.x to 1.0
+-----------------------------
+
+* Keep one owner for each ``client``. It is non-copyable as of 0.3.0. Share
+  namespace socket handles obtained through ``client.socket()``.
+* Replace direct socket construction and calls to ``dispatch_event()``,
+  ``dispatch_ack()``, or ``mark_connected()`` with the public listener and
+  acknowledgement APIs.
+* Move emissions for the next session after ``client.connect()``.
+  Explicit shutdown drops buffered events and pending ACKs. Each
+  ``emit()`` overload rejects new emissions until the client reconnects
+  through an explicit call to ``connect()``.
+* Use a server URL whose DNS name or IP address matches the TLS certificate.
+  For a private CA, include it in the CA bundle selected by ``SSL_CERT_FILE``.
+  Server identity is checked even through an HTTP proxy.
+* Keep existing reconnect fields and either I/O ownership model. With a
+  caller-owned context, keep callback state alive until the application's
+  context has drained the client's transport work after ``sync_close()``.
+* Update installed-package consumers to
+  ``find_package(sioxx 1.0 CONFIG REQUIRED)``. Rebuild and relink when
+  upgrading the shared library.

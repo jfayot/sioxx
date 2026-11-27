@@ -150,8 +150,8 @@ Where to go next
 ----------------
 
 Read :doc:`examples` for complete usage patterns, follow the
-:doc:`migration` guide when replacing ``socket.io-client-cpp``, or go directly
-to the :doc:`api` reference.
+:doc:`migration` guide when replacing ``socket.io-client-cpp`` or upgrading
+sioxx, or go directly to the :doc:`api` reference.
 
 .. toctree::
    :hidden:
@@ -159,5 +159,5 @@ to the :doc:`api` reference.
 
    Home <self>
    Examples <examples>
-   Migration from socket.io-client-cpp <migration>
+   Migration and upgrades <migration>
    API <api>

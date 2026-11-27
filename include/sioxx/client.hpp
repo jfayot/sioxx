@@ -39,11 +39,11 @@ class client_impl;
  * @code
  *   sioxx::client c;
  *   c.set_open_listener([]{ std::cout << "connected\n"; });
- *   c.connect("wss://example.com");
  *   auto chat = c.socket("/chat");
  *   chat->on("msg", [](const std::string&, sioxx::message data){
  *       std::cout << "msg: " << data.dump() << '\n';
  *   });
+ *   c.connect("wss://example.com");
  * @endcode
  */
 class client
@@ -104,7 +104,7 @@ class client
    *             URL is replaced by `client_options::engineio_path` and
    *             `client_options::query`.
    * @throws std::invalid_argument if the configured query contains a reserved
-   *         Engine.IO parameter.
+   *         Engine.IO parameter or the configured proxy URI is invalid.
    */
   void connect(const std::string& uri);
 
@@ -163,17 +163,27 @@ class client
    * and manually connect/disconnect the namespace. If the namespace socket
    * already exists, a non-null `auth` replaces its current authentication
    * payload; a null `auth` leaves it unchanged.
+   * A retained pointer keeps the socket alive. Keep the client alive to use
+   * the socket for network operations.
    */
   std::shared_ptr<sioxx::socket> socket(const std::string& nsp = "/",
                                         message auth = json());
 
-  /** @name Lifecycle listeners */
+  /** @name Lifecycle listeners
+   * Keep any state captured by reference alive through callback completion.
+   * Replacing a listener allows already-dispatched calls to finish.
+   * Callbacks may run on library workers or on the caller-owned context and
+   * must not throw. An explicit close can notify on the calling thread.
+   */
   /** @{ */
-  /** @brief Set a callback that runs when the Engine.IO connection opens. */
+  /** @brief Set a callback for a completed Engine.IO handshake.
+   * Use socket::on_connect() to observe a namespace's own handshake.
+   */
   void set_open_listener(std::function<void()> h);
   /** @brief Set a callback that runs when the Engine.IO connection closes. */
   void set_close_listener(std::function<void(const std::string&)> h);
-  /** @brief Set a callback that runs when the Engine.IO handshake fails. */
+  /** @brief Set a callback for exhaustion of the configured reconnect attempts.
+   */
   void set_fail_listener(std::function<void()> h);
   /**
    * @brief Set a callback that runs when a reconnect attempt starts.
@@ -189,7 +199,10 @@ class client
    * back-off delay in milliseconds.
    */
   void set_reconnect_listener(std::function<void(unsigned, unsigned)> h);
-  /** @brief Set a callback that runs on any error condition. */
+  /** @brief Set a callback for connection diagnostics.
+   * Messages include transport errors and WebSocket-to-polling fallback. Use
+   * a socket listener for `connect_error` to receive a namespace rejection.
+   */
   void set_error_listener(std::function<void(const std::string&)> h);
   /** @} */
 

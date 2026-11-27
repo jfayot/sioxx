@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changes :construction:
 
+- Froze the v1.0 public API, including both I/O ownership modes, the existing
+  reconnect settings, and custom parser support. Clarified the lifecycle
+  listener and callback lifetime contracts and expanded installed-package API
+  coverage.
 - Defined the v1.x source compatibility and shared-library rebuild policy.
   From v1.0, installed CMake packages match within the same major version and
   shared-library `SOVERSION` uses the full release version.

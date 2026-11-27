@@ -271,8 +271,8 @@ configured with (e.g. Node's `socket.io` default vs.
 exactly like the JS clients don't either.
 
 Applications can supply their own strategy with `parser_factory`. It takes
-precedence over `parser`, and is called once for each client so the returned
-parser may keep per-connection state:
+precedence over `parser` and is called once during construction. The client
+owns the returned parser and reuses it across connections.
 
 ```cpp
 class my_parser : public sioxx::parser_base {
@@ -520,7 +520,12 @@ connections with automatic polling fallback and the polling-only mode set by
 ### v1.x source and binary compatibility
 
 Code using the documented public API can be rebuilt against newer v1.x
-releases. Installed CMake packages use `SameMajorVersion` starting at v1.0.
+releases. This covers `client`, `socket`, their options and callbacks, message
+types and helpers, and the custom parser extension API (`parser_factory`,
+`parser_base`, `frame_writer`, `packet`, and `packet_type`). See the
+[API reference](docs/api.rst) and [upgrade guide](docs/migration.rst).
+
+Installed CMake packages use `SameMajorVersion` starting at v1.0.
 For example, an installed v1.1 package satisfies
 `find_package(sioxx 1.0 CONFIG REQUIRED)`.
 

@@ -70,7 +70,8 @@ struct client_options
 
   /** @brief Optional factory that creates a custom `parser_base` instance.
    *
-   * The factory must return a non‑null `std::unique_ptr<parser_base>`.
+   * Called once during client construction. A null return causes construction
+   * to throw `std::invalid_argument`.
    */
   std::function<std::unique_ptr<parser_base>()> parser_factory;
 
@@ -88,7 +89,7 @@ struct client_options
    */
   bool force_http_polling{false};
 
-  /** @brief Extra HTTP/WebSocket headers to send on the upgrade request. */
+  /** @brief Extra headers for WebSocket upgrades and HTTP polling requests. */
   std::vector<std::pair<std::string, std::string>> extra_headers;
 
   /** @brief Optional HTTP proxy and its Basic authentication credentials. */

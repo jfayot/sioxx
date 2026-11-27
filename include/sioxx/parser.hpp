@@ -33,8 +33,9 @@ using frame_writer =
  *   - Encode a packet into one (or more) Engine.IO frames.
  *   - Decode a single Engine.IO payload back into a `packet`.
  *
- * @note The `name()` method is used for diagnostics and for selecting a
- *       parser in logs.
+ * A client owns the parser returned by its factory. If an implementation
+ * shares state between encode() and decode(), it must synchronize access
+ * because sending and receiving can run on different threads.
  */
 class parser_base
 {
@@ -43,7 +44,10 @@ class parser_base
   virtual ~parser_base() = default;
 
   /**
-   * @brief Encode a `packet` into an Engine.IO frame.
+   * @brief Encode a `packet` into one or more Engine.IO payloads.
+   *
+   * Invoke `write` synchronously during encode(). The writer and packet
+   * references are valid for the duration of the call.
    *
    * @param packet   Packet to encode.
    * @param write    Callback that forwards the encoded payload to the
