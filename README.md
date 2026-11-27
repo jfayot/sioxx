@@ -141,7 +141,7 @@ include(FetchContent)
 FetchContent_Declare(
   sioxx
   GIT_REPOSITORY https://github.com/jfayot/sioxx.git
-  GIT_TAG v0.3.0
+  GIT_TAG v0.4.0
   GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(sioxx)
@@ -179,7 +179,7 @@ FetchContent_Declare(
 FetchContent_Declare(
   sioxx
   GIT_REPOSITORY https://github.com/jfayot/sioxx.git
-  GIT_TAG v0.3.0
+  GIT_TAG v0.4.0
   GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(sioxx)
@@ -210,7 +210,7 @@ conan create . \
   --build=missing
 ```
 
-Consumers can require `sioxx/0.3.0` and use Conan's `CMakeDeps` and
+Consumers can require `sioxx/0.4.0` and use Conan's `CMakeDeps` and
 `CMakeToolchain` generators. The generated CMake target is `sioxx::sioxx`.
 
 ### Shared libraries

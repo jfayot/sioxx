@@ -7,7 +7,7 @@ build
 build-tidy
 build-shared
 build-docs
-build-release
+build-release*
 build-e2e
 build-tests
 build-coverage-local
