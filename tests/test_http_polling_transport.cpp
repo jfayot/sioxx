@@ -8,6 +8,7 @@
 #include <exception>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <utility>
@@ -20,6 +21,137 @@ using namespace std::chrono_literals;
 
 namespace
 {
+
+void expect_response_limit(const std::string& response, bool external_io,
+                           std::size_t expected_size,
+                           boost::beast::error_code expected_error = {})
+{
+  namespace http = boost::beast::http;
+  boost::asio::io_context server_context;
+  boost::asio::ip::tcp::acceptor acceptor(server_context,
+                                          {boost::asio::ip::tcp::v4(), 0});
+  const auto port = acceptor.local_endpoint().port();
+  std::exception_ptr server_error;
+  std::thread server(
+    [&]
+    {
+      try
+      {
+        boost::asio::ip::tcp::socket socket(server_context);
+        acceptor.accept(socket);
+        acceptor.close();
+        boost::beast::flat_buffer buffer;
+        http::request<http::empty_body> request;
+        http::read(socket, buffer, request);
+        // Rejection can close the connection before the whole response is sent.
+        boost::beast::error_code ec;
+        boost::asio::write(socket, boost::asio::buffer(response), ec);
+      }
+      catch (...)
+      {
+        server_error = std::current_exception();
+      }
+    });
+
+  boost::asio::io_context client_context;
+  auto transport =
+    external_io
+      ? std::make_shared<sioxx::http_polling_transport>(client_context)
+      : std::make_shared<sioxx::http_polling_transport>();
+  std::mutex mutex;
+  std::condition_variable condition;
+  bool closed = false;
+  std::size_t received_size = 0;
+  std::string error;
+  transport->set_message_handler(
+    [&](const std::string& payload, bool)
+    {
+      received_size += payload.size();
+      transport->close();
+    });
+  transport->set_error_handler([&](const std::string& message)
+                               { error = message; });
+  transport->set_close_handler(
+    [&](const std::string&)
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      closed = true;
+      condition.notify_all();
+    });
+  transport->connect("ws://127.0.0.1:" + std::to_string(port) + "/");
+  if (external_io)
+    client_context.run();
+  else
+  {
+    std::unique_lock<std::mutex> lock(mutex);
+    EXPECT_TRUE(condition.wait_for(lock, 5s, [&] { return closed; }));
+  }
+  transport->sync_close();
+  server.join();
+
+  ASSERT_EQ(server_error, nullptr);
+  EXPECT_TRUE(closed);
+  EXPECT_EQ(received_size, expected_size);
+  if (expected_error)
+    EXPECT_NE(error.find(expected_error.message()), std::string::npos) << error;
+  else
+    EXPECT_TRUE(error.empty()) << error;
+}
+
+TEST(HttpPollingTransport, EnforcesResponseBodyLimitForEveryFramingAndIoMode)
+{
+  constexpr std::size_t limit = 8 * 1024 * 1024;
+  for (const bool external_io : {false, true})
+  {
+    for (const std::string framing : {"length", "chunked", "eof"})
+    {
+      for (const std::size_t size : {limit, limit + 1})
+      {
+        SCOPED_TRACE(::testing::Message()
+                     << external_io << " " << framing << " " << size);
+        std::string response = "HTTP/1.1 200 OK\r\nConnection: close\r\n";
+        if (framing == "length")
+          response += "Content-Length: " + std::to_string(size) + "\r\n";
+        else if (framing == "chunked")
+          response += "Transfer-Encoding: chunked\r\n";
+        response += "\r\n";
+        if (framing == "chunked")
+        {
+          // Each chunk fits; their combined body must also fit.
+          for (const auto chunk_size : {limit / 2, size - limit / 2})
+          {
+            std::ostringstream header;
+            header << std::hex << chunk_size << "\r\n";
+            response += header.str() + std::string(chunk_size, 'x') + "\r\n";
+          }
+          response += "0\r\n\r\n";
+        }
+        else
+          response.append(size, 'x');
+        expect_response_limit(response, external_io, size == limit ? size : 0,
+                              size == limit
+                                ? boost::beast::error_code{}
+                                : boost::beast::http::error::body_limit);
+      }
+    }
+  }
+}
+
+TEST(HttpPollingTransport, RejectsOversizedHeadersAndChunkMetadata)
+{
+  for (const bool external_io : {false, true})
+  {
+    SCOPED_TRACE(external_io);
+    expect_response_limit(
+      "HTTP/1.1 200 OK\r\nX-Padding: " + std::string(8192, 'x') +
+        "\r\nContent-Length: 0\r\n\r\n",
+      external_io, 0, boost::beast::http::error::header_limit);
+    expect_response_limit(
+      "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1;pad=" +
+        std::string(64 * 1024, 'x') + "\r\nx\r\n0\r\n\r\n",
+      external_io, 0, boost::beast::http::error::buffer_overflow);
+  }
+}
 
 TEST(HttpPollingTransport, ConnectionFailureNotifiesErrorAndCloseOnce)
 {

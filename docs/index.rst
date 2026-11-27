@@ -160,4 +160,5 @@ sioxx, or go directly to the :doc:`api` reference.
    Home <self>
    Examples <examples>
    Migration and upgrades <migration>
+   Resource limits <resource_limits>
    API <api>

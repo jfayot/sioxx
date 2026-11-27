@@ -12,10 +12,17 @@ namespace sioxx::detail
 
 inline constexpr std::size_t max_json_depth = 128;
 
+struct abort_bounded_json_parse
+{
+};
+
 class bounded_json_dom final : public json::json_sax_t
 {
  public:
-  explicit bounded_json_dom(json& root) : root_(root) {}
+  bounded_json_dom(json& root, json::input_format_t format)
+      : root_(root), format_(format)
+  {
+  }
 
   bool null() override { return scalar(nullptr); }
   bool boolean(bool value) override { return scalar(value); }
@@ -51,6 +58,10 @@ class bounded_json_dom final : public json::json_sax_t
   bool parse_error(std::size_t, const string_t&,
                    const json::exception&) override
   {
+    // Older nlohmann-json readers can keep processing a truncated value
+    // after the error callback returns. Stop the MessagePack reader here.
+    if (format_ == json::input_format_t::msgpack)
+      throw abort_bounded_json_parse{};
     return false;
   }
 
@@ -83,6 +94,7 @@ class bounded_json_dom final : public json::json_sax_t
   }
 
   json& root_;
+  json::input_format_t format_;
   std::vector<json*> containers_;
   json* member_{nullptr};
 };
@@ -92,10 +104,16 @@ inline json parse_bounded_json(
   json::input_format_t format = json::input_format_t::json)
 {
   json result;
-  bounded_json_dom decoder(result);
-  if (!json::sax_parse(payload.begin(), payload.end(), &decoder, format))
-    return json(json::value_t::discarded);
-  return result;
+  bounded_json_dom decoder(result, format);
+  try
+  {
+    if (json::sax_parse(payload.begin(), payload.end(), &decoder, format))
+      return result;
+  }
+  catch (const abort_bounded_json_parse&)
+  {
+  }
+  return json(json::value_t::discarded);
 }
 
 }  // namespace sioxx::detail
