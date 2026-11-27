@@ -63,6 +63,7 @@ class engineio_client : public std::enable_shared_from_this<engineio_client>
   void handle_transport_close(const std::string& reason);
   void handle_open_packet(const std::string& payload);
   bool start_session(detail::engineio_handshake handshake);
+  void run_heartbeat();
   void request_heartbeat_stop();
   void stop_heartbeat_timer();
 

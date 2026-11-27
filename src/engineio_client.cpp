@@ -187,38 +187,33 @@ bool engineio_client::start_session(detail::engineio_handshake handshake)
   }
   open_ = true;
   heartbeat_stop_requested_ = false;
-  auto self = shared_from_this();
-  heartbeat_thread_ = std::thread(
-    [self = std::move(self)]
+  heartbeat_thread_ =
+    std::thread(&engineio_client::run_heartbeat, shared_from_this());
+  return true;
+}
+
+void engineio_client::run_heartbeat()
+{
+  while (open_.load() && !closing_.load() && !heartbeat_stop_requested_.load())
+  {
     {
-      while (self->open_.load() && !self->closing_.load() &&
-             !self->heartbeat_stop_requested_.load())
+      std::unique_lock<std::mutex> lock(heartbeat_mutex_);
+      auto ping_interval = std::chrono::milliseconds(ping_interval_ms_);
+      auto timeout =
+        ping_interval + std::chrono::milliseconds(ping_timeout_ms_);
+      if (heartbeat_cv_.wait_for(
+            lock, ping_interval, [this]
+            { return closing_.load() || heartbeat_stop_requested_.load(); }))
       {
-        {
-          std::unique_lock<std::mutex> lock(self->heartbeat_mutex_);
-          auto ping_interval =
-            std::chrono::milliseconds(self->ping_interval_ms_);
-          auto timeout =
-            ping_interval + std::chrono::milliseconds(self->ping_timeout_ms_);
-          if (self->heartbeat_cv_.wait_for(
-                lock, ping_interval,
-                [&self]
-                {
-                  return self->closing_.load() ||
-                         self->heartbeat_stop_requested_.load();
-                }))
-          {
-            return;
-          }
-          auto elapsed = std::chrono::steady_clock::now() - self->last_pong_;
-          if (elapsed <= timeout) continue;
-        }
-        if (self->on_error_) self->on_error_("engine.io ping timeout");
-        if (!self->closing_ && self->transport_) self->transport_->close();
         return;
       }
-    });
-  return true;
+      auto elapsed = std::chrono::steady_clock::now() - last_pong_;
+      if (elapsed <= timeout) continue;
+    }
+    if (on_error_) on_error_("engine.io ping timeout");
+    if (!closing_ && transport_) transport_->close();
+    return;
+  }
 }
 
 void engineio_client::stop_heartbeat_timer()
