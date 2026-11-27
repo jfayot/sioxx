@@ -295,14 +295,17 @@ client construction throws `std::invalid_argument`.
 Both built-in parsers support `nlohmann::json::binary_t` values created with
 `sioxx::binary_message()`, including values nested in arrays and objects. The
 default JSON parser uses Socket.IO's `BINARY_EVENT`/`BINARY_ACK` placeholder
-and attachment frames. `msgpack_parser` is implemented on top of
-`nlohmann::json::to_msgpack` / `from_msgpack`, so it needs no extra MessagePack
-library and carries the same values natively in one binary frame.
+and attachment frames. `msgpack_parser` uses nlohmann-json's MessagePack
+support to carry these values natively in one binary frame.
 
 The default JSON parser limits each incoming binary event or acknowledgement
 to 64 attachments and 8 MiB, counting the Socket.IO header and decoded
 attachment bytes together. It discards packets that exceed either limit and
 resumes at the next text packet.
+
+The built-in MessagePack decoder accepts up to 128 levels of nested arrays
+and objects, counting the outer packet object as level one. It discards
+packets that exceed the limit and continues decoding subsequent packets.
 
 ### Event buffers
 
