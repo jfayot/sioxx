@@ -119,6 +119,7 @@ class client_impl : public std::enable_shared_from_this<client_impl>
   mutable std::mutex engineio_mutex_;
   std::shared_ptr<engineio_client> engineio_;
   std::string base_uri_;
+  std::mutex sync_close_mutex_;
   std::mutex send_mutex_;
   std::mutex retry_mutex_;
   std::unique_ptr<boost::asio::thread_pool> retry_worker_;

@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <future>
@@ -12,6 +13,7 @@
 #include "polling_protocol.hpp"
 
 using namespace sioxx;
+using namespace std::chrono_literals;
 
 namespace
 {
@@ -66,7 +68,7 @@ class fake_transport : public transport_base
 
   std::string last_connect_url;
   std::vector<std::pair<std::string, bool>> sent;
-  int close_calls{0};
+  std::atomic<int> close_calls{0};
   int sync_close_calls{0};
   bool throw_on_sync_close{false};
 };
@@ -428,6 +430,26 @@ TEST_F(EngineioClientFixture, SyncCloseWaitsAfterCloseRequest)
   EXPECT_EQ(transport->sync_close_calls, 1);
 }
 
+TEST_F(EngineioClientFixture, IgnoresFramesQueuedAfterClose)
+{
+  bool opened = false;
+  bool frame_delivered = false;
+  client->on_open([&opened] { opened = true; });
+  client->on_frame([&frame_delivered](const std::string&, bool)
+                   { frame_delivered = true; });
+  client->open("ws://localhost/socket.io/");
+
+  client->close();
+  transport->simulate_message(make_open_payload());
+  transport->simulate_message("4late event");
+  transport->simulate_message("late binary", true);
+
+  EXPECT_FALSE(client->is_open());
+  EXPECT_TRUE(client->session_id().empty());
+  EXPECT_FALSE(opened);
+  EXPECT_FALSE(frame_delivered);
+}
+
 TEST_F(EngineioClientFixture,
        UnexpectedTransportCloseStopsHeartbeatAndNotifiesImmediately)
 {
@@ -486,4 +508,50 @@ TEST_F(EngineioClientFixture, HeartbeatTimeoutCallbackCanCloseClient)
             std::future_status::ready);
   client->sync_close();
   EXPECT_FALSE(client->is_open());
+}
+
+TEST(EngineioClient, SyncCloseDrainsHeartbeatAfterCloseNotification)
+{
+  for (bool local_close : {false, true})
+  {
+    SCOPED_TRACE(local_close ? "explicit close" : "transport closes");
+    auto client = std::make_shared<engineio_client>();
+    auto transport = std::make_shared<fake_transport>();
+    client->set_transport(transport);
+    std::promise<void> entered;
+    auto callback_entered = entered.get_future();
+    std::promise<void> release;
+    auto callback_release = release.get_future();
+    client->on_error(
+      [&](const std::string& message)
+      {
+        EXPECT_EQ(message, "engine.io ping timeout");
+        entered.set_value();
+        callback_release.wait();
+      });
+    client->open("ws://localhost/socket.io/");
+    transport->simulate_message(make_open_payload(10, 0));
+    const bool entered_in_time =
+      callback_entered.wait_for(2s) == std::future_status::ready;
+
+    auto close = std::async(std::launch::async,
+                            [&]
+                            {
+                              if (local_close)
+                                client->close();
+                              else
+                                transport->simulate_close("connection reset");
+                            });
+    const auto close_status = close.wait_for(1s);
+    auto sync_close =
+      std::async(std::launch::async, [&] { client->sync_close(); });
+    const auto sync_close_status = sync_close.wait_for(50ms);
+    release.set_value();
+    close.get();
+    sync_close.get();
+
+    EXPECT_TRUE(entered_in_time);
+    EXPECT_EQ(close_status, std::future_status::ready);
+    EXPECT_EQ(sync_close_status, std::future_status::timeout);
+  }
 }

@@ -35,7 +35,7 @@ items listed here should either be completed or explicitly resolved before the
 - [x] Run unit and E2E tests under ASan, UBSan, and TSan in CI, with repeated
       concurrency regressions for shutdown, reconnection, heartbeat, and
       callback dispatch.
-- [ ] Complete the race-condition review for shutdown, reconnection, heartbeat,
+- [x] Complete the race-condition review for shutdown, reconnection, heartbeat,
       and callback dispatch using the sanitizer coverage above.
 
 ## Public API stabilization

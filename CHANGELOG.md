@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes :wrench:
 
+- Ignore queued Engine.IO frames after explicit shutdown, and leave active
+  heartbeat callbacks for `sync_close()` to drain. Synchronize HTTP polling
+  writer shutdown with the writer's condition-variable wait.
+- Make overlapping `sync_close()` calls wait for the same shutdown work,
+  including an active reconnect callback.
 - Limit incoming JSON and MessagePack to 128 levels of arrays and objects,
   counting the outermost container as level one. Discard over-limit Socket.IO
   packets and reject over-limit Engine.IO handshakes.
