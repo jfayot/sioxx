@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <cstddef>
+
 #include "msgpack_parser.hpp"
 
 using namespace sioxx;
@@ -98,4 +100,34 @@ TEST(MsgpackParser, RejectsMalformedBytes)
   packet decoded;
   std::string garbage = "\xff\xff\xff\xff";
   EXPECT_FALSE(parser.decode(garbage, true, decoded));
+}
+
+TEST(MsgpackParser, EnforcesNestingLimitAndDecodesNextPacket)
+{
+  constexpr std::size_t limit = 128;
+  msgpack_parser parser;
+
+  for (const bool use_objects : {false, true})
+  {
+    SCOPED_TRACE(use_objects ? "nested objects" : "nested arrays");
+    const auto encode = [use_objects](std::size_t depth)
+    {
+      json data = "leaf";
+      for (std::size_t level = 1; level < depth; ++level)
+      {
+        data =
+          use_objects ? json::object({{"child", data}}) : json::array({data});
+      }
+      const auto bytes = json::to_msgpack({{"type", 2}, {"data", data}});
+      return std::string(bytes.begin(), bytes.end());
+    };
+
+    packet decoded;
+    EXPECT_TRUE(parser.decode(encode(limit), true, decoded));
+    EXPECT_FALSE(parser.decode(encode(limit + 1), true, decoded));
+    ASSERT_TRUE(parser.decode(encode(2), true, decoded));
+    EXPECT_EQ(decoded.type, packet_type::event);
+    EXPECT_EQ(decoded.data, use_objects ? json::object({{"child", "leaf"}})
+                                        : json::array({"leaf"}));
+  }
 }
