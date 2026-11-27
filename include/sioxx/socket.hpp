@@ -53,6 +53,9 @@ class socket_test_access;
  * until client::connect() is called again. The buffer has no size limit.
  *
  * All public methods are thread‑safe; internal state is protected by a mutex.
+ * Keep any state captured by reference alive through callback completion.
+ * Removing or replacing a listener allows already-dispatched calls to finish.
+ * Listeners must not throw.
  */
 class socket : public std::enable_shared_from_this<socket>
 {

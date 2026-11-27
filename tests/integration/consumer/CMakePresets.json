@@ -19,7 +19,9 @@
       "inherits": "ci-ninja",
       "binaryDir": "${sourceDir}/../../../build-consumer",
       "cacheVariables": {
-        "CMAKE_PREFIX_PATH": "${sourceDir}/../../../relocated-stage"
+        "CMAKE_PREFIX_PATH": "${sourceDir}/../../../relocated-stage",
+        "SIOXX_USE_SYSTEM_BOOST": "OFF",
+        "FETCHCONTENT_BASE_DIR": "${sourceDir}/../../../.cache/fetchcontent"
       }
     },
     {
@@ -27,7 +29,9 @@
       "inherits": "ci-ninja",
       "binaryDir": "${sourceDir}/../../../build-fetched-shared-consumer",
       "cacheVariables": {
-        "CMAKE_PREFIX_PATH": "${sourceDir}/../../../relocated-stage-fetched-shared"
+        "CMAKE_PREFIX_PATH": "${sourceDir}/../../../relocated-stage-fetched-shared",
+        "SIOXX_USE_SYSTEM_BOOST": "OFF",
+        "FETCHCONTENT_BASE_DIR": "${sourceDir}/../../../.cache/fetchcontent"
       }
     },
     {
@@ -51,7 +55,9 @@
       "binaryDir": "${sourceDir}/../../../build-consumer",
       "architecture": "x64",
       "cacheVariables": {
-        "CMAKE_PREFIX_PATH": "${sourceDir}/../../../stage"
+        "CMAKE_PREFIX_PATH": "${sourceDir}/../../../stage",
+        "SIOXX_USE_SYSTEM_BOOST": "OFF",
+        "FETCHCONTENT_BASE_DIR": "${sourceDir}/../../../.cache/fetchcontent"
       }
     },
     {
