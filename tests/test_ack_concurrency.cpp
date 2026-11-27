@@ -6,7 +6,10 @@
 #include <sioxx/client.hpp>
 #include <sioxx/socket.hpp>
 
+#include "socket_test_access.hpp"
+
 using namespace sioxx;
+using sioxx::detail::socket_test_access;
 using namespace std::chrono_literals;
 
 namespace
@@ -61,7 +64,7 @@ TEST(AckConcurrency, ConcurrentTimedAcksInvokeCallbackOnce)
   auto deliver = [&]
   {
     EXPECT_EQ(ready.wait_for(5s), std::future_status::ready);
-    socket->dispatch_ack(0, json::array({42}));
+    socket_test_access::dispatch_ack(*socket, 0, json::array({42}));
     if (++delivered == 1) first_delivery.set_value();
   };
   auto first = std::async(std::launch::async, deliver);
@@ -74,7 +77,7 @@ TEST(AckConcurrency, ConcurrentTimedAcksInvokeCallbackOnce)
   first.get();
   second.get();
   instance.sync_close();
-  socket->dispatch_ack(0, json::array({43}));
+  socket_test_access::dispatch_ack(*socket, 0, json::array({43}));
   EXPECT_EQ(calls->load(), 1);
 }
 
@@ -92,10 +95,12 @@ TEST(AckConcurrency, LateAcksDoNotReenterRunningTimeoutCallback)
                  if (++*calls == 1) gate->enter();
                });
   EXPECT_TRUE(gate->wait_until_entered());
-  auto first = std::async(std::launch::async,
-                          [socket] { socket->dispatch_ack(0, json()); });
-  auto second = std::async(std::launch::async,
-                           [socket] { socket->dispatch_ack(0, json()); });
+  auto first =
+    std::async(std::launch::async, [socket]
+               { socket_test_access::dispatch_ack(*socket, 0, json()); });
+  auto second =
+    std::async(std::launch::async, [socket]
+               { socket_test_access::dispatch_ack(*socket, 0, json()); });
   EXPECT_EQ(first.wait_for(5s), std::future_status::ready);
   EXPECT_EQ(second.wait_for(5s), std::future_status::ready);
   gate->release();
@@ -125,10 +130,10 @@ TEST(AckConcurrency, CloseCancelsQueuedTimeoutsWhileCallbackRuns)
   capture.reset();
   instance.close();
   EXPECT_TRUE(retained.expired());
-  socket->dispatch_ack(1, json());
+  socket_test_access::dispatch_ack(*socket, 1, json());
   gate->release();
   instance.sync_close();
-  socket->dispatch_ack(1, json());
+  socket_test_access::dispatch_ack(*socket, 1, json());
   EXPECT_EQ(calls->load(), 0);
 }
 
@@ -165,7 +170,7 @@ TEST(AckConcurrency, CloseRacingUntimedEmissionCancelsCallback)
     start.set_value();
     emitting.get();
     closing.get();
-    socket->dispatch_ack(0, json());
+    socket_test_access::dispatch_ack(*socket, 0, json());
     EXPECT_EQ(calls.load(), 0);
     EXPECT_THROW(socket->emit("after-close"), std::logic_error);
     instance.sync_close();

@@ -30,6 +30,11 @@ class client_impl;
 class ack_scheduler;
 class engineio_client;
 
+namespace detail
+{
+class socket_test_access;
+}
+
 /**
  * @class socket
  * @brief One namespace‑scoped communication channel.
@@ -79,16 +84,6 @@ class socket : public std::enable_shared_from_this<socket>
 
   /** @brief Listener for the *disconnect* event of this namespace. */
   using disconnect_listener = std::function<void(const std::string& reason)>;
-
-  /**
-   * @brief Construct a socket bound to a client and a namespace.
-   *
-   * @param client   Weak reference to the owning `client_impl`.
-   * @param nsp      Namespace string (e.g. `"/chat"`).
-   * @param auth     Authentication payload for namespace CONNECT packets.
-   */
-  socket(std::weak_ptr<client_impl> client, std::string nsp,
-         message auth = json());
 
   /** @brief Discard buffered events and pending ACKs without notification. */
   ~socket();
@@ -283,8 +278,12 @@ class socket : public std::enable_shared_from_this<socket>
   void disconnect();
   /** @} */
 
-  /** @name Internal callbacks – called by client_impl */
-  /** @{ */
+ private:
+  friend class client_impl;
+  friend class detail::socket_test_access;
+
+  socket(std::weak_ptr<client_impl> client, std::string nsp, message auth);
+
   /** @brief Deliver an incoming event from the server. */
   void dispatch_event(const std::string& event, message data, int ack_id = -1);
 
@@ -302,10 +301,7 @@ class socket : public std::enable_shared_from_this<socket>
    */
   void mark_connected(bool connected,
                       const std::string& disconnect_reason = "");
-  /** @} */
 
- private:
-  friend class client_impl;
   struct retry_emission;
   struct timed_ack
   {

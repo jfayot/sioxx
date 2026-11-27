@@ -15,7 +15,10 @@
 #include <thread>
 #include <vector>
 
+#include "socket_test_access.hpp"
+
 using namespace sioxx;
+using sioxx::detail::socket_test_access;
 using namespace std::chrono_literals;
 
 namespace
@@ -103,7 +106,7 @@ struct AckRetries : ::testing::Test
     // Leave the caller-owned context stopped: the parser records attempts
     // without opening a network connection.
     instance->connect("ws://127.0.0.1:1");
-    sock->mark_connected(true);
+    socket_test_access::mark_connected(*sock, true);
   }
 
   void TearDown() override { instance->sync_close(); }
@@ -131,10 +134,13 @@ TEST_F(AckRetries, SecondAttemptSucceedsAndOldAcknowledgementsAreIgnored)
   ASSERT_EQ(attempts.size(), 2u);
   EXPECT_NE(attempts[0].id, attempts[1].id);
   EXPECT_EQ(attempts[0].data, attempts[1].data);
-  sock->dispatch_ack(attempts[0].id, json::array({"late"}));
+  socket_test_access::dispatch_ack(*sock, attempts[0].id,
+                                   json::array({"late"}));
   EXPECT_EQ(calls->load(), 0);
-  sock->dispatch_ack(attempts[1].id, json::array({"reply"}));
-  sock->dispatch_ack(attempts[1].id, json::array({"duplicate"}));
+  socket_test_access::dispatch_ack(*sock, attempts[1].id,
+                                   json::array({"reply"}));
+  socket_test_access::dispatch_ack(*sock, attempts[1].id,
+                                   json::array({"duplicate"}));
   instance->sync_close();
   EXPECT_EQ(calls->load(), 1);
   EXPECT_EQ(events->snapshot().size(), 2u);
@@ -160,7 +166,7 @@ TEST_F(AckRetries, ExhaustionReportsTimeoutOnceAfterExactAttemptBudget)
   {
     EXPECT_EQ(attempts[i].data, json::array({"request", 42}));
     if (i > 0) EXPECT_GT(attempts[i].id, attempts[i - 1].id);
-    sock->dispatch_ack(attempts[i].id, json());
+    socket_test_access::dispatch_ack(*sock, attempts[i].id, json());
   }
   EXPECT_EQ(calls->load(), 1);
 }
@@ -180,7 +186,7 @@ TEST_F(AckRetries, ZeroRetriesMakesOnlyOneAttempt)
 
 TEST_F(AckRetries, DisconnectedAttemptsExpireWithoutLaterDelivery)
 {
-  sock->mark_connected(false);
+  socket_test_access::mark_connected(*sock, false);
   auto completed = std::make_shared<std::promise<socket::ack_status>>();
   auto result = completed->get_future();
   sock->emit("request", json(), 10ms, 2,
@@ -188,7 +194,7 @@ TEST_F(AckRetries, DisconnectedAttemptsExpireWithoutLaterDelivery)
              { completed->set_value(status); });
   ASSERT_EQ(result.wait_for(5s), std::future_status::ready);
   EXPECT_EQ(result.get(), socket::ack_status::timeout);
-  sock->mark_connected(true);
+  socket_test_access::mark_connected(*sock, true);
   instance->sync_close();
   EXPECT_TRUE(events->snapshot().empty());
 }
@@ -204,7 +210,7 @@ TEST_F(AckRetries, ShutdownCancelsAttemptsAndReleasesCaptures)
   ASSERT_TRUE(events->wait_for(1));
   instance->sync_close();
   EXPECT_TRUE(retained.expired());
-  sock->dispatch_ack(events->snapshot()[0].id, json());
+  socket_test_access::dispatch_ack(*sock, events->snapshot()[0].id, json());
   EXPECT_EQ(calls->load(), 0);
   EXPECT_EQ(events->snapshot().size(), 1u);
   EXPECT_THROW(
@@ -234,7 +240,7 @@ TEST_F(AckRetries, LargeTimeoutAndRetryCountDoNotOverflow)
                ++*calls;
              });
   ASSERT_TRUE(events->wait_for(1));
-  sock->dispatch_ack(events->snapshot()[0].id, json());
+  socket_test_access::dispatch_ack(*sock, events->snapshot()[0].id, json());
   instance->sync_close();
   EXPECT_EQ(calls->load(), 1);
   EXPECT_EQ(events->snapshot().size(), 1u);
@@ -242,8 +248,7 @@ TEST_F(AckRetries, LargeTimeoutAndRetryCountDoNotOverflow)
 
 TEST_F(AckRetries, SocketDestructionReleasesRetryCallback)
 {
-  auto detached =
-    std::make_shared<sioxx::socket>(std::weak_ptr<client_impl>{}, "/");
+  auto detached = socket_test_access::make_socket();
   auto capture = std::make_shared<int>(42);
   std::weak_ptr<int> retained = capture;
   detached->emit("request", json(), 1h, 2,
@@ -270,7 +275,7 @@ TEST_F(AckRetries, ConcurrentAcknowledgementsInvokeCallbackOnce)
   auto deliver = [&]
   {
     EXPECT_EQ(ready.wait_for(5s), std::future_status::ready);
-    sock->dispatch_ack(id, json());
+    socket_test_access::dispatch_ack(*sock, id, json());
   };
   auto first = std::async(std::launch::async, deliver);
   auto second = std::async(std::launch::async, deliver);
@@ -285,11 +290,11 @@ TEST_F(AckRetries, ConcurrentAcknowledgementsInvokeCallbackOnce)
 TEST_F(AckRetries, ExpiredAckQueuesRetryBehindNewerBufferedEvents)
 {
   auto gate = std::make_shared<callback_gate>();
-  sock->mark_connected(false);
+  socket_test_access::mark_connected(*sock, false);
   sock->emit("blocker", json(), 1ms,
              [gate](socket::ack_status, message) { gate->enter(); });
   ASSERT_TRUE(gate->wait_until_entered());
-  sock->mark_connected(true);
+  socket_test_access::mark_connected(*sock, true);
   auto calls = std::make_shared<std::atomic<int>>(0);
   sock->emit("request", json::array({42}), 50ms, 1,
              [calls](socket::ack_status status, message)
@@ -303,21 +308,21 @@ TEST_F(AckRetries, ExpiredAckQueuesRetryBehindNewerBufferedEvents)
                  { return attempt.data.front() == "request"; });
   ASSERT_NE(request, initial.end());
   const auto old_id = request->id;
-  sock->mark_connected(false);
+  socket_test_access::mark_connected(*sock, false);
   sock->emit("newer");
   std::this_thread::sleep_for(80ms);
   // Expiry is claimed on this ACK delivery thread while the worker is busy.
-  sock->dispatch_ack(old_id, json());
-  sock->dispatch_ack(old_id, json());
+  socket_test_access::dispatch_ack(*sock, old_id, json());
+  socket_test_access::dispatch_ack(*sock, old_id, json());
   EXPECT_EQ(calls->load(), 0);
-  sock->mark_connected(true);
+  socket_test_access::mark_connected(*sock, true);
   auto attempts = events->snapshot();
   gate->release();
   ASSERT_EQ(attempts.size(), 3u);
   EXPECT_EQ(attempts[1].data[0], "newer");
   EXPECT_EQ(attempts[2].data, json::array({"request", 42}));
   EXPECT_NE(attempts[2].id, old_id);
-  sock->dispatch_ack(attempts[2].id, json());
+  socket_test_access::dispatch_ack(*sock, attempts[2].id, json());
   instance->sync_close();
   EXPECT_EQ(calls->load(), 1);
 }
@@ -325,11 +330,11 @@ TEST_F(AckRetries, ExpiredAckQueuesRetryBehindNewerBufferedEvents)
 TEST_F(AckRetries, ShutdownRacingExpiredAckCancelsRetry)
 {
   auto gate = std::make_shared<callback_gate>();
-  sock->mark_connected(false);
+  socket_test_access::mark_connected(*sock, false);
   sock->emit("blocker", json(), 1ms,
              [gate](socket::ack_status, message) { gate->enter(); });
   ASSERT_TRUE(gate->wait_until_entered());
-  sock->mark_connected(true);
+  socket_test_access::mark_connected(*sock, true);
   auto calls = std::make_shared<std::atomic<int>>(0);
   sock->emit("request", json(), 50ms, 100,
              [calls](socket::ack_status, message) { ++*calls; });
@@ -347,7 +352,7 @@ TEST_F(AckRetries, ShutdownRacingExpiredAckCancelsRetry)
                [&]
                {
                  EXPECT_EQ(ready.wait_for(5s), std::future_status::ready);
-                 sock->dispatch_ack(id, json());
+                 socket_test_access::dispatch_ack(*sock, id, json());
                });
   auto shutdown =
     std::async(std::launch::async,
@@ -376,7 +381,8 @@ TEST_F(AckRetries, SyncCloseDrainsRunningRetrySuccessCallback)
   ASSERT_TRUE(events->wait_for(2));
   const auto id = events->snapshot()[1].id;
   auto acknowledgement =
-    std::async(std::launch::async, [&] { sock->dispatch_ack(id, json()); });
+    std::async(std::launch::async,
+               [&] { socket_test_access::dispatch_ack(*sock, id, json()); });
   EXPECT_TRUE(gate->wait_until_entered());
   auto shutdown =
     std::async(std::launch::async, [&] { instance->sync_close(); });
@@ -392,7 +398,7 @@ TEST_F(AckRetries, InitialEncodingErrorDiscardsAcknowledgement)
   client json_client(context);
   auto json_socket = json_client.socket();
   json_client.connect("ws://127.0.0.1:1");
-  json_socket->mark_connected(true);
+  socket_test_access::mark_connected(*json_socket, true);
   auto capture = std::make_shared<int>(42);
   std::weak_ptr<int> pending = capture;
   const auto invalid_utf8 = json(std::string(1, static_cast<char>(0xff)));
@@ -475,10 +481,10 @@ TEST_F(AckRetries, QueuedRetryLeavesDeadlinesRunningAndCannotCrossShutdown)
   if (deadline_status == std::future_status::ready)
     EXPECT_EQ(result.get(), socket::ack_status::timeout);
 
-  sock->mark_connected(false);
+  socket_test_access::mark_connected(*sock, false);
   instance->close();
   instance->connect("ws://127.0.0.1:1");
-  sock->mark_connected(true);
+  socket_test_access::mark_connected(*sock, true);
   gate->release();
   blocked.get();
 

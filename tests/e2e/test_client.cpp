@@ -1430,8 +1430,7 @@ TEST(E2E, ReconnectsAfterUnexpectedWebsocketClose)
   options.reconnect_randomization_factor = 0.0;
 
   auto connections = std::make_shared<event_counter>();
-  auto closed = std::make_shared<completion_signal>();
-  auto drop_requested = std::make_shared<async_value<sioxx::message>>();
+  auto opened_at_close = std::make_shared<async_value<bool>>();
   auto initial_transport = std::make_shared<async_value<sioxx::message>>();
   auto reconnected_transport = std::make_shared<async_value<sioxx::message>>();
   auto acknowledgement = std::make_shared<async_value<sioxx::message>>();
@@ -1443,7 +1442,8 @@ TEST(E2E, ReconnectsAfterUnexpectedWebsocketClose)
   auto socket = client.socket("/e2e");
 
   configure_failure_reporting(client, error);
-  client.set_close_listener([closed](const std::string&) { closed->set(); });
+  client.set_close_listener([&client, opened_at_close](const std::string&)
+                            { opened_at_close->set(client.opened()); });
   client.set_reconnect_listener(
     [reconnect_scheduled](unsigned attempt, unsigned delay)
     { reconnect_scheduled->set({attempt, delay}); });
@@ -1464,20 +1464,17 @@ TEST(E2E, ReconnectsAfterUnexpectedWebsocketClose)
   ASSERT_EQ(initial_transport->value().size(), 1);
   ASSERT_EQ(initial_transport->value()[0], "websocket");
 
-  socket->emit("drop_transport", sioxx::json::array(),
-               [drop_requested](sioxx::message data)
-               { drop_requested->set(std::move(data)); });
+  socket->emit("drop_websocket");
 
-  ASSERT_TRUE(drop_requested->wait_for(5s));
-  ASSERT_TRUE(closed->wait_for(5s))
+  ASSERT_TRUE(opened_at_close->wait_for(5s))
     << "client did not observe the WebSocket transport close";
-  EXPECT_FALSE(client.opened());
+  EXPECT_FALSE(opened_at_close->value());
   ASSERT_TRUE(reconnect_scheduled->wait_for(5s));
   EXPECT_EQ(reconnect_scheduled->value(),
             std::make_pair(0U, static_cast<unsigned>((100ms).count())));
   ASSERT_TRUE(reconnecting->wait_for(5s));
   ASSERT_TRUE(connections->wait_for(2, 5s))
-    << "client did not reconnect after the server restarted";
+    << "client did not reconnect after the WebSocket transport closed";
   EXPECT_TRUE(client.opened());
   EXPECT_FALSE(client.get_sessionid().empty());
   EXPECT_NE(client.get_sessionid(), initial_session_id);

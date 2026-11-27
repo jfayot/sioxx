@@ -5,6 +5,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking changes :mega:
+
+- Made the `socket` constructor and the `dispatch_event()`, `dispatch_ack()`,
+  and `mark_connected()` methods private. Obtain namespace sockets through
+  `client.socket()`.
+
 ### Additions :tada:
 
 - Added opt-in per-emission acknowledgement retries with per-attempt timeouts,
@@ -35,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Stabilized reconnect E2E tests across platforms by explicitly rejecting
   handshakes and preventing server fixture restarts after test shutdown.
+- Made the WebSocket reconnect test independent of server restart timing.
 - Secure WebSocket and HTTPS polling now reject certificates that do not match
   the destination DNS name or IP address when TLS verification is enabled,
   including for connections through an HTTP proxy.

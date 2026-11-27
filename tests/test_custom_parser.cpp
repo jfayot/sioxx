@@ -7,7 +7,10 @@
 #include <stdexcept>
 #include <utility>
 
+#include "socket_test_access.hpp"
+
 using namespace sioxx;
+using sioxx::detail::socket_test_access;
 
 namespace
 {
@@ -120,7 +123,7 @@ TEST(CustomParser, ClientDestructorCompletesWhenDisconnectEncodingThrows)
   auto instance = std::make_unique<client>(options);
   auto socket = instance->socket();
   instance->connect("ws://127.0.0.1:1");
-  socket->mark_connected(true);
+  socket_test_access::mark_connected(*socket, true);
 
   EXPECT_NO_THROW(instance.reset());
   EXPECT_EQ(encode_calls, 1);
@@ -137,7 +140,7 @@ TEST(CustomParser, TimedEmissionExpiredBeforeRegistrationIsNotEncoded)
   client instance(io_context, options);
   auto socket = instance.socket();
   instance.connect("ws://127.0.0.1:1");
-  socket->mark_connected(true);
+  socket_test_access::mark_connected(*socket, true);
 
   std::promise<void> locked;
   auto lock_acquired = locked.get_future();
