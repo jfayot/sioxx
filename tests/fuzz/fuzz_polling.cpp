@@ -2,16 +2,19 @@
 #include <cstdint>
 #include <cstdlib>
 #include <string>
+#include <string_view>
 
 #include "polling_protocol.hpp"
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data,
                                       std::size_t size)
 {
-  const std::string payload(reinterpret_cast<const char*>(data), size);
-  for (const auto& packet : sioxx::detail::polling_split_payload(payload))
+  std::string_view remaining(reinterpret_cast<const char*>(data), size);
+  while (!remaining.empty())
   {
-    if (packet.empty()) std::abort();
+    const auto previous_size = remaining.size();
+    const auto packet = sioxx::detail::polling_next_packet(remaining);
+    if (remaining.size() >= previous_size) std::abort();
 
     std::string binary;
     if (!sioxx::detail::polling_decode_binary(packet, binary)) continue;

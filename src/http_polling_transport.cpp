@@ -11,6 +11,7 @@
 #include <boost/beast/ssl.hpp>
 #include <cstdint>
 #include <stdexcept>
+#include <string_view>
 
 #include "engineio_handshake.hpp"
 #include "polling_protocol.hpp"
@@ -573,12 +574,15 @@ std::string http_polling_transport::poll_target() const
 
 void http_polling_transport::deliver(const std::string& body)
 {
-  for (const auto& packet : detail::polling_split_payload(body))
+  std::string_view remaining = body;
+  while (!closing_)
   {
-    if (closing_) return;
+    const auto packet = detail::polling_next_packet(remaining);
+    if (packet.empty() || closing_) return;
     if (packet[0] == '0')
     {
-      auto handshake = detail::parse_engineio_handshake(packet.substr(1));
+      auto handshake =
+        detail::parse_engineio_handshake(std::string(packet.substr(1)));
       if (!handshake) return fail("invalid Engine.IO handshake");
       std::lock_guard<std::mutex> lock(mutex_);
       sid_ = std::move(handshake->sid);
@@ -593,7 +597,7 @@ void http_polling_transport::deliver(const std::string& body)
     }
     else if (auto handler = current_handler(on_message_))
     {
-      handler(packet, false);
+      handler(std::string(packet), false);
     }
   }
 }

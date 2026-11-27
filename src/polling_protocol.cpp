@@ -18,7 +18,7 @@ int base64_value(char c)
   return -1;
 }
 
-bool base64_decode(const std::string& input, std::string& out)
+bool base64_decode(std::string_view input, std::string& out)
 {
   if (input.size() % 4 != 0) return false;
   out.clear();
@@ -44,28 +44,29 @@ std::string detail::polling_encode_binary(const std::string& payload)
   return "b" + base64_encode(payload);
 }
 
-bool detail::polling_decode_binary(const std::string& packet,
+bool detail::polling_decode_binary(std::string_view packet,
                                    std::string& payload)
 {
   return !packet.empty() && packet[0] == 'b' &&
          base64_decode(packet.substr(1), payload);
 }
 
-std::vector<std::string> detail::polling_split_payload(
-  const std::string& payload)
+std::string_view detail::polling_next_packet(std::string_view& remaining)
 {
-  std::vector<std::string> packets;
-  size_t begin = 0;
-  while (begin <= payload.size())
+  constexpr char separator = '\x1e';  // Engine.IO uses ASCII Record Separator.
+  const auto begin = remaining.find_first_not_of(separator);
+  if (begin == std::string_view::npos)
   {
-    const size_t separator = payload.find('\x1e', begin);
-    const size_t end =
-      separator == std::string::npos ? payload.size() : separator;
-    if (end > begin) packets.push_back(payload.substr(begin, end - begin));
-    if (separator == std::string::npos) break;
-    begin = separator + 1;
+    remaining = {};
+    return {};
   }
-  return packets;
+
+  remaining.remove_prefix(begin);
+  const auto end = remaining.find(separator);
+  const auto packet = remaining.substr(0, end);
+  remaining.remove_prefix(end == std::string_view::npos ? remaining.size()
+                                                        : end + 1);
+  return packet;
 }
 
 }  // namespace sioxx

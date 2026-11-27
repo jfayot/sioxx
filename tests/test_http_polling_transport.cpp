@@ -10,7 +10,10 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <utility>
+#include <vector>
 
+#include "engineio_client.hpp"
 #include "http_polling_transport.hpp"
 
 using namespace std::chrono_literals;
@@ -148,6 +151,68 @@ TEST(HttpPollingTransport, UsesCallerOwnedIoContext)
 
   EXPECT_EQ(error, "invalid Engine.IO handshake");
   EXPECT_EQ(callback_thread, run_thread);
+}
+
+TEST(HttpPollingTransport, DeliversBatchInOrderUntilClientCloses)
+{
+  namespace http = boost::beast::http;
+  boost::asio::io_context server_context;
+  boost::asio::ip::tcp::acceptor acceptor(server_context,
+                                          {boost::asio::ip::tcp::v4(), 0});
+  const auto port = acceptor.local_endpoint().port();
+  std::exception_ptr server_error;
+  std::thread server(
+    [&]
+    {
+      try
+      {
+        boost::asio::ip::tcp::socket socket(server_context);
+        acceptor.accept(socket);
+        acceptor.close();
+        boost::beast::flat_buffer buffer;
+        http::request<http::empty_body> request;
+        http::read(socket, buffer, request);
+        http::response<http::string_body> response{http::status::ok,
+                                                   request.version()};
+        response.body() =
+          "0{\"sid\":\"batch-session\"}\x1e"
+          "4first\x1e"
+          "bAAE=\x1e"
+          "4second\x1e"
+          "4after-close";
+        response.prepare_payload();
+        http::write(socket, response);
+      }
+      catch (...)
+      {
+        server_error = std::current_exception();
+      }
+    });
+
+  boost::asio::io_context client_context;
+  std::vector<std::pair<std::string, bool>> frames;
+  std::string error;
+  auto client = std::make_shared<sioxx::engineio_client>();
+  client->set_transport(
+    std::make_shared<sioxx::http_polling_transport>(client_context));
+  client->on_error([&](const std::string& message) { error = message; });
+  client->on_frame(
+    [&](const std::string& payload, bool is_binary)
+    {
+      frames.emplace_back(payload, is_binary);
+      if (!is_binary && payload == "second") client->close();
+    });
+  client->open("ws://127.0.0.1:" + std::to_string(port) +
+               "/socket.io/?EIO=4&transport=polling");
+  client_context.run();
+  server.join();
+
+  const std::vector<std::pair<std::string, bool>> expected{
+    {"first", false}, {std::string("\x00\x01", 2), true}, {"second", false}};
+  ASSERT_EQ(server_error, nullptr);
+  EXPECT_TRUE(error.empty()) << error;
+  EXPECT_EQ(frames, expected);
+  EXPECT_FALSE(client->is_open());
 }
 
 TEST(HttpPollingTransport, SendsPlainRequestsThroughAuthenticatedProxy)

@@ -315,6 +315,9 @@ networks or transport-specific testing:
    sioxx::client client(options);
    client.connect("https://example.com");
 
+HTTP polling response bodies are limited to 8 MiB. When a response contains
+multiple packets, sioxx delivers them in order, one packet at a time.
+
 Configure TLS and request headers
 ---------------------------------
 
