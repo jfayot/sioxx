@@ -16,9 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes :wrench:
 
-- Limit incoming MessagePack packets to 128 levels of arrays and objects,
-  including the outer packet object. Reject packets that exceed the limit
-  and continue decoding subsequent packets.
+- Limit incoming JSON and MessagePack to 128 levels of arrays and objects,
+  counting the outermost container as level one. Discard over-limit Socket.IO
+  packets and reject over-limit Engine.IO handshakes.
 - Reject malformed Engine.IO open handshakes through the connection error path
   on WebSocket and HTTP polling.
 - Bound incoming JSON binary events and acknowledgements to 64 attachments

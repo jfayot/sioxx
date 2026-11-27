@@ -581,8 +581,7 @@ void http_polling_transport::deliver(const std::string& body)
     if (packet.empty() || closing_) return;
     if (packet[0] == '0')
     {
-      auto handshake =
-        detail::parse_engineio_handshake(std::string(packet.substr(1)));
+      auto handshake = detail::parse_engineio_handshake(packet.substr(1));
       if (!handshake) return fail("invalid Engine.IO handshake");
       std::lock_guard<std::mutex> lock(mutex_);
       sid_ = std::move(handshake->sid);

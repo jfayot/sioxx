@@ -1,12 +1,14 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <cstddef>
 #include <future>
 #include <sioxx/message.hpp>
 #include <stdexcept>
 #include <string_view>
 
 #include "engineio_client.hpp"
+#include "engineio_handshake.hpp"
 #include "polling_protocol.hpp"
 
 using namespace sioxx;
@@ -180,6 +182,21 @@ TEST(EngineioClient, OpenWithoutTransportThrows)
 {
   auto client = std::make_shared<engineio_client>();
   EXPECT_THROW(client->open("ws://localhost/socket.io/"), std::runtime_error);
+}
+
+TEST(EngineioHandshake, EnforcesJsonNestingLimit)
+{
+  constexpr std::size_t limit = 128;
+  const auto payload = [](std::size_t depth)
+  {
+    return R"({"sid":"test-sid","metadata":)" + std::string(depth - 1, '[') +
+           "0" + std::string(depth - 1, ']') + '}';
+  };
+
+  const auto handshake = detail::parse_engineio_handshake(payload(limit));
+  ASSERT_TRUE(handshake);
+  EXPECT_EQ(handshake->sid, "test-sid");
+  EXPECT_FALSE(detail::parse_engineio_handshake(payload(limit + 1)));
 }
 
 TEST_F(EngineioClientFixture, ForwardsTransportErrors)

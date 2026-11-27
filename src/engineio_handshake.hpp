@@ -6,6 +6,9 @@
 #include <optional>
 #include <sioxx/message.hpp>
 #include <string>
+#include <string_view>
+
+#include "bounded_json.hpp"
 
 namespace sioxx::detail
 {
@@ -30,9 +33,9 @@ inline bool read_handshake_duration(const json& handshake, const char* field,
 }
 
 inline std::optional<engineio_handshake> parse_engineio_handshake(
-  const std::string& payload)
+  std::string_view payload)
 {
-  const auto handshake = json::parse(payload, nullptr, false);
+  const auto handshake = parse_bounded_json(payload);
   if (!handshake.is_object()) return std::nullopt;
 
   const auto sid = handshake.find("sid");

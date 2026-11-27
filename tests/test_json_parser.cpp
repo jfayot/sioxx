@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <cstddef>
+
 #include "json_parser.hpp"
 
 using namespace sioxx;
@@ -185,6 +187,15 @@ TEST(JsonParser, DecodesEventOnDefaultNamespaceWithoutId)
   EXPECT_EQ(decoded.data[1].get<std::string>(), "world");
 }
 
+TEST(JsonParser, PreservesExplicitNullEventArgument)
+{
+  json_parser parser;
+  packet decoded;
+
+  ASSERT_TRUE(parser.decode(R"(2["update",null,42])", false, decoded));
+  EXPECT_EQ(decoded.data, json::array({"update", nullptr, 42}));
+}
+
 TEST(JsonParser, DecodesConnectWithNoPayload)
 {
   json_parser parser;
@@ -308,6 +319,45 @@ TEST(JsonParser, RejectsOversizedBinaryHeaderAndRecovers)
   EXPECT_FALSE(parser.decode("", true, decoded));
   ASSERT_TRUE(parser.decode(R"(2["recovered"])", false, decoded));
   EXPECT_EQ(decoded.data, json::array({"recovered"}));
+}
+
+TEST(JsonParser, EnforcesTextPacketNestingLimit)
+{
+  constexpr std::size_t limit = 128;
+  const auto event = [](std::size_t depth)
+  {
+    return R"(2["nested",)" + std::string(depth - 1, '[') + "0" +
+           std::string(depth, ']');
+  };
+  json_parser parser;
+  packet decoded;
+
+  ASSERT_TRUE(parser.decode(event(limit), false, decoded));
+  EXPECT_EQ(decoded.data[0], "nested");
+  EXPECT_FALSE(parser.decode(event(limit + 1), false, decoded));
+  ASSERT_TRUE(parser.decode(R"(2["next"])", false, decoded));
+  EXPECT_EQ(decoded.data, json::array({"next"}));
+}
+
+TEST(JsonParser, RejectsOverDepthBinaryHeaderAndRecovers)
+{
+  constexpr std::size_t limit = 128;
+  const auto header = [](std::size_t depth)
+  {
+    return R"(51-["nested",)" + std::string(depth - 2, '[') +
+           R"({"_placeholder":true,"num":0})" + std::string(depth - 1, ']');
+  };
+  json_parser parser;
+  packet decoded;
+
+  EXPECT_FALSE(parser.decode(header(limit), false, decoded));
+  ASSERT_TRUE(parser.decode("attachment", true, decoded));
+  EXPECT_EQ(decoded.attachments, 1);
+
+  EXPECT_FALSE(parser.decode(header(limit + 1), false, decoded));
+  EXPECT_FALSE(parser.decode("attachment", true, decoded));
+  ASSERT_TRUE(parser.decode(R"(2["next"])", false, decoded));
+  EXPECT_EQ(decoded.data, json::array({"next"}));
 }
 
 TEST(JsonParser, RejectsMalformedBinaryHeadersAndRecovers)

@@ -304,9 +304,10 @@ MessagePack frame:
    sioxx::client client(options);
    client.connect("wss://example.com");
 
-The built-in MessagePack decoder accepts up to 128 levels of arrays and
-objects, including the outer packet object. It discards packets that exceed
-the limit and continues decoding subsequent packets.
+The built-in JSON and MessagePack decoders accept up to 128 levels of arrays
+and objects, counting the outermost container as level one. sioxx discards
+Socket.IO packets that exceed the limit and continues decoding subsequent
+packets. An over-limit Engine.IO handshake is rejected.
 
 Use HTTP long-polling
 ---------------------
