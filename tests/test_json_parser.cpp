@@ -187,6 +187,15 @@ TEST(JsonParser, DecodesEventOnDefaultNamespaceWithoutId)
   EXPECT_EQ(decoded.data[1].get<std::string>(), "world");
 }
 
+TEST(JsonParser, PreservesExplicitNullEventArgument)
+{
+  json_parser parser;
+  packet decoded;
+
+  ASSERT_TRUE(parser.decode(R"(2["update",null,42])", false, decoded));
+  EXPECT_EQ(decoded.data, json::array({"update", nullptr, 42}));
+}
+
 TEST(JsonParser, DecodesConnectWithNoPayload)
 {
   json_parser parser;
