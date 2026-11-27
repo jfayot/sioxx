@@ -547,7 +547,8 @@ that support versioned shared-library names.
   `reconnect_randomization_factor`.
 - HTTP long-polling is used automatically only when the initial WebSocket
   connection fails. It is intentionally not upgraded back to WebSocket, and
-  it opens a fresh HTTP connection for each poll/write.
+  it opens a fresh HTTP connection for each poll/write. Polling response bodies
+  are limited to 8 MiB, and packets within each response are delivered in order.
 - Proxy connections support HTTP proxies. HTTPS proxy endpoints and proxy
   authentication schemes other than Basic are not currently supported.
 

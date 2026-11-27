@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added bounded fuzzing for JSON, MessagePack, URLs, Engine.IO frames, and
   polling payloads to Linux ASan/UBSan CI.
+- Reduce memory use when delivering HTTP polling batches by processing one
+  packet at a time.
 
 ### Fixes :wrench:
 

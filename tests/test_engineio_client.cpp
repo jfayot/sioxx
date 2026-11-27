@@ -4,6 +4,7 @@
 #include <future>
 #include <sioxx/message.hpp>
 #include <stdexcept>
+#include <string_view>
 
 #include "engineio_client.hpp"
 #include "polling_protocol.hpp"
@@ -141,25 +142,32 @@ TEST(HttpPollingProtocol, HandlesBase64PaddingAndEmptyPayloads)
   }
 }
 
-TEST(HttpPollingProtocol, SplitsBatchedEngineioPackets)
+TEST(HttpPollingProtocol, ReadsViewsOfBatchedEngineioPackets)
 {
-  const auto packets = detail::polling_split_payload(
+  const std::string payload =
     "40/e2e,{\"sid\":\"abc\"}\x1e"
-    "42/e2e,[\"server_arguments\",1]");
+    "42/e2e,[\"server_arguments\",1]";
+  std::string_view remaining = payload;
 
-  ASSERT_EQ(packets.size(), 2);
-  EXPECT_EQ(packets[0], "40/e2e,{\"sid\":\"abc\"}");
-  EXPECT_EQ(packets[1], "42/e2e,[\"server_arguments\",1]");
+  const auto first = detail::polling_next_packet(remaining);
+  EXPECT_EQ(first, "40/e2e,{\"sid\":\"abc\"}");
+  EXPECT_EQ(first.data(), payload.data());
+  EXPECT_EQ(detail::polling_next_packet(remaining),
+            "42/e2e,[\"server_arguments\",1]");
+  EXPECT_TRUE(remaining.empty());
 }
 
-TEST(HttpPollingProtocol, IgnoresEmptyPacketsWhenSplitting)
+TEST(HttpPollingProtocol, SkipsEmptyPackets)
 {
-  const auto packets = detail::polling_split_payload(
+  std::string_view remaining =
     "\x1e"
-    "2\x1e");
+    "2\x1e\x1e"
+    "6\x1e\x1e";
 
-  ASSERT_EQ(packets.size(), 1);
-  EXPECT_EQ(packets[0], "2");
+  EXPECT_EQ(detail::polling_next_packet(remaining), "2");
+  EXPECT_EQ(detail::polling_next_packet(remaining), "6");
+  EXPECT_TRUE(detail::polling_next_packet(remaining).empty());
+  EXPECT_TRUE(remaining.empty());
 }
 
 TEST_F(EngineioClientFixture, NotOpenBeforeHandshake)
