@@ -1,5 +1,6 @@
 #ifndef SIOXX_SRC_JSON_PARSER_HPP
 #define SIOXX_SRC_JSON_PARSER_HPP
+#include <cstddef>
 #include <optional>
 #include <vector>
 
@@ -24,8 +25,14 @@ class json_parser final : public parser_base
   std::string name() const override { return "json"; }
 
  private:
-  std::optional<packet> pending_binary_packet_;
-  std::vector<std::string> pending_attachments_;
+  struct binary_assembly
+  {
+    packet header;
+    std::vector<std::string> attachments;
+    std::size_t remaining_bytes;
+  };
+
+  std::optional<binary_assembly> pending_binary_packet_;
 };
 
 }  // namespace sioxx

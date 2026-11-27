@@ -1835,6 +1835,43 @@ TEST(E2E, ExchangesJsonBinaryAttachmentsWithHttpPolling)
   client.close();
 }
 
+TEST(E2E, DiscardsOverLimitJsonBinaryEventAndReceivesNextEvent)
+{
+  for (const bool polling : {false, true})
+  {
+    SCOPED_TRACE(polling ? "polling" : "WebSocket");
+    auto connected = std::make_shared<completion_signal>();
+    auto oversized_received = std::make_shared<std::atomic<bool>>(false);
+    auto received = std::make_shared<async_value<sioxx::message>>();
+    auto error = std::make_shared<async_value<std::string>>();
+    sioxx::client_options options;
+    options.force_http_polling = polling;
+    sioxx::client client(options);
+    auto socket = client.socket("/e2e");
+
+    configure_failure_reporting(client, error);
+    socket->on_connect([connected] { connected->set(); });
+    socket->on("json_binary_over_limit",
+               [oversized_received](const std::string&, sioxx::message)
+               { oversized_received->store(true); });
+    socket->on("json_binary_within_limit",
+               [received](const std::string&, sioxx::message data)
+               { received->set(std::move(data)); });
+    client.connect(polling ? server_url("SIOXX_E2E_POLLING_ONLY_URL")
+                           : server_url());
+
+    ASSERT_TRUE(connected->wait_for(5s)) << error->value();
+    socket->emit("request_json_binary_attachment_batches");
+    ASSERT_TRUE(received->wait_for(5s)) << error->value();
+    EXPECT_FALSE(oversized_received->load());
+    const auto reply = received->value();
+    ASSERT_EQ(reply.size(), 2);
+    EXPECT_EQ(reply[0], polling ? "polling" : "websocket");
+    EXPECT_EQ(reply[1], sioxx::json::binary({0x42}));
+    client.sync_close();
+  }
+}
+
 TEST(E2E, RoutesEventsAndAcknowledgementsAcrossNamespaces)
 {
   auto a_connected = std::make_shared<completion_signal>();

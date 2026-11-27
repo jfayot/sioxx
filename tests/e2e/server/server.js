@@ -157,6 +157,18 @@ e2e.on("connection", (socket) => {
     acknowledgement(...args);
   });
 
+  socket.on("request_json_binary_attachment_batches", () => {
+    socket.emit(
+      "json_binary_over_limit",
+      Array.from({ length: 65 }, () => Buffer.from([0x42])),
+    );
+    socket.emit(
+      "json_binary_within_limit",
+      socket.conn.transport.name,
+      Buffer.from([0x42]),
+    );
+  });
+
   socket.emit(
     "json_binary_ack_request",
     Buffer.from([0x00, 0x7f, 0xff]),

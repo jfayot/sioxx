@@ -11,6 +11,8 @@ namespace sioxx
 {
 namespace
 {
+constexpr int max_binary_attachments = 64;
+constexpr std::size_t max_binary_packet_size = 8 * 1024 * 1024;
 
 void deconstruct_binary(json& value, std::vector<std::string>& attachments)
 {
@@ -186,20 +188,25 @@ bool json_parser::decode(const std::string& payload, bool is_binary,
   {
     if (is_binary)
     {
-      pending_attachments_.push_back(payload);
-      if (pending_attachments_.size() <
-          static_cast<size_t>(pending_binary_packet_->attachments))
+      auto& pending = *pending_binary_packet_;
+      if (payload.size() > pending.remaining_bytes)
+      {
+        pending_binary_packet_.reset();
+        return false;
+      }
+      pending.attachments.push_back(payload);
+      pending.remaining_bytes -= payload.size();
+      if (pending.attachments.size() <
+          static_cast<size_t>(pending.header.attachments))
         return false;
 
-      reconstruct_binary(pending_binary_packet_->data, pending_attachments_);
-      out = std::move(*pending_binary_packet_);
+      reconstruct_binary(pending.header.data, pending.attachments);
+      out = std::move(pending.header);
       pending_binary_packet_.reset();
-      pending_attachments_.clear();
       return true;
     }
 
     pending_binary_packet_.reset();
-    pending_attachments_.clear();
   }
 
   if (is_binary || payload.empty()) return false;
@@ -213,13 +220,16 @@ bool json_parser::decode(const std::string& payload, bool is_binary,
   ++i;
 
   decoded.attachments = 0;
-  if (decoded.type == packet_type::binary_event ||
-      decoded.type == packet_type::binary_ack)
+  const bool has_attachments = decoded.type == packet_type::binary_event ||
+                               decoded.type == packet_type::binary_ack;
+  if (has_attachments)
   {
+    if (payload.size() > max_binary_packet_size) return false;
     size_t dash = payload.find('-', i);
     if (dash == std::string::npos) return false;
     if (!parse_nonnegative_int(payload, i, dash, decoded.attachments) ||
-        decoded.attachments == 0)
+        decoded.attachments == 0 ||
+        decoded.attachments > max_binary_attachments)
       return false;
     i = dash + 1;
   }
@@ -267,12 +277,12 @@ bool json_parser::decode(const std::string& payload, bool is_binary,
     decoded.data = json();
   }
 
-  if (decoded.type == packet_type::binary_event ||
-      decoded.type == packet_type::binary_ack)
+  if (has_attachments)
   {
     if (!has_valid_placeholders(decoded.data, decoded.attachments))
       return false;
-    pending_binary_packet_ = std::move(decoded);
+    pending_binary_packet_ = binary_assembly{
+      std::move(decoded), {}, max_binary_packet_size - payload.size()};
     return false;
   }
 
