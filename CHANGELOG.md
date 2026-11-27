@@ -7,10 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changes :construction:
 
-- Added bounded JSON and MessagePack decoder fuzzing to Linux ASan/UBSan CI.
+- Added bounded fuzzing for JSON, MessagePack, URLs, Engine.IO frames, and
+  polling payloads to Linux ASan/UBSan CI.
 
 ### Fixes :wrench:
 
+- Reject malformed Engine.IO open handshakes through the connection error path
+  on WebSocket and HTTP polling.
 - Bound incoming JSON binary events and acknowledgements to 64 attachments
   and 8 MiB for the Socket.IO header and attachments combined. The parser
   discards packets that exceed either limit and resumes at the next text

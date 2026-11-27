@@ -647,9 +647,11 @@ For ThreadSanitizer, use a separate build directory, replace
 ### Parser fuzz tests
 
 The Linux ASan/UBSan job runs separate 10-second libFuzzer tests for the
-built-in JSON and MessagePack decoders. The JSON test feeds sequences of text
-and binary frames through one parser and checks that it can still decode a
-valid event afterwards. CI preserves any failing inputs as an artifact.
+built-in JSON and MessagePack decoders, URL parsing, Engine.IO frame handling,
+and HTTP polling payloads. The JSON test feeds sequences of text and binary
+frames through one parser and checks that it can still decode a valid event
+afterwards. The polling test checks that decoded binary packets can round-trip
+through the encoder. CI preserves failing inputs as an artifact.
 
 With Clang and its libFuzzer runtime installed, run the same tests locally.
 
@@ -660,7 +662,8 @@ cmake -S . -B /tmp/sioxx-fuzz \
   -DSIOXX_BUILD_TESTS=OFF \
   -DSIOXX_BUILD_EXAMPLES=OFF \
   -DSIOXX_BUILD_FUZZ_TESTS=ON
-cmake --build /tmp/sioxx-fuzz --target sioxx_fuzz_json sioxx_fuzz_msgpack --parallel
+cmake --build /tmp/sioxx-fuzz --parallel --target \
+  sioxx_fuzz_json sioxx_fuzz_msgpack sioxx_fuzz_url sioxx_fuzz_engineio sioxx_fuzz_polling
 ctest --test-dir /tmp/sioxx-fuzz -L fuzz --no-tests=error --output-on-failure
 ```
 

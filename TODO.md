@@ -62,7 +62,7 @@ items listed here should either be completed or explicitly resolved before the
 - [ ] Review protocol parsers and transport response limits for memory and CPU
       exhaustion cases.
 - [x] Fuzz the JSON and MessagePack decoders in ASan/UBSan CI.
-- [ ] Fuzz the URL, Engine.IO, and polling payload parsers.
+- [x] Fuzz the URL, Engine.IO, and polling payload parsers.
 - [ ] Establish a vulnerability-reporting and supported-security-release
       policy.
 

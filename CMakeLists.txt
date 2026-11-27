@@ -62,6 +62,7 @@ add_library(
   src/msgpack_parser.cpp
   src/websocket_transport.cpp
   src/http_polling_transport.cpp
+  src/polling_protocol.cpp
   src/engineio_client.cpp
   src/reconnection.cpp
   src/socket.cpp
