@@ -80,7 +80,7 @@ jobs:
       - name: Run unit and E2E tests
         run: ctest --test-dir build-sanitizers -LE fuzz --output-on-failure --timeout 60
 
-      - name: Fuzz JSON and MessagePack decoders
+      - name: Fuzz protocol parsers
         if: matrix.fuzz_tests == 'ON'
         run: ctest --test-dir build-sanitizers -L fuzz --no-tests=error --output-on-failure
 

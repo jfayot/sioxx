@@ -4,12 +4,12 @@ endif()
 
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/artifacts")
 
-foreach(parser IN ITEMS json msgpack)
+function(sioxx_add_fuzzer parser)
   set(target sioxx_fuzz_${parser})
   set(corpus "${CMAKE_CURRENT_BINARY_DIR}/${parser}-corpus")
   file(MAKE_DIRECTORY "${corpus}")
 
-  add_executable(${target} fuzz_${parser}.cpp "${PROJECT_SOURCE_DIR}/src/${parser}_parser.cpp")
+  add_executable(${target} fuzz_${parser}.cpp ${ARGN})
   target_include_directories(${target} PRIVATE "${PROJECT_SOURCE_DIR}/include"
                                                "${PROJECT_SOURCE_DIR}/src")
   target_link_libraries(${target} PRIVATE nlohmann_json::nlohmann_json)
@@ -25,4 +25,12 @@ foreach(parser IN ITEMS json msgpack)
             "-artifact_prefix=${CMAKE_CURRENT_BINARY_DIR}/artifacts/${parser}-"
   )
   set_tests_properties(${target} PROPERTIES LABELS fuzz TIMEOUT 30)
-endforeach()
+endfunction()
+
+set(src "${PROJECT_SOURCE_DIR}/src")
+sioxx_add_fuzzer(json "${src}/json_parser.cpp")
+sioxx_add_fuzzer(msgpack "${src}/msgpack_parser.cpp")
+sioxx_add_fuzzer(url "${src}/url_parse.cpp" "${src}/engineio_url.cpp")
+sioxx_add_fuzzer(engineio "${src}/engineio_client.cpp")
+target_link_libraries(sioxx_fuzz_engineio PRIVATE Threads::Threads)
+sioxx_add_fuzzer(polling "${src}/polling_protocol.cpp" "${src}/proxy.cpp" "${src}/url_parse.cpp")

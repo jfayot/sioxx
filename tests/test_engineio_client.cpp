@@ -201,6 +201,46 @@ TEST_F(EngineioClientFixture, OpenHandshakeMarksClientOpenAndFiresCallback)
   EXPECT_TRUE(open_fired);
 }
 
+TEST_F(EngineioClientFixture, RejectsIncompleteOpenHandshake)
+{
+  std::string received_error;
+  bool open_fired = false;
+  client->on_error([&](const std::string& error) { received_error = error; });
+  client->on_open([&] { open_fired = true; });
+
+  transport->simulate_message("0{}");
+
+  EXPECT_EQ(received_error, "invalid Engine.IO handshake");
+  EXPECT_EQ(transport->close_calls, 1);
+  EXPECT_FALSE(client->is_open());
+  EXPECT_FALSE(open_fired);
+}
+
+TEST_F(EngineioClientFixture, RejectsFractionalHeartbeatTimeout)
+{
+  std::string received_error;
+  client->on_error([&](const std::string& error) { received_error = error; });
+  client->open("ws://localhost/socket.io/");
+
+  transport->simulate_message(
+    R"(0{"sid":"test-sid","pingInterval":25000,"pingTimeout":1.5})");
+
+  EXPECT_EQ(received_error, "invalid Engine.IO handshake");
+  EXPECT_EQ(transport->close_calls, 1);
+  EXPECT_FALSE(client->is_open());
+}
+
+TEST_F(EngineioClientFixture, IncompleteOpenFramePreservesEstablishedSession)
+{
+  transport->simulate_message(make_open_payload());
+
+  transport->simulate_message("0{}");
+
+  EXPECT_EQ(transport->close_calls, 0);
+  EXPECT_TRUE(client->is_open());
+  EXPECT_EQ(client->session_id(), "test-sid");
+}
+
 TEST_F(EngineioClientFixture, PingFrameTriggersImmediatePongReply)
 {
   client->open("ws://localhost/socket.io/");

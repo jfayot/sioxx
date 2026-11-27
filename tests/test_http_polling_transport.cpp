@@ -115,36 +115,38 @@ TEST(HttpPollingTransport, UsesCallerOwnedIoContext)
     {
       boost::asio::ip::tcp::socket socket(server_context);
       acceptor.accept(socket);
+      acceptor.close();
       boost::beast::flat_buffer buffer;
       http::request<http::string_body> request;
       http::read(socket, buffer, request);
-      http::response<http::empty_body> response{
-        http::status::internal_server_error, request.version()};
+      http::response<http::string_body> response{http::status::ok,
+                                                 request.version()};
+      response.body() = "0{}";
       response.prepare_payload();
       http::write(socket, response);
     });
 
   boost::asio::io_context client_context;
-  bool failed = false;
+  std::string error;
   std::thread::id callback_thread;
   auto transport =
     std::make_shared<sioxx::http_polling_transport>(client_context);
   transport->set_error_handler(
-    [&](const std::string&)
+    [&](const std::string& message)
     {
-      failed = true;
+      error = message;
       callback_thread = std::this_thread::get_id();
     });
   transport->connect("ws://127.0.0.1:" + std::to_string(port) +
                      "/socket.io/?EIO=4&transport=polling");
   transport->send("before open", false);
 
-  EXPECT_FALSE(failed);
+  EXPECT_TRUE(error.empty());
   const auto run_thread = std::this_thread::get_id();
   client_context.run();
   server.join();
 
-  EXPECT_TRUE(failed);
+  EXPECT_EQ(error, "invalid Engine.IO handshake");
   EXPECT_EQ(callback_thread, run_thread);
 }
 

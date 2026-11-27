@@ -41,6 +41,8 @@ Engine.IO query key or an invalid proxy URI.
   and WebSocket-to-polling fallback. A connection can still succeed after
   a diagnostic.
 * ``set_fail_listener()`` reports exhaustion of configured reconnect attempts.
+* Malformed Engine.IO open handshakes fail the connection attempt through
+  the transport error listener.
 * A namespace rejection delivers ``connect_error`` to that socket's event
   listeners.
 

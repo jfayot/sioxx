@@ -1,6 +1,6 @@
 #include "engineio_client.hpp"
 
-#include "sioxx/message.hpp"
+#include "engineio_handshake.hpp"
 
 namespace sioxx
 {
@@ -131,22 +131,23 @@ void engineio_client::handle_transport_message(const std::string& payload,
   {
   case '0':
   {  // open
-    json handshake = json::parse(rest, nullptr, false);
+    auto handshake = detail::parse_engineio_handshake(rest);
+    if (!handshake)
+    {
+      if (on_error_) on_error_("invalid Engine.IO handshake");
+      if (!open_) close();
+      break;
+    }
     stop_heartbeat_timer();
     {
       std::lock_guard<std::mutex> lock(heartbeat_mutex_);
-      if (!handshake.is_discarded())
-      {
-        ping_interval_ms_ = handshake.value("pingInterval", 25000);
-        ping_timeout_ms_ = handshake.value("pingTimeout", 20000);
-      }
+      ping_interval_ms_ = handshake->ping_interval_ms;
+      ping_timeout_ms_ = handshake->ping_timeout_ms;
       last_pong_ = std::chrono::steady_clock::now();
     }
     {
       std::lock_guard<std::mutex> lock(session_mutex_);
-      session_id_ = handshake.is_discarded()
-                      ? std::string{}
-                      : handshake.value("sid", std::string{});
+      session_id_ = std::move(handshake->sid);
     }
     open_ = true;
     start_heartbeat_timer();
@@ -175,7 +176,7 @@ void engineio_client::handle_transport_message(const std::string& payload,
     if (on_frame_) on_frame_(rest, false);
     break;
   case '6':  // noop
-  default:  break;
+  default:   break;
   }
 }
 
