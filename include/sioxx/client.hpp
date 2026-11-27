@@ -115,8 +115,9 @@ class client
    * when the caller must wait for library-owned workers and active timed ACK
    * callbacks to finish. All buffered events and pending ACK callbacks are
    * cancelled silently. Every emit() overload throws std::logic_error until
-   * another connect() call. Already running callbacks may finish, and packets
-   * already handed to a transport cannot be recalled.
+   * another connect() call. Queued Engine.IO frames are ignored after
+   * shutdown. Already running callbacks may finish, and packets already
+   * handed to a transport cannot be recalled.
    * Repeated calls are safe.
    */
   void close();
@@ -135,8 +136,8 @@ class client
    * sync_close() returns. The caller owns running and draining the context and
    * must keep it alive longer than the client.
    *
-   * Call from outside library callbacks. Use close() from callbacks. Repeated
-   * calls are safe.
+   * Call from outside library callbacks. Use close() from callbacks. Each
+   * concurrent or repeated call waits for shutdown.
    */
   void sync_close();
 

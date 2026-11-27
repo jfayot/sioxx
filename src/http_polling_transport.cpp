@@ -626,7 +626,6 @@ void http_polling_transport::close()
                           [](beast::error_code, const response&) {});
           return;
         }
-        write_condition_.notify_all();
         // Ending the Engine.IO session causes a pending poll to
         // return promptly.
         bool has_session = false;
@@ -634,6 +633,9 @@ void http_polling_transport::close()
           std::lock_guard<std::mutex> queue_lock(mutex_);
           has_session = !sid_.empty();
         }
+        // Take the writer's mutex before notifying so it cannot miss shutdown
+        // between checking the stop predicate and going to sleep.
+        write_condition_.notify_all();
         if (has_session)
         {
           auto self = shared_from_this();

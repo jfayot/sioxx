@@ -70,7 +70,9 @@ HTTP polling networking run on an application's existing event loop:
 
 The context must outlive the client. The application runs and stops it.
 Transport callbacks are serialized on an internal strand. ``sync_close()``
-waits for library-owned workers and active timed acknowledgement callbacks.
+waits for library-owned workers, including any active heartbeat callback, and
+active timed acknowledgement callbacks. Each concurrent call waits for that
+work.
 Transport shutdown completes on the supplied context, where I/O and ordinary
 transport callbacks may still be pending or active when ``sync_close()``
 returns. Keep callback state alive while the application drains the client's

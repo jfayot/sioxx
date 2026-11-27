@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <atomic>
+#include <boost/asio/executor_work_guard.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/post.hpp>
 #include <chrono>
@@ -1676,45 +1677,76 @@ TEST(E2E, CloseFromReconnectingCallbackCancelsAttempt)
 
 TEST(E2E, SyncCloseWaitsForRunningReconnectCallback)
 {
-  sioxx::client_options options;
-  options.reconnect_attempts = 1;
-  options.reconnect_delay = 1ms;
-  options.reconnect_delay_max = 1ms;
-  options.reconnect_randomization_factor = 0.0;
-  auto connected = std::make_shared<completion_signal>();
-  auto entered = std::make_shared<completion_signal>();
-  auto release = std::make_shared<completion_signal>();
-  auto returned = std::make_shared<std::atomic<bool>>(false);
-  sioxx::client client(options);
-  auto socket = client.socket("/e2e");
-  socket->on_connect([connected] { connected->set(); });
-  client.set_reconnecting_listener(
-    [&client, entered, release, returned]
-    {
-      entered->set();
-      EXPECT_TRUE(release->wait_for(5s));
-      client.close();
-      *returned = true;
-    });
-  client.connect(server_url());
-  ASSERT_TRUE(connected->wait_for(5s));
-  socket->emit("drop_transport", sioxx::json::array(), [](sioxx::message) {});
-  ASSERT_TRUE(entered->wait_for(5s));
-  std::promise<void> shutdown_started;
-  auto started = shutdown_started.get_future();
-  auto shutdown = std::async(std::launch::async,
-                             [&client, &shutdown_started]
-                             {
-                               shutdown_started.set_value();
-                               client.sync_close();
-                             });
-  EXPECT_EQ(started.wait_for(5s), std::future_status::ready);
-  EXPECT_EQ(shutdown.wait_for(50ms), std::future_status::timeout);
-  release->set();
-  EXPECT_EQ(shutdown.wait_for(5s), std::future_status::ready);
-  shutdown.get();
-  EXPECT_TRUE(returned->load());
-  EXPECT_FALSE(client.opened());
+  for (bool caller_owned : {false, true})
+  {
+    SCOPED_TRACE(caller_owned ? "caller-owned I/O" : "library-owned I/O");
+    boost::asio::io_context io_context;
+    auto work = boost::asio::make_work_guard(io_context);
+    sioxx::client_options options;
+    options.reconnect_attempts = 1;
+    options.reconnect_delay = 1ms;
+    options.reconnect_delay_max = 1ms;
+    options.reconnect_randomization_factor = 0.0;
+    auto connected = std::make_shared<completion_signal>();
+    auto entered = std::make_shared<completion_signal>();
+    auto release = std::make_shared<completion_signal>();
+    auto returned = std::make_shared<std::atomic<bool>>(false);
+    auto client = caller_owned
+                    ? std::make_unique<sioxx::client>(io_context, options)
+                    : std::make_unique<sioxx::client>(options);
+    auto socket = client->socket("/e2e");
+    socket->on_connect([connected] { connected->set(); });
+    client->set_reconnecting_listener(
+      [&client, entered, release, returned]
+      {
+        entered->set();
+        EXPECT_TRUE(release->wait_for(5s));
+        client->close();
+        *returned = true;
+      });
+    client->connect(server_url());
+
+    std::future<void> io_worker;
+    if (caller_owned)
+      io_worker = std::async(std::launch::async, [&] { io_context.run(); });
+    const bool did_connect = connected->wait_for(5s);
+    if (did_connect) socket->emit("drop_websocket");
+    const bool did_enter = entered->wait_for(5s);
+
+    completion_signal shutdown_started;
+    auto shutdown = std::async(std::launch::async,
+                               [&]
+                               {
+                                 shutdown_started.set();
+                                 client->sync_close();
+                               });
+    EXPECT_TRUE(shutdown_started.wait_for(5s));
+    EXPECT_EQ(shutdown.wait_for(50ms), std::future_status::timeout);
+
+    completion_signal second_shutdown_started;
+    auto second_shutdown = std::async(std::launch::async,
+                                      [&]
+                                      {
+                                        second_shutdown_started.set();
+                                        client->sync_close();
+                                      });
+    EXPECT_TRUE(second_shutdown_started.wait_for(5s));
+    EXPECT_EQ(second_shutdown.wait_for(50ms), std::future_status::timeout);
+    EXPECT_EQ(shutdown.wait_for(0ms), std::future_status::timeout);
+
+    release->set();
+    EXPECT_EQ(shutdown.wait_for(5s), std::future_status::ready);
+    shutdown.get();
+    EXPECT_EQ(second_shutdown.wait_for(5s), std::future_status::ready);
+    second_shutdown.get();
+    work.reset();
+    if (io_worker.valid()) io_worker.get();
+
+    EXPECT_TRUE(did_connect);
+    EXPECT_TRUE(did_enter);
+    EXPECT_TRUE(returned->load());
+    EXPECT_FALSE(client->opened());
+  }
 }
 
 TEST(E2E, SyncCloseCancelsLongReconnectDelay)

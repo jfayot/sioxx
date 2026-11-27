@@ -421,9 +421,11 @@ updating UI state or anything not thread-safe, hop back to your own thread or
 queue from inside the callback.
 
 `client.close()` requests shutdown and is safe to call from a library
-callback. `client.sync_close()` also waits for library-owned transport,
+callback. Queued Engine.IO frames arriving after shutdown are ignored.
+`client.sync_close()` waits for library-owned transport,
 reconnect, retry, and heartbeat workers and active timed acknowledgement
-callbacks. Call `sync_close()` and destroy the client outside library callbacks.
+callbacks. Each concurrent `sync_close()` call waits for that work. Call
+`sync_close()` and destroy the client outside library callbacks.
 
 To integrate transport networking with an existing Asio event loop, pass its
 `io_context` when constructing the client:

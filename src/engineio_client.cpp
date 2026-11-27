@@ -108,13 +108,15 @@ void engineio_client::handle_transport_open()
 void engineio_client::handle_transport_close(const std::string& reason)
 {
   open_ = false;
-  stop_heartbeat_timer();
+  // A transport can notify close synchronously. Leave the join to sync_close().
+  request_heartbeat_stop();
   if (on_close_) on_close_(reason);
 }
 
 void engineio_client::handle_transport_message(const std::string& payload,
                                                bool is_binary)
 {
+  if (closing_) return;
   if (is_binary)
   {
     // Binary frames are always socket.io payloads (used by msgpack_parser),
@@ -129,35 +131,11 @@ void engineio_client::handle_transport_message(const std::string& payload,
 
   switch (type_char)
   {
-  case '0':
-  {  // open
-    auto handshake = detail::parse_engineio_handshake(rest);
-    if (!handshake)
-    {
-      if (on_error_) on_error_("invalid Engine.IO handshake");
-      if (!open_) close();
-      break;
-    }
-    stop_heartbeat_timer();
-    {
-      std::lock_guard<std::mutex> lock(heartbeat_mutex_);
-      ping_interval_ms_ = handshake->ping_interval_ms;
-      ping_timeout_ms_ = handshake->ping_timeout_ms;
-      last_pong_ = std::chrono::steady_clock::now();
-    }
-    {
-      std::lock_guard<std::mutex> lock(session_mutex_);
-      session_id_ = std::move(handshake->sid);
-    }
-    open_ = true;
-    start_heartbeat_timer();
-    if (on_open_) on_open_();
+  case '0':  // open
+    handle_open_packet(rest);
     break;
-  }
   case '1':  // close
-    open_ = false;
-    stop_heartbeat_timer();
-    if (on_close_) on_close_("server closed connection");
+    handle_transport_close("server closed connection");
     break;
   case '2':  // ping (engine.io v4: server pings, client pongs)
   {
@@ -180,46 +158,68 @@ void engineio_client::handle_transport_message(const std::string& payload,
   }
 }
 
-void engineio_client::start_heartbeat_timer()
+void engineio_client::handle_open_packet(const std::string& payload)
+{
+  auto handshake = detail::parse_engineio_handshake(payload);
+  if (!handshake)
+  {
+    if (on_error_) on_error_("invalid Engine.IO handshake");
+    if (!open_) close();
+    return;
+  }
+  stop_heartbeat_timer();
+  if (start_session(std::move(*handshake)) && !closing_ && on_open_) on_open_();
+}
+
+bool engineio_client::start_session(detail::engineio_handshake handshake)
 {
   std::lock_guard<std::mutex> thread_lock(heartbeat_thread_mutex_);
-  if (!open_ || closing_) return;
+  if (closing_) return false;
+  {
+    std::lock_guard<std::mutex> lock(heartbeat_mutex_);
+    ping_interval_ms_ = handshake.ping_interval_ms;
+    ping_timeout_ms_ = handshake.ping_timeout_ms;
+    last_pong_ = std::chrono::steady_clock::now();
+  }
+  {
+    std::lock_guard<std::mutex> lock(session_mutex_);
+    session_id_ = std::move(handshake.sid);
+  }
+  open_ = true;
   heartbeat_stop_requested_ = false;
-  auto self = shared_from_this();
-  heartbeat_thread_ = std::thread(
-    [self = std::move(self)]
+  heartbeat_thread_ =
+    std::thread(&engineio_client::run_heartbeat, shared_from_this());
+  return true;
+}
+
+void engineio_client::run_heartbeat()
+{
+  while (open_.load() && !closing_.load() && !heartbeat_stop_requested_.load())
+  {
     {
-      while (self->open_.load() && !self->closing_.load() &&
-             !self->heartbeat_stop_requested_.load())
+      std::unique_lock<std::mutex> lock(heartbeat_mutex_);
+      auto ping_interval = std::chrono::milliseconds(ping_interval_ms_);
+      auto timeout =
+        ping_interval + std::chrono::milliseconds(ping_timeout_ms_);
+      if (heartbeat_cv_.wait_for(
+            lock, ping_interval, [this]
+            { return closing_.load() || heartbeat_stop_requested_.load(); }))
       {
-        {
-          std::unique_lock<std::mutex> lock(self->heartbeat_mutex_);
-          auto ping_interval =
-            std::chrono::milliseconds(self->ping_interval_ms_);
-          auto timeout =
-            ping_interval + std::chrono::milliseconds(self->ping_timeout_ms_);
-          if (self->heartbeat_cv_.wait_for(
-                lock, ping_interval,
-                [&self]
-                {
-                  return self->closing_.load() ||
-                         self->heartbeat_stop_requested_.load();
-                }))
-          {
-            return;
-          }
-          auto elapsed = std::chrono::steady_clock::now() - self->last_pong_;
-          if (elapsed <= timeout) continue;
-        }
-        if (self->on_error_) self->on_error_("engine.io ping timeout");
-        if (self->transport_) self->transport_->close();
         return;
       }
-    });
+      auto elapsed = std::chrono::steady_clock::now() - last_pong_;
+      if (elapsed <= timeout) continue;
+    }
+    if (on_error_) on_error_("engine.io ping timeout");
+    if (!closing_ && transport_) transport_->close();
+    return;
+  }
 }
 
 void engineio_client::stop_heartbeat_timer()
 {
+  // Keep concurrent shutdown callers waiting until any in-progress join ends.
+  std::lock_guard<std::mutex> join_lock(heartbeat_join_mutex_);
   request_heartbeat_stop();
   std::thread thread_to_join;
   {

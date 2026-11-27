@@ -488,6 +488,9 @@ void client_impl::close()
 
 void client_impl::sync_close()
 {
+  // Another caller must wait even after this call takes ownership of the
+  // workers.
+  std::lock_guard<std::mutex> lock(sync_close_mutex_);
   std::exception_ptr first_error;
   capture_shutdown_error(first_error, [this] { close(); });
   capture_shutdown_error(first_error, [this] { stop_reconnect_thread(); });
