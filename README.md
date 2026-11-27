@@ -542,6 +542,8 @@ that support versioned shared-library names.
 
 ## Known limitations
 
+- WS and WSS connections close if an incoming WebSocket message exceeds
+  16 MiB, including when the message arrives in fragments.
 - Reconnection uses capped exponential backoff with symmetric jitter. Configure
   it with `reconnect_attempts`, `reconnect_delay`, `reconnect_delay_max`, and
   `reconnect_randomization_factor`.

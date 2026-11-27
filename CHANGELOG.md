@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   polling payloads to Linux ASan/UBSan CI.
 - Reduce memory use when delivering HTTP polling batches by processing one
   packet at a time.
+- Set an explicit 16 MiB receive limit for WebSocket and secure WebSocket
+  messages.
 
 ### Fixes :wrench:
 

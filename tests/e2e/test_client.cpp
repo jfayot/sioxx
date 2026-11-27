@@ -5,12 +5,14 @@
 #include <boost/asio/post.hpp>
 #include <chrono>
 #include <condition_variable>
+#include <cstddef>
 #include <cstdlib>
 #include <future>
 #include <memory>
 #include <mutex>
 #include <sioxx/sioxx.hpp>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -1213,6 +1215,43 @@ TEST(E2E, ConnectsWithHttpPollingOverTls)
 namespace
 {
 
+void expect_websocket_receive_limit(const std::string& url)
+{
+  constexpr std::size_t limit = 16 * 1024 * 1024;
+  constexpr std::string_view empty_probe =
+    R"(42/e2e,["websocket_limit_probe",""])";
+  auto connected = std::make_shared<completion_signal>();
+  auto closed = std::make_shared<completion_signal>();
+  auto error = std::make_shared<async_value<std::string>>();
+  std::vector<std::size_t> received_sizes;
+
+  sioxx::client_options options;
+  options.reconnect_attempts = 0;
+  sioxx::client client(options);
+  auto socket = client.socket("/e2e");
+  configure_failure_reporting(client, error);
+  client.set_close_listener([closed](const std::string&) { closed->set(); });
+  socket->on_connect([connected] { connected->set(); });
+  socket->on(
+    "websocket_limit_probe",
+    [&received_sizes](const std::string&, sioxx::message data)
+    {
+      ASSERT_EQ(data.size(), 1);
+      ASSERT_TRUE(data[0].is_string());
+      received_sizes.push_back(data[0].get_ref<const std::string&>().size());
+    });
+  client.connect(url);
+
+  ASSERT_TRUE(connected->wait_for(5s)) << error->value();
+  socket->emit("request_websocket_limit_probe");
+  ASSERT_TRUE(closed->wait_for(10s)) << error->value();
+  EXPECT_FALSE(client.opened());
+  client.sync_close();
+
+  EXPECT_EQ(received_sizes,
+            (std::vector<std::size_t>{limit - empty_probe.size()}));
+}
+
 void expect_tls_identity_rejected(const std::string& url)
 {
   for (const bool force_polling : {false, true})
@@ -1275,6 +1314,16 @@ void expect_tls_identity_rejected(const std::string& url)
 }
 
 }  // namespace
+
+TEST(E2E, EnforcesWebsocketReceiveLimit)
+{
+  expect_websocket_receive_limit(server_url());
+}
+
+TEST(E2E, EnforcesSecureWebsocketReceiveLimit)
+{
+  expect_websocket_receive_limit(server_url("SIOXX_E2E_TLS_HOSTNAME_URL"));
+}
 
 TEST(E2E, RejectsTlsCertificateForWrongHostname)
 {

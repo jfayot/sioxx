@@ -38,6 +38,10 @@ The client creates and manages the namespace socket returned by
 Dispatch back to your application thread before modifying thread-affine state
 such as a UI.
 
+An incoming message larger than 16 MiB closes the WebSocket connection.
+The limit applies to both WS and WSS and to the complete message across all
+fragments.
+
 Use an existing Asio event loop
 -------------------------------
 
