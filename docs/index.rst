@@ -47,6 +47,7 @@ Features
   nested binary payload support.
 * Custom parser strategies for other wire formats.
 * Event listeners, event emission, acknowledgements, and lifecycle callbacks.
+* Per-emission acknowledgement deadlines and optional retries.
 * Namespace authentication, custom Engine.IO paths, and handshake query
   parameters.
 * Configurable reconnection with capped exponential back-off and jitter.
@@ -110,8 +111,6 @@ Post-1.0 protocol and transport work
 Client reliability
 ~~~~~~~~~~~~~~~~~~
 
-* Configurable acknowledgement timeouts.
-* Automatic retries for events that are not acknowledged.
 * Connection-state recovery, including restoration of the client session and
   reception of packets missed during a temporary disconnection.
 * More control over reconnection attempts, delays, backoff and jitter.

@@ -19,7 +19,7 @@ cmake -S . -B build-qt \
   -DCMAKE_BUILD_TYPE=Release \
   -DSIOXX_BUILD_TESTS=OFF \
   -DSIOXX_BUILD_EXAMPLES=ON
-cmake --build build-qt --target sioxx_qt_chat --parallel
+cmake --build build-qt --config Release --target sioxx_qt_chat --parallel
 ```
 
 Start the matching Socket.IO server in another terminal:
@@ -29,8 +29,16 @@ pnpm --dir examples/qt_chat install --frozen-lockfile
 pnpm --dir examples/qt_chat start
 ```
 
-Then run `build-qt/sioxx_qt_chat`, keep the default JSON parser, choose a
-display name, and connect. Open a second client to chat between them.
+Launch the client from the repository root:
+
+| Platform | Command |
+| --- | --- |
+| Linux with a single-configuration generator | `./build-qt/examples/qt_chat/sioxx_qt_chat` |
+| macOS with a single-configuration generator | `open build-qt/examples/qt_chat/sioxx_qt_chat.app` |
+| Windows with Visual Studio | `.\build-qt\examples\qt_chat\Release\sioxx_qt_chat.exe` |
+
+Keep the default JSON parser, choose a display name, and connect. Open a
+second client to chat between them.
 
 Binary file sharing works with either parser. To use MessagePack, start the
 server with `pnpm --dir examples/qt_chat start:msgpack` and select MessagePack

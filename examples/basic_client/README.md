@@ -2,7 +2,9 @@
 
 This command-line example demonstrates connection lifecycle listeners,
 namespaces, events, acknowledgements, parser selection, custom parsers, and
-forced HTTP long-polling.
+forced HTTP long-polling. It buffers emissions before connecting and gives the
+acknowledgement request a five-second deadline. It runs for 30 seconds before
+shutting down.
 
 Build it from the repository root:
 

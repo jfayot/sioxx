@@ -87,7 +87,10 @@ class client
    */
   client(boost::asio::io_context& io_context, client_options&& options);
 
+  /** @brief Clients cannot be copy constructed. Share namespace handles. */
   client(const client&) = delete;
+
+  /** @brief Clients cannot be copy assigned. */
   client& operator=(const client&) = delete;
 
   /**
@@ -109,7 +112,7 @@ class client
   void connect(const std::string& uri);
 
   /**
-   * @brief Start closing the connection and return without waiting.
+   * @brief Start closing the connection without waiting for workers to finish.
    *
    * This operation is safe to call from library callbacks. Use sync_close()
    * when the caller must wait for library-owned workers and active timed ACK
@@ -149,7 +152,9 @@ class client
 
   /**
    * @brief Return the current Engine.IO session identifier.
-   * @return The handshake `sid`, or an empty string before a session exists.
+   * @return The most recent handshake `sid` for the current connection
+   * attempt, or an empty string before a session exists. Use opened() to check
+   * whether the session is still open.
    */
   std::string get_sessionid() const;
 
@@ -175,15 +180,20 @@ class client
    * Replacing a listener allows already-dispatched calls to finish.
    * Callbacks may run on library workers or on the caller-owned context and
    * must not throw. An explicit close can notify on the calling thread.
+   * Pass an empty function to remove the registered listener.
    */
   /** @{ */
   /** @brief Set a callback for a completed Engine.IO handshake.
    * Use socket::on_connect() to observe a namespace's own handshake.
+   * @param h Callback invoked when Engine.IO opens.
    */
   void set_open_listener(std::function<void()> h);
-  /** @brief Set a callback that runs when the Engine.IO connection closes. */
+  /** @brief Set a callback that runs when the Engine.IO connection closes.
+   * @param h Callback receiving the transport close reason.
+   */
   void set_close_listener(std::function<void(const std::string&)> h);
   /** @brief Set a callback for exhaustion of the configured reconnect attempts.
+   * @param h Callback invoked when the reconnect budget runs out.
    */
   void set_fail_listener(std::function<void()> h);
   /**
@@ -191,18 +201,20 @@ class client
    *
    * This callback runs after the configured back-off delay, immediately
    * before opening the replacement Engine.IO connection.
+   * @param h Callback invoked before the next reconnect attempt.
    */
   void set_reconnecting_listener(std::function<void()> h);
   /**
    * @brief Set a callback that runs when a reconnect attempt is scheduled.
    *
-   * The callback receives the zero-based attempt index and the selected
+   * @param h Callback receiving the zero-based attempt index and the selected
    * back-off delay in milliseconds.
    */
   void set_reconnect_listener(std::function<void(unsigned, unsigned)> h);
   /** @brief Set a callback for connection diagnostics.
    * Messages include transport errors and WebSocket-to-polling fallback. Use
    * a socket listener for `connect_error` to receive a namespace rejection.
+   * @param h Callback receiving the diagnostic message.
    */
   void set_error_listener(std::function<void(const std::string&)> h);
   /** @} */

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changes :construction:
 
+- Complete the v1.0 API reference, deployment guidance, and upgrade notes
+  from 0.2.0. Align the quick start and example commands with the public API.
 - Document the parser and transport resource-limit review and its operational
   boundaries. Add regression coverage for polling body/framing limits in both
   I/O modes.
