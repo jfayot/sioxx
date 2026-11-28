@@ -236,18 +236,27 @@ struct http_polling_transport::async_request_operation
         });
   }
 
+  template <typename Stream> void read_response(Stream& stream)
+  {
+    // Check the header before reading the body. Older Beast versions can
+    // lose the header's body-limit error when both are parsed in one read.
+    http::async_read_header(
+      stream, buffer, parser,
+      [self = shared_from_this(), &stream](beast::error_code ec, std::size_t)
+      {
+        if (ec) return self->finish(ec);
+        http::async_read(stream, self->buffer, self->parser,
+                         [self](beast::error_code body_ec, std::size_t)
+                         { self->complete_response(body_ec); });
+      });
+  }
+
   void read_response()
   {
     if (tls_stream)
-      http::async_read(
-        *tls_stream, buffer, parser,
-        [self = shared_from_this()](beast::error_code ec, std::size_t)
-        { self->complete_response(ec); });
+      read_response(*tls_stream);
     else
-      http::async_read(
-        *plain_stream, buffer, parser,
-        [self = shared_from_this()](beast::error_code ec, std::size_t)
-        { self->complete_response(ec); });
+      read_response(*plain_stream);
   }
 
   void complete_response(beast::error_code ec)

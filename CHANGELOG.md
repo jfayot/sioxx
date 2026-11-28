@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Stop MessagePack decoding at the first parse error, including on older
   supported nlohmann-json versions.
+- Enforce the HTTP polling response body limit with caller-owned I/O on older
+  supported Boost versions.
 - Ignore queued Engine.IO frames after explicit shutdown, and leave active
   heartbeat callbacks for `sync_close()` to drain. Synchronize HTTP polling
   writer shutdown with the writer's condition-variable wait.
