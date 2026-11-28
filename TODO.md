@@ -86,7 +86,7 @@ items listed here should either be completed or explicitly resolved before the
       pushing the release tag.
 - [ ] Confirm exported CMake targets do not leak private dependencies or build
       paths.
-- [ ] Prepare the `1.0.0` version bump, changelog, and migration notes.
+- [x] Prepare the `1.0.0` version bump, changelog, and migration notes.
 - [ ] After validating the release commit, sign and push `v1.0.0` and verify
       the GitHub release.
 
