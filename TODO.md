@@ -59,8 +59,9 @@ items listed here should either be completed or explicitly resolved before the
       combined packet size.
 - [ ] Document trust boundaries for TLS verification, origin headers,
       namespace authentication, and proxy credentials.
-- [ ] Review protocol parsers and transport response limits for memory and CPU
-      exhaustion cases.
+- [x] Review protocol parsers and transport response limits for memory and CPU
+      exhaustion cases; record [limits, regression coverage, and operational
+      boundaries](docs/resource_limits.rst).
 - [x] Fuzz the JSON and MessagePack decoders in ASan/UBSan CI.
 - [x] Fuzz the URL, Engine.IO, and polling payload parsers.
 - [ ] Establish a vulnerability-reporting and supported-security-release

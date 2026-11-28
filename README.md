@@ -560,6 +560,12 @@ that support versioned shared-library names.
 - Proxy connections support HTTP proxies. HTTPS proxy endpoints and proxy
   authentication schemes other than Basic are not currently supported.
 
+See the [resource-limit review](docs/resource_limits.rst) for decoder and HTTP
+framing limits and operational boundaries. Receive-size limits do not bound
+total process memory, traffic rates, or outgoing queues. Polling requests have
+no request deadline; a stalled peer can delay `sync_close()` with library-owned
+I/O.
+
 ## Documentation
 
 **[Read the sioxx documentation](https://jfayot.github.io/sioxx/)** for an

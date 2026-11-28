@@ -102,6 +102,24 @@ TEST(MsgpackParser, RejectsMalformedBytes)
   EXPECT_FALSE(parser.decode(garbage, true, decoded));
 }
 
+TEST(MsgpackParser, RejectsTruncatedValuesAndDecodesNextPacket)
+{
+  msgpack_parser parser;
+  packet decoded;
+  for (const json& value : {json("value"), json::binary({0x01, 0x02}),
+                            json::binary({0x01, 0x02}, 1), json::array({1, 2}),
+                            json::object({{"name", "value"}})})
+  {
+    SCOPED_TRACE(value.dump());
+    const auto bytes = json::to_msgpack({{"data", value}});
+    const std::string payload(bytes.begin(), bytes.end());
+    EXPECT_FALSE(
+      parser.decode(payload.substr(0, payload.size() - 1), true, decoded));
+    ASSERT_TRUE(parser.decode(payload, true, decoded));
+    EXPECT_EQ(decoded.data, value);
+  }
+}
+
 TEST(MsgpackParser, EnforcesNestingLimitAndDecodesNextPacket)
 {
   constexpr std::size_t limit = 128;
