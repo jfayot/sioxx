@@ -68,9 +68,8 @@ cmake --build build -j
 cmake --install build --prefix /usr/local   # optional
 ```
 
-This produces `libsioxx.a` and the
-`sioxx_basic_client` example. It also emits a `sioxxConfig.cmake`, so any
-downstream project can just:
+This builds the static library and the `sioxx_basic_client` example. Install
+the library before using its CMake package from a separate project:
 
 ```cmake
 find_package(sioxx CONFIG REQUIRED)
@@ -79,52 +78,39 @@ target_link_libraries(my_app PRIVATE sioxx::sioxx)
 
 ## API example
 
+This program works with the [bundled Socket.IO server](#example-test-server)
+in its default JSON mode. Keep it running to receive events and press Enter
+to shut down.
+
 ```cpp
+#include <iostream>
 #include <sioxx/sioxx.hpp>
 
-sioxx::client_options opts;
-opts.parser = sioxx::parser_kind::msgpack;   // or parser_kind::json (default)
-opts.reconnect_attempts = 5;
-opts.reconnect_delay = std::chrono::milliseconds(1000);
-opts.reconnect_delay_max = std::chrono::milliseconds(30000);
-opts.reconnect_randomization_factor = 0.5;
-opts.proxy = sioxx::proxy_options{  // optional
-    "http://proxy.example.com:8080", "user", "password"};
+int main() {
+    sioxx::client client;
+    auto sock = client.socket("/your_namespace");
+    sock->on("your_message", [](const std::string& event, sioxx::message args) {
+        std::cout << event << ": " << args.dump() << '\n';
+    });
+    client.set_error_listener([](const std::string& error) {
+        std::cerr << error << '\n';
+    });
 
-sioxx::client client(opts);
-client.set_open_listener([] { /* Engine.IO connection opened */ });
-client.set_close_listener([](const std::string& reason) { /* ... */ });
-client.set_reconnect_listener([](unsigned attempt, unsigned delay_ms) {
-    /* reconnect scheduled; attempt is zero-based */
-});
-client.set_reconnecting_listener([] { /* reconnect attempt starting */ });
+    // Buffered until the server accepts the namespace.
+    sock->emit("ping_ack", sioxx::make_args(1, 2, 3), [](sioxx::message reply) {
+        std::cout << "ACK: " << reply.dump() << '\n';
+    });
+    client.connect("ws://localhost:3000");
 
-auto sock = client.socket("/chat");  // any namespace path
-sock->on("message", [](const std::string& event, sioxx::message data) {
-    // data is an nlohmann::json array of the event's arguments
-});
-sock->on_any([](const std::string& event, sioxx::message data) {
-    // observes every incoming event after its event-specific listener
-});
-
-client.connect("wss://chat.example");
-
-if (client.opened()) {
-    const std::string session_id = client.get_sessionid();
+    std::cin.get();
+    client.sync_close();
 }
-
-// Events emitted before the namespace connects are buffered and sent in order.
-sock->emit("hello", sioxx::json{"world"});
-sock->emit("ping_ack", sioxx::json::array({1, 2, 3}), [](sioxx::message reply) {
-    // ack callback
-});
-
-client.sync_close();
 ```
 
 Obtain namespace sockets with `client.socket()`. The client constructs the
 socket, manages its connection state, and delivers events and acknowledgements
-from the server to registered callbacks.
+from the server to registered callbacks. See [more examples](docs/examples.rst)
+for configuration, reconnection, and acknowledgement deadlines.
 
 ## Installation and configuration
 
@@ -260,6 +246,13 @@ sioxx loads CA certificates from OpenSSL's default trust paths. For a private
 CA, include it in a trusted CA bundle and point `SSL_CERT_FILE` at that bundle.
 Use `verify_tls = false` only for controlled development. It disables both
 certificate chain and server identity verification.
+
+`extra_headers` go to the origin in WebSocket upgrades and HTTP polling
+requests. Namespace authentication goes to the origin in Socket.IO CONNECT
+packets. Use `wss://` or `https://` with verification enabled for either kind
+of origin credential. HTTP Basic proxy credentials travel unencrypted to the
+proxy, even when the origin uses TLS through a CONNECT tunnel. Supply them
+only when you trust the proxy and the network path to it.
 
 ### Parser selection
 

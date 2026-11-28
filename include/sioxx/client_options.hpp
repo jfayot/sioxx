@@ -25,8 +25,8 @@ namespace sioxx
  *
  * - **json** – classic text‑based protocol compatible with the reference
  *   `socket.io-parser`.
- * - **msgpack** – binary protocol that uses MessagePack via
- *   `nlohmann::json::to_msgpack`/`from_msgpack`.
+ * - **msgpack** – binary MessagePack protocol. Select it when the server uses
+ *   a compatible MessagePack parser.
  */
 enum class parser_kind
 {

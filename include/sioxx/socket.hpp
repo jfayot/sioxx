@@ -60,7 +60,7 @@ class socket_test_access;
 class socket : public std::enable_shared_from_this<socket>
 {
  public:
-  /** @brief Type of a generic event listener (receives event name & payload).
+  /** @brief Receives the event name and a JSON array of event arguments.
    */
   using event_listener =
     std::function<void(const std::string& event, message data)>;
@@ -91,19 +91,25 @@ class socket : public std::enable_shared_from_this<socket>
   /** @brief Discard buffered events and pending ACKs without notification. */
   ~socket();
 
-  /** @brief Return the namespace this socket belongs to. */
+  /** @brief Return the namespace this socket belongs to.
+   * @return A reference valid for the lifetime of this socket.
+   */
   const std::string& nsp() const { return nsp_; }
 
   /** @brief Replace the authentication payload used by the next CONNECT.
    *
-   * Passing a null message clears the payload.
+   * @param auth New namespace credentials. A null value clears the payload.
    */
   void set_auth(message auth);
 
-  /** @brief Return a copy of the current namespace authentication payload. */
+  /** @brief Read the namespace authentication payload.
+   * @return A copy of the current payload, or null if none is set.
+   */
   message auth() const;
 
-  /** @brief Whether the namespace is currently connected. */
+  /** @brief Query the namespace connection state.
+   * @return `true` while this namespace is connected.
+   */
   bool connected() const;
 
   /** @name Event registration */
@@ -154,19 +160,28 @@ class socket : public std::enable_shared_from_this<socket>
    */
   void on_any(ack_event_listener listener);
 
-  /** @brief Remove the listener for a given event name. */
+  /** @brief Remove the named listener, leaving any catch-all listener active.
+   * @param event Name of the event whose listener should be removed.
+   */
   void off(const std::string& event);
 
-  /** @brief Remove **all** registered event listeners. */
+  /** @brief Remove named and catch-all listeners. Lifecycle listeners remain.
+   */
   void off_all();
   /** @} */
 
   /** @name Connection lifecycle callbacks */
   /** @{ */
-  /** @brief Set a callback invoked when this namespace receives a CONNECT. */
+  /** @brief Set a callback invoked when the server accepts this namespace.
+   * @param listener Callback invoked on connection, or empty to clear it.
+   */
   void on_connect(connect_listener listener);
 
-  /** @brief Set a callback invoked when this namespace receives a DISCONNECT.
+  /** @brief Set a callback for a server or transport disconnect.
+   *
+   * A local call to disconnect() does not invoke this callback.
+   * @param listener Callback receiving the reason, which may be empty.
+   * Pass an empty function to clear it.
    */
   void on_disconnect(disconnect_listener listener);
   /** @} */
@@ -180,7 +195,9 @@ class socket : public std::enable_shared_from_this<socket>
    * order once its CONNECT packet is acknowledged by the server.
    *
    * @param event   Event name.
-   * @param data    Payload (default empty JSON array).  May be any JSON value.
+   * @param data    A JSON array supplies the individual event arguments. Any
+   * other non-null value supplies one argument. Null supplies no arguments.
+   * The default is an empty array.
    * @throws std::logic_error If the client has explicitly shut down.
    */
   void emit(const std::string& event, const message& data = json::array());
@@ -269,7 +286,11 @@ class socket : public std::enable_shared_from_this<socket>
 
   /** @name Namespace control */
   /** @{ */
-  /** @brief Send a CONNECT packet for this namespace. */
+  /** @brief Request namespace connection using the current auth payload.
+   *
+   * Call after the Engine.IO connection opens. client::connect() already
+   * requests connection for registered namespaces when Engine.IO opens.
+   */
   void connect();
 
   /**

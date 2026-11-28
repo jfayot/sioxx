@@ -427,24 +427,57 @@ public API.
 
 .. _upgrade-to-sioxx-1-0:
 
-Upgrade from sioxx 0.x to 1.0
------------------------------
+Upgrade from sioxx 0.2.0 to 1.0
+-------------------------------
 
-* Keep one owner for each ``client``. It is non-copyable as of 0.3.0. Share
-  namespace socket handles obtained through ``client.socket()``.
-* Replace direct socket construction and calls to ``dispatch_event()``,
-  ``dispatch_ack()``, or ``mark_connected()`` with the public listener and
-  acknowledgement APIs.
-* Move emissions for the next session after ``client.connect()``.
-  Explicit shutdown drops buffered events and pending ACKs. Each
-  ``emit()`` overload rejects new emissions until the client reconnects
-  through an explicit call to ``connect()``.
+Apply the changes below in order. If you already use 0.3.0 or 0.4.0, start
+with the changes introduced after that version.
+
+Changes in 0.3.0
+~~~~~~~~~~~~~~~~
+
+* Keep one owner for each ``client``. Clients are non-copyable. Share the
+  namespace handles returned by ``client.socket()``. Construct a default
+  client with ``sioxx::client client;`` or pass a ``client_options`` object
+  to the constructor. Set options by name if you previously used positional
+  aggregate initialization, since ``client_options`` gained a proxy field.
+* Use ``set_open_listener()`` for the Engine.IO handshake and
+  ``socket::on_connect()`` when work depends on the server accepting a
+  namespace. The open listener now fires even when the client never requests
+  the root namespace.
+* Use ``close()`` to request shutdown and ``sync_close()`` to wait for the
+  library's workers. Call ``sync_close()`` and destroy the client outside
+  library callbacks. With a caller-owned Asio context, also drain pending
+  transport work on that context before releasing callback state.
+* Update scripts that use ``examples/test_server`` or the example sources at
+  the root of ``examples``. The basic client, CBOR parser, and matching server
+  now live under ``examples/basic_client``.
+
+Changes in 0.4.0
+~~~~~~~~~~~~~~~~
+
+* Replace direct socket construction with ``client.socket()``. Replace calls
+  to ``dispatch_event()``, ``dispatch_ack()``, or ``mark_connected()`` with
+  the public listener, acknowledgement, and namespace control APIs.
+* Move emissions for the next session after the next explicit
+  ``client.connect()``. Explicit shutdown drops buffered events and pending
+  acknowledgements. All ``emit()`` overloads throw ``std::logic_error`` until
+  ``client.connect()`` is called again. Applications that need queued work to
+  survive shutdown must store it separately.
 * Use a server URL whose DNS name or IP address matches the TLS certificate.
   For a private CA, include it in the CA bundle selected by ``SSL_CERT_FILE``.
   Server identity is checked even through an HTTP proxy.
-* Keep existing reconnect fields and either I/O ownership model. With a
-  caller-owned context, keep callback state alive until the application's
-  context has drained the client's transport work after ``sync_close()``.
+
+Changes in 1.0
+~~~~~~~~~~~~~~
+
+* Keep incoming payloads within the :doc:`resource_limits` for the selected
+  parser and transport. Binary JSON packets and nested JSON and MessagePack
+  values that exceed their limits are discarded. An invalid Engine.IO
+  handshake reports an error instead of opening a session.
 * Update installed-package consumers to
-  ``find_package(sioxx 1.0 CONFIG REQUIRED)``. Rebuild and relink when
-  upgrading the shared library.
+  ``find_package(sioxx 1.0 CONFIG REQUIRED)``. From 1.0, compatible CMake
+  packages match within the same major version. Rebuild and relink consumers
+  with matching JSON versions and build settings when upgrading the shared
+  library. Where supported, its versioned file name uses the full release
+  version from 1.0 onward.

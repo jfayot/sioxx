@@ -21,7 +21,11 @@
 namespace sioxx
 {
 
-/** @brief Signature of the callback that writes a fully‑encoded frame. */
+/** @brief Writes an encoded Socket.IO payload to Engine.IO.
+ *
+ * Pass `true` for a binary frame and `false` for a text frame. Do not add
+ * Engine.IO framing to the payload.
+ */
 using frame_writer =
   std::function<void(const std::string& payload, bool is_binary)>;
 
@@ -60,11 +64,12 @@ class parser_base
   /**
    * @brief Decode a single Engine.IO payload.
    *
-   * @param payload   Raw payload received from the transport.
+   * @param payload   Socket.IO payload with Engine.IO framing removed.
    * @param is_binary `true` if the payload is binary, `false` otherwise.
    * @param out       Destination packet – filled on successful decode.
-   * @return `true` if the packet was completely decoded; `false` if more
-   *         data is required (e.g., waiting for binary attachments).
+   * @return `true` when `out` contains a complete packet. Return `false` to
+   *         discard an invalid payload or wait for more frames. The client
+   *         ignores `out` when this function returns `false`.
    */
   virtual bool decode(const std::string& payload, bool is_binary,
                       packet& out) = 0;

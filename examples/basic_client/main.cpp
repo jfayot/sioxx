@@ -57,27 +57,21 @@ int main(int argc, char** argv)
     "your_message", [](const std::string& event, const sioxx::message& data)
     { std::cout << "[event] " << event << " -> " << data.dump() << "\n"; });
 
-  sock->on_connect(
-    [sock]
-    {
-      std::cout << "[sioxx] /your_namespace connected\n";
+  sock->on_connect([] { std::cout << "[sioxx] /your_namespace connected\n"; });
 
-      sock->emit("hello", sioxx::json{"world"});
-
-      sock->emit(
-        "ping_ack", sioxx::json::array({1, 2, 3}), std::chrono::seconds(5),
-        [](sioxx::socket::ack_status status, const sioxx::message& reply)
-        {
-          if (status == sioxx::socket::ack_status::timeout)
-            std::cout << "[ack] timed out\n";
-          else
-            std::cout << "[ack] " << reply.dump() << "\n";
-        });
-    });
-
+  // These events wait in the namespace buffer until the server accepts it.
+  sock->emit("hello", sioxx::make_args("world"));
+  sock->emit("ping_ack", sioxx::make_args(1, 2, 3), std::chrono::seconds(5),
+             [](sioxx::socket::ack_status status, const sioxx::message& reply)
+             {
+               if (status == sioxx::socket::ack_status::timeout)
+                 std::cout << "[ack] timed out\n";
+               else
+                 std::cout << "[ack] " << reply.dump() << "\n";
+             });
   client.connect(uri);
 
   std::this_thread::sleep_for(std::chrono::seconds(30));
-  client.close();
+  client.sync_close();
   return 0;
 }

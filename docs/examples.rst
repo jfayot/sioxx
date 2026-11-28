@@ -3,8 +3,8 @@ Examples
 
 .. default-domain:: cpp
 
-The snippets below cover the most common client configurations. For a
-complete executable, see
+Place the C++ statements below inside an application function and any
+``#include`` directives at the top of the source file. For a complete executable, see
 `examples/basic_client/main.cpp
 <https://github.com/jfayot/sioxx/blob/main/examples/basic_client/main.cpp>`_ in the
 project repository.
@@ -34,9 +34,9 @@ the server accepts the namespace:
    client.connect("wss://example.com");
 
 The client creates and manages the namespace socket returned by
-``client.socket("/chat")``. Callbacks run on the connection's background thread.
-Dispatch back to your application thread before modifying thread-affine state
-such as a UI.
+``client.socket("/chat")``. Keep the client alive while it receives events.
+Dispatch callbacks to your application thread before modifying state owned by
+that thread, such as a UI.
 
 An incoming message larger than 16 MiB closes the WebSocket connection.
 The limit applies to both WS and WSS and to the complete message across all
@@ -63,7 +63,7 @@ HTTP polling networking run on an application's existing event loop:
    client.connect("wss://example.com");
    std::thread io_thread([&] { io_context.run(); });
 
-   // From the application thread when ready to shut down.
+   // Run your application here. Then shut down from the application thread.
    client.sync_close();
    work.reset();
    io_thread.join();
@@ -338,8 +338,8 @@ private CA, include it in a trusted CA bundle and point ``SSL_CERT_FILE`` at
 the bundle. Setting ``verify_tls`` to ``false`` disables both checks and is
 intended for controlled development only.
 
-Use ``extra_headers`` to add authentication or application headers to the
-handshake.
+Use ``extra_headers`` to add authentication or application headers to
+WebSocket upgrades and HTTP polling requests.
 
 .. code-block:: cpp
 
@@ -353,8 +353,7 @@ Connect through an HTTP proxy
 -----------------------------
 
 Set an HTTP proxy for WebSocket and polling connections. Optional Basic
-credentials authenticate with the proxy and are not forwarded to the
-Socket.IO server:
+credentials authenticate the client to the proxy:
 
 .. code-block:: cpp
 
@@ -367,7 +366,8 @@ Socket.IO server:
 
 Only HTTP proxy endpoints are supported. Secure origin connections are
 tunnelled through the proxy before TLS is established with the origin.
-Certificate verification uses the host in the Socket.IO server URL.
+Certificate verification uses the host in the Socket.IO server URL. The
+client sends Basic proxy credentials outside that tunnel, over plain HTTP.
 
 Authenticate a namespace and customize the endpoint
 ---------------------------------------------------
@@ -422,9 +422,28 @@ Reconnects use capped exponential back-off with jitter:
        // The back-off elapsed and the retry is starting.
    });
 
-Use ``client.opened()`` to query whether the Engine.IO handshake is currently
-open. ``client.get_sessionid()`` returns the handshake session ID, or an empty
-string before a session exists.
+Use ``client.opened()`` to check whether the Engine.IO connection is open.
+``client.get_sessionid()`` returns the handshake session ID once available.
+That ID can remain readable after the connection closes.
+
+Production checklist
+--------------------
+
+* Use a ``wss://`` or ``https://`` origin and keep TLS verification enabled.
+  Add a private CA to the trusted bundle when necessary. Origin headers and
+  namespace credentials travel inside the TLS connection. Use HTTP Basic
+  proxy credentials only with a trusted proxy and a trusted network path.
+* Choose a finite reconnect attempt count and use capped delays with jitter.
+  Use acknowledgement deadlines to expire stale work while disconnected.
+  Enable retries only for operations that tolerate duplicates or that the
+  server can deduplicate. Bound how much work the application queues.
+* Keep callbacks short and dispatch blocking work or UI updates to the
+  application's own executor. Keep referenced state alive until callbacks
+  finish. Use a weak pointer when a listener retains its own namespace socket.
+* Call ``close()`` to request shutdown from a callback. On the application
+  thread, call ``sync_close()`` before releasing callback state. With a
+  caller-owned context, keep it running until pending transport work drains.
+  See :doc:`resource_limits` for limits on shutdown with a stalled polling peer.
 
 Run the bundled client and server
 ---------------------------------
@@ -442,7 +461,7 @@ Start the server in another terminal:
 .. code-block:: console
 
    $ cd examples/basic_client/server
-   $ pnpm install
+   $ pnpm install --frozen-lockfile
    $ pnpm start
 
 Then run the C++ client:
@@ -472,11 +491,10 @@ skips this target without error when Qt Widgets is unavailable:
 
    $ cmake -S . -B build-qt -DSIOXX_BUILD_EXAMPLES=ON \
        -DSIOXX_BUILD_TESTS=OFF
-   $ cmake --build build-qt --target sioxx_qt_chat --parallel
+   $ cmake --build build-qt --config Release --target sioxx_qt_chat --parallel
    $ pnpm --dir examples/qt_chat install --frozen-lockfile
    $ pnpm --dir examples/qt_chat start
-   $ ./build-qt/sioxx_qt_chat
 
 See the `Qt chat README
-<https://github.com/jfayot/sioxx/tree/main/examples/qt_chat>`_ for parser and
-binary-sharing instructions.
+<https://github.com/jfayot/sioxx/tree/main/examples/qt_chat>`_ for platform-specific
+launch commands and binary-sharing instructions.

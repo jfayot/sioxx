@@ -12,7 +12,6 @@ items listed here should either be completed or explicitly resolved before the
 - [x] Freeze the public API documented in the [API reference](docs/api.rst).
 - [x] Document the minimum Boost and nlohmann-json versions in the
       [README](README.md#quick-start).
-- [ ] Confirm and document supported compiler and OpenSSL versions.
 - [ ] Pass the full Linux, macOS, and Windows CI matrices on the `1.0.0`
       release commit, including unit, E2E, integration, packaging,
       static-analysis, and documentation checks.
@@ -57,23 +56,22 @@ items listed here should either be completed or explicitly resolved before the
 
 - [x] Bound incoming JSON binary packet assembly by attachment count and
       combined packet size.
-- [ ] Document trust boundaries for TLS verification, origin headers,
-      namespace authentication, and proxy credentials.
+- [x] Add a short README note explaining where extra headers, namespace
+      authentication, and proxy credentials are sent and when TLS protects them.
 - [x] Review protocol parsers and transport response limits for memory and CPU
       exhaustion cases; record [limits, regression coverage, and operational
       boundaries](docs/resource_limits.rst).
 - [x] Fuzz the JSON and MessagePack decoders in ASan/UBSan CI.
 - [x] Fuzz the URL, Engine.IO, and polling payload parsers.
-- [ ] Establish a vulnerability-reporting and supported-security-release
-      policy.
+- [ ] Publish a private channel for vulnerability reports.
 
 ## Documentation and examples
 
-- [ ] Ensure every public type and function has complete Doxygen documentation.
-- [ ] Review the quick start, examples, migration guide, and generated API
+- [x] Ensure every public type and function has complete Doxygen documentation.
+- [x] Review the quick start, examples, migration guide, and generated API
       documentation against the final 1.0.0 API.
-- [ ] Add upgrade notes covering every breaking change made after 0.2.0.
-- [ ] Document production deployment guidance for TLS, proxies, reconnects,
+- [x] Add upgrade notes covering every breaking change made after 0.2.0.
+- [x] Document production deployment guidance for TLS, proxies, reconnects,
       timeouts, threading, and orderly shutdown.
 
 ## Packaging and release engineering
@@ -94,6 +92,10 @@ items listed here should either be completed or explicitly resolved before the
 
 ## Explicitly post-1.0
 
+- Publish a detailed security guide covering TLS verification, origin headers,
+  namespace authentication, and proxy trust boundaries.
+- Define the long-term policy for which releases receive security fixes.
+- Confirm and document supported compiler and OpenSSL versions.
 - Coroutine-friendly APIs.
 - Outgoing catch-all listeners and richer connection and transport diagnostics.
 - Upgrade established HTTP long-polling connections to WebSocket.
