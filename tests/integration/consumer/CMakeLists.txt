@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.28)
 project(sioxx_consumer LANGUAGES CXX)
 
 # Release preparation requests the current 0.x minor or the stable major's .0.
-find_package(sioxx 0.4 CONFIG REQUIRED)
+find_package(sioxx 1.0 CONFIG REQUIRED)
 
 option(SIOXX_USE_SYSTEM_BOOST "Use system Boost for the consumer's Asio context" ON)
 

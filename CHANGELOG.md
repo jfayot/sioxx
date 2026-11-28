@@ -5,6 +5,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-28
+
+sioxx 1.0.0 is the first stable release. The documented public API, including
+custom parsers and both Asio I/O ownership modes, is source compatible across
+1.x. Installed CMake packages support same-major version requests. Rebuild and
+relink clients when upgrading the shared library.
+
+The release targets Socket.IO 4.8.1 over Engine.IO v4 with WebSocket and HTTP
+long-polling, including TLS and proxy support. See the
+[upgrade guide](https://jfayot.github.io/sioxx/migration.html#upgrade-to-sioxx-1-0)
+for changes since 0.2.0 and the
+[resource limits](https://jfayot.github.io/sioxx/resource_limits.html) for
+receive limits and shutdown behavior.
+
 ### Changes :construction:
 
 - Complete the v1.0 API reference, deployment guidance, and upgrade notes
@@ -288,7 +302,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed WebSocket write-queue and recursive-mutex deadlocks.
 - Fixed windows builds and test configuration in CMake and VS Code.
 
-[Unreleased]: https://github.com/jfayot/sioxx/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/jfayot/sioxx/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/jfayot/sioxx/compare/v0.4.0...v1.0.0
 [0.4.0]: https://github.com/jfayot/sioxx/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/jfayot/sioxx/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/jfayot/sioxx/compare/v0.1.1...v0.2.0
